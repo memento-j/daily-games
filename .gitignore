@@ -40,6 +40,15 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+#impeccable
+.impeccable
+
+#claude
+.claude
+
+#hydrorivers dataset
+/HydroRIVERS_v10_shp
+
 #markdown files
 AGENTS.md
 CLAUDE.md
