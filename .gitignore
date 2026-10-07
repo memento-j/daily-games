@@ -47,7 +47,11 @@ next-env.d.ts
 .claude
 
 #hydrorivers dataset
-/HydroRIVERS_v10_shp
+/scripts/downstream/HydroRIVERS_v10_shp
+/scripts/downstream/IHO_seas
+/scripts/downstream/cache
+/scripts/downstream/out
+/scripts/downstream/__pycache__
 
 #markdown files
 AGENTS.md
