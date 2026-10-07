@@ -8,46 +8,79 @@ Usage (from the repo root):
     python scripts/downstream/generate.py prepare          # one-off: build fast caches
     python scripts/downstream/generate.py validate         # trace the known test pins
     python scripts/downstream/generate.py trace LON LAT    # trace a single pin
+    python scripts/downstream/generate.py generate         # add the next 10 daily puzzles
 
 Build order step 1: batch generation of daily puzzle files comes after the
 validation pins all trace correctly.
 """
 
+# How it works, start to finish
+# -----------------------------
+# Files:
+#   generate.py  this file: the main flow (prepare, trace_drop, generate, validate, CLI)
+#   config.py    every path and tunable setting
+#   rivers.py    Rivers: load HydroRIVERS, snap a pin, trace NEXT_DOWN
+#   seas.py      Seas: name the sea at a point, rank seas by distance; display names
+#   geo.py       haversine_km distance helper
+#
+# Folders (next to this file; gitignored):
+#   HydroRIVERS_v10_shp/  raw river network: 8.5M river segments, each with HYRIV_ID,
+#                         NEXT_DOWN (the segment it flows into; 0 = river ends here),
+#                         ENDORHEIC (1 = basin drains inland) and a line shape.
+#   IHO_seas/iho.json     raw sea areas: 101 named polygons ("Gulf of Mexico", ...).
+#                         No rivers, just a labelled map of the seas.
+#   cache/                the same two datasets converted to GeoParquet by `prepare`
+#                         (loads in ~1 s instead of ~1 min).
+#   out/                  GeoJSON previews written by `validate` / `trace`, to inspect
+#                         by eye at geojson.io. Not used by the game.
+#
+# Per pin (trace_drop):
+#   1. SNAP    Rivers.snap: the pin rarely sits exactly on a river, so find the
+#              nearest segment. Each segment's bounding box is cached, so we only
+#              measure exact distances to segments whose box is near the pin.
+#   2. TRACE   Rivers.trace: follow NEXT_DOWN from segment to segment until it is 0.
+#              Every segment points to exactly one next segment, so no pathfinding.
+#   3. STITCH  Join the segments' line shapes into one route: pin -> river mouth.
+#   4. NAME    Seas.name_at on the route's last point (the river mouth, on the coast):
+#              a. STRtree query: is the mouth inside a sea polygon? -> that name, 0 km.
+#              b. Otherwise the nearest polygon (distance to its outline) -> name + km.
+#                 HydroRIVERS and IHO drew the coastline separately, so a mouth often
+#                 lands slightly short of the polygon edge (0-15 km in tests).
+#   5. FILTER  Reject the drop if HydroRIVERS flags it ENDORHEIC, or if the nearest sea
+#              is more than MOUTH_MAX_SEA_KM away: the river ended somewhere that is not
+#              a sea (the Volga ends in the Caspian, which has no IHO polygon).
+#   6. EXTRAS  Route distance, the sea nearest the *pin* (if it differs from the
+#              answer, the drop is surprising = harder), and a simplified route.
+#
+# The STRtree is only a fast lookup: it skips seas whose bounding rectangle can't
+# match. The geometry itself (point-in-polygon, distance to edges) is Shapely's.
+# Distances are in degrees, converted to km with ~111.32 km/degree (approximate,
+# fine for the 50 km cutoff).
+
 from __future__ import annotations
 
 import argparse
 import json
-import math
 import sys
 import time
 from dataclasses import dataclass
-from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
-import pyarrow.parquet as pq
 import pyogrio
 import shapely
-from shapely.geometry import LineString, Point
+from shapely.geometry import LineString
 from shapely.ops import substring
 
-HERE = Path(__file__).resolve().parent
-RIVERS_SHP = HERE / "HydroRIVERS_v10_shp" / "HydroRIVERS_v10.shp"
-SEAS_SRC = HERE / "IHO_seas" / "iho.json"
-CACHE_DIR = HERE / "cache"
-RIVERS_PARQUET = CACHE_DIR / "hydrorivers.parquet"
-SEAS_PARQUET = CACHE_DIR / "iho_seas.parquet"
-OUT_DIR = HERE / "out"
-
-RIVER_COLUMNS = ["HYRIV_ID", "NEXT_DOWN", "MAIN_RIV", "LENGTH_KM", "DIST_DN_KM", "ENDORHEIC"]
-
-EARTH_RADIUS_KM = 6371.0
-SNAP_MAX_DEG = 1.0  # give up snapping if no river within ~100 km
-# Real mouths sit within ~15 km of an IHO sea polygon. Further than this means the
-# river ends inland in a lake HydroSHEDS treats as ocean (e.g. the Caspian Sea).
-MOUTH_MAX_SEA_KM = 50
-SIMPLIFY_DEG = 0.005  # ~500 m; invisible at the zoom levels the game uses
-COORD_DECIMALS = 4  # ~11 m
+from config import (
+    CACHE_DIR, COORD_DECIMALS, DAY_DIFFICULTIES, DEFAULT_DAYS, HARD_DIFFICULTY, HARD_RIVER_REUSE_DAYS,
+    MIN_PIN_SEPARATION_KM, MIN_ROUTE_KM, MOUTH_MAX_SEA_KM, OUT_DIR, POOL_PER_SLOT, PUZZLE_DIR,
+    RIVER_COLUMNS, RIVER_REUSE_DAYS, RIVERS_PARQUET, RIVERS_SHP, SAME_RIVER_MIN_KM, SCREEN_LIMIT,
+    SEAS_PARQUET, SEAS_SRC, SIMPLIFY_DEG, STAGE_FRACTIONS,
+)
+from geo import haversine_km
+from rivers import Rivers
+from seas import Seas, display_name
 
 
 # --------------------------------------------------------------------------- #
@@ -74,116 +107,8 @@ def prepare() -> None:
 
 
 # --------------------------------------------------------------------------- #
-# River network
-# --------------------------------------------------------------------------- #
-
-class Rivers:
-    """HydroRIVERS as flat numpy arrays; geometries decoded only on demand."""
-
-    def __init__(self, path: Path = RIVERS_PARQUET):
-        if not path.exists():
-            sys.exit(f"Missing {path}. Run `prepare` first.")
-        t = time.time()
-        table = pq.read_table(path, columns=RIVER_COLUMNS + ["bbox", "geometry"])
-        self.ids = table["HYRIV_ID"].to_numpy()
-        self.next_down = table["NEXT_DOWN"].to_numpy()
-        self.main_riv = table["MAIN_RIV"].to_numpy()
-        self.dist_dn_km = table["DIST_DN_KM"].to_numpy()
-        self.endorheic = table["ENDORHEIC"].to_numpy()
-        bbox = table["bbox"].combine_chunks()
-        self.xmin = bbox.field("xmin").to_numpy()
-        self.ymin = bbox.field("ymin").to_numpy()
-        self.xmax = bbox.field("xmax").to_numpy()
-        self.ymax = bbox.field("ymax").to_numpy()
-        self._wkb = table["geometry"].combine_chunks()
-        # HYRIV_ID -> row index
-        self._order = np.argsort(self.ids)
-        self._sorted_ids = self.ids[self._order]
-        print(f"Loaded {len(self.ids):,} river segments in {time.time() - t:.1f}s")
-
-    def row_of(self, hyriv_id: int) -> int:
-        # Match the array dtype, or numpy converts all 8.5M ids on every call.
-        i = np.searchsorted(self._sorted_ids, self._sorted_ids.dtype.type(hyriv_id))
-        if i >= len(self._sorted_ids) or self._sorted_ids[i] != hyriv_id:
-            raise KeyError(hyriv_id)
-        return int(self._order[i])
-
-    def geoms(self, rows) -> np.ndarray:
-        return shapely.from_wkb(self._wkb.take(np.asarray(rows)).to_numpy(zero_copy_only=False))
-
-    def snap(self, lon: float, lat: float) -> tuple[int, float, float]:
-        """Nearest segment to the pin. Returns (row, distance_km, fraction along segment).
-
-        Distances use an equirectangular approximation (longitude scaled by
-        cos(lat)), plenty accurate over the few km a snap covers.
-        """
-        kx = math.cos(math.radians(lat))
-        pin = Point(lon * kx, lat)
-        radius = 0.05
-        while radius <= SNAP_MAX_DEG:
-            rows = np.flatnonzero(
-                (self.xmax >= lon - radius / kx) & (self.xmin <= lon + radius / kx)
-                & (self.ymax >= lat - radius) & (self.ymin <= lat + radius)
-            )
-            if len(rows):
-                scaled = shapely.transform(self.geoms(rows), lambda c: c * [kx, 1.0])
-                dists = shapely.distance(scaled, pin)
-                best = int(np.argmin(dists))
-                # Only trust the hit if nothing outside the box could be closer.
-                if dists[best] <= radius:
-                    fraction = scaled[best].project(pin, normalized=True)
-                    return int(rows[best]), float(dists[best]) * 111.32, float(fraction)
-            radius *= 2
-        raise ValueError(f"No river within {SNAP_MAX_DEG} degrees of ({lon}, {lat})")
-
-    def trace(self, start_row: int) -> list[int]:
-        """Rows from start_row to the mouth, following NEXT_DOWN until 0."""
-        rows, seen = [start_row], {start_row}
-        while (nxt := int(self.next_down[rows[-1]])) != 0:
-            row = self.row_of(nxt)
-            if row in seen:
-                raise RuntimeError(f"Loop in river network at HYRIV_ID {nxt}")
-            rows.append(row)
-            seen.add(row)
-        return rows
-
-
-# --------------------------------------------------------------------------- #
-# Seas
-# --------------------------------------------------------------------------- #
-
-class Seas:
-    def __init__(self, path: Path = SEAS_PARQUET):
-        if not path.exists():
-            sys.exit(f"Missing {path}. Run `prepare` first.")
-        self.gdf = gpd.read_parquet(path)
-        self.names = self.gdf["name"].to_numpy()
-        self.tree = shapely.STRtree(self.gdf.geometry.to_numpy())
-
-    def name_at(self, lon: float, lat: float) -> tuple[str, float]:
-        """Sea containing the point, else the nearest one. Returns (name, approx km away).
-
-        River mouths often sit on the coastline, just outside the sea polygon,
-        hence the nearest-sea fallback.
-        """
-        pt = Point(lon, lat)
-        hits = self.tree.query(pt, predicate="intersects")
-        if len(hits):
-            return str(self.names[hits[0]]), 0.0
-        i = int(self.tree.nearest(pt))
-        return str(self.names[i]), float(self.tree.geometries[i].distance(pt)) * 111.32
-
-
-# --------------------------------------------------------------------------- #
 # Tracing a drop
 # --------------------------------------------------------------------------- #
-
-def haversine_km(coords: np.ndarray) -> float:
-    lon, lat = np.radians(coords[:, 0]), np.radians(coords[:, 1])
-    dlon, dlat = np.diff(lon), np.diff(lat)
-    a = np.sin(dlat / 2) ** 2 + np.cos(lat[:-1]) * np.cos(lat[1:]) * np.sin(dlon / 2) ** 2
-    return float(2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a)).sum())
-
 
 @dataclass
 class Drop:
@@ -207,11 +132,14 @@ class Drop:
 
 
 def trace_drop(rivers: Rivers, seas: Seas, lon: float, lat: float) -> Drop:
+    # 1. SNAP the pin to the nearest river segment.
     row, snap_km, fraction = rivers.snap(lon, lat)
+    # 2. TRACE NEXT_DOWN to the mouth.
     rows = rivers.trace(row)
     geoms = rivers.geoms(rows)
 
-    # First segment: only the part downstream of the snap point.
+    # 3. STITCH the segments into one route. First segment: only the part
+    # downstream of the snap point.
     first = substring(geoms[0], fraction, 1.0, normalized=True)
     parts = [np.array([[lon, lat]]), shapely.get_coordinates(first)]
     gaps = 0
@@ -224,6 +152,8 @@ def trace_drop(rivers: Rivers, seas: Seas, lon: float, lat: float) -> Drop:
         parts.append(c)
     coords = np.vstack(parts)
 
+    # 4. NAME the sea at the mouth (the route's last point), and
+    # 5. FILTER drops that never reach a sea.
     mouth_row = rows[-1]
     endorheic = bool(rivers.endorheic[mouth_row])
     mouth_lon, mouth_lat = coords[-1]
@@ -231,6 +161,7 @@ def trace_drop(rivers: Rivers, seas: Seas, lon: float, lat: float) -> Drop:
     inland = mouth_sea_km is not None and mouth_sea_km > MOUTH_MAX_SEA_KM
     if inland:
         answer = None
+    # 6. EXTRAS: the sea a player would naively guess from the pin, for difficulty.
     nearest_sea, _ = seas.name_at(lon, lat)
 
     return Drop(
@@ -248,6 +179,177 @@ def trace_drop(rivers: Rivers, seas: Seas, lon: float, lat: float) -> Drop:
         nearest_sea=nearest_sea,
         main_riv=int(rivers.main_riv[row]),
     )
+
+
+# --------------------------------------------------------------------------- #
+# Puzzle generation: writes public/data/downstream/NNNN.json
+# --------------------------------------------------------------------------- #
+#
+# 1. Read the existing puzzle files: last puzzle number, pins already used, and the
+#    river systems used recently (found by re-snapping recent pins).
+# 2. SCREEN random river segments into a pool of candidates. This is cheap: walk the
+#    next_row array to the mouth and name its sea, without stitching the route.
+#    Each candidate gets a difficulty from where the answer ranks among the seas
+#    nearest the pin.
+# 3. For each new day, PICK one candidate per target difficulty, respecting the
+#    variety rules, then fully trace the chosen five and write the file.
+#
+# All tunable settings live in config.py; sea display names in seas.py.
+
+
+def difficulty_from_rank(rank: int) -> int:
+    """rank = position of the answer among the seas nearest the pin (0 = nearest)."""
+    return {0: 1, 1: 2, 2: 3, 3: 4, 4: 4}.get(rank, 5)
+
+
+def with_article(sea: str) -> str:
+    # "the Atlantic Ocean", "the Bay of Bengal", but "Hudson Bay"
+    return sea if sea.endswith(" Bay") else f"the {sea}"
+
+
+@dataclass
+class Candidate:
+    row: int  # river segment the pin sits on
+    pin: tuple[float, float]
+    main_riv: int  # river system ID (same for every segment in one basin)
+    answer: str  # display name
+    nearby: list[str]  # display names, nearest to the pin first
+    difficulty: int
+
+
+def screen(rivers: Rivers, seas: Seas, row: int, rng: np.random.Generator) -> Candidate | None:
+    """Cheap check of one river segment as a puzzle pin. None = unusable."""
+    point = rivers.geoms([row])[0].interpolate(rng.random(), normalized=True)
+    lon, lat = round(point.x, COORD_DECIMALS), round(point.y, COORD_DECIMALS)
+    mouth_row = rivers.trace(row)[-1]
+    mouth_lon, mouth_lat = shapely.get_coordinates(rivers.geoms([mouth_row])[0])[-1]
+    iho, km = seas.name_at(mouth_lon, mouth_lat)
+    if km > MOUTH_MAX_SEA_KM:
+        return None
+    answer = display_name(iho)
+    nearby = seas.ranked(lon, lat)
+    return Candidate(row, (lon, lat), int(rivers.main_riv[row]), answer, nearby,
+                     difficulty_from_rank(nearby.index(answer)))
+
+
+def build_drop(rivers: Rivers, seas: Seas, c: Candidate, rng: np.random.Generator) -> dict | None:
+    """Full trace of a chosen candidate into the puzzle-file format."""
+    drop = trace_drop(rivers, seas, *c.pin)
+    if drop.answer is None or display_name(drop.answer) != c.answer:
+        return None  # re-snapping the rounded pin landed in another basin; skip it
+    distance = round(drop.distance_km)
+    options = [c.answer] + [s for s in c.nearby if s != c.answer][:3]
+    rng.shuffle(options)
+    return {
+        "pin": list(c.pin),
+        "answer": c.answer,
+        "options": options,
+        "distanceKm": distance,
+        "route": drop.route_coords(),
+        "stages": [round(distance * f) for f in STAGE_FRACTIONS],
+        "fact": f"This drop travels {distance:,} km and ends up in {with_article(c.answer)}.",
+        "difficulty": c.difficulty,
+    }
+
+
+def km_between(a: tuple[float, float], b: tuple[float, float]) -> float:
+    return haversine_km(np.array([a, b]))
+
+
+def river_allowed(c: Candidate, recent: list[list[tuple[int, tuple]]]) -> bool:
+    """River reuse rule. recent = per day, oldest first: [(river system, pin), ...]."""
+    window = recent[-RIVER_REUSE_DAYS:]
+    for days_ago, day in enumerate(reversed(window), start=1):
+        for river, pin in day:
+            if river != c.main_riv:
+                continue
+            if c.difficulty < HARD_DIFFICULTY or days_ago <= HARD_RIVER_REUSE_DAYS:
+                return False
+            if km_between(c.pin, pin) < SAME_RIVER_MIN_KM:
+                return False
+    return True
+
+
+def read_existing(rivers: Rivers) -> tuple[int, set, list[list[tuple[int, tuple]]]]:
+    """(last puzzle number, all pins used, [(river system, pin), ...] per recent day)."""
+    files = sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json"))
+    pins, recent = set(), []
+    for f in files:
+        pins |= {tuple(d["pin"]) for d in json.loads(f.read_text(encoding="utf-8"))["drops"]}
+    for f in files[-RIVER_REUSE_DAYS:]:
+        drops = json.loads(f.read_text(encoding="utf-8"))["drops"]
+        recent.append([(int(rivers.main_riv[rivers.snap(*d["pin"])[0]]), tuple(d["pin"])) for d in drops])
+    last = int(files[-1].stem) if files else 0
+    return last, pins, recent
+
+
+def generate(days: int, seed: int | None) -> None:
+    rivers, seas = Rivers(), Seas()
+    last, used_pins, recent = read_existing(rivers)
+    rng = np.random.default_rng(last if seed is None else seed)
+    print(f"Existing puzzles: {last}. Generating #{last + 1}-#{last + days}.")
+
+    # SCREEN: fill a pool of candidates per difficulty.
+    eligible = np.flatnonzero((rivers.endorheic == 0) & (rivers.dist_dn_km >= MIN_ROUTE_KM))
+    need = {d: DAY_DIFFICULTIES.count(d) * days * POOL_PER_SLOT for d in set(DAY_DIFFICULTIES)}
+    pool: dict[int, list[Candidate]] = {d: [] for d in range(1, 6)}
+    # Big basins (Amazon, Mississippi...) cover many segments, so random picks keep
+    # landing in them. Easy drops: keep one candidate per river system per difficulty,
+    # or the pool fills with duplicates the reuse rule throws away. Hard drops may reuse
+    # a river, so keep several per river as long as their pins are far apart.
+    pooled: dict[tuple[int, int], list[tuple]] = {}  # (difficulty, river) -> pins
+    t, screened = time.time(), 0
+    while screened < SCREEN_LIMIT and any(len(pool[d]) < n for d, n in need.items()):
+        screened += 1
+        c = screen(rivers, seas, int(rng.choice(eligible)), rng)
+        if not c or c.pin in used_pins:
+            continue
+        same_river = pooled.setdefault((c.difficulty, c.main_riv), [])
+        if same_river and (c.difficulty < HARD_DIFFICULTY
+                           or any(km_between(c.pin, p) < SAME_RIVER_MIN_KM for p in same_river)):
+            continue
+        same_river.append(c.pin)
+        pool[c.difficulty].append(c)
+        if screened % 500 == 0:
+            print(f"  screened {screened:,} ({time.time() - t:.0f}s), pool: "
+                  + ", ".join(f"{d}: {len(pool[d])}/{need.get(d, 0)}" for d in pool), flush=True)
+    print(f"Screened {screened:,} segments in {time.time() - t:.0f}s. "
+          f"Pool by difficulty: {', '.join(f'{d}: {len(p)}' for d, p in pool.items())}")
+
+    # PICK: one candidate per target difficulty, nearest available difficulty if empty.
+    PUZZLE_DIR.mkdir(parents=True, exist_ok=True)
+    for puzzle in range(last + 1, last + days + 1):
+        drops, chosen = [], []
+        for target in DAY_DIFFICULTIES:
+            for d in sorted(pool, key=lambda d: (abs(d - target), -d)):
+                for c in list(pool[d]):
+                    if (not river_allowed(c, recent)
+                            or any(c.main_riv == o.main_riv or c.answer == o.answer
+                                   or km_between(c.pin, o.pin) < MIN_PIN_SEPARATION_KM
+                                   for o in chosen)):
+                        continue
+                    pool[d].remove(c)
+                    drop = build_drop(rivers, seas, c, rng)
+                    if drop:
+                        chosen.append(c)
+                        drops.append(drop)
+                        break
+                else:
+                    continue
+                break
+        if len(drops) < len(DAY_DIFFICULTIES):
+            sys.exit(f"Ran out of candidates at puzzle #{puzzle}; raise SCREEN_LIMIT.")
+
+        drops.sort(key=lambda d: d["difficulty"])
+        out = PUZZLE_DIR / f"{puzzle:04d}.json"
+        out.write_text(json.dumps({"puzzle": puzzle, "drops": drops}, separators=(",", ":"),
+                                  ensure_ascii=False), encoding="utf-8")
+        recent.append([(c.main_riv, c.pin) for c in chosen])
+        used_pins |= {c.pin for c in chosen}
+        print(f"  #{puzzle:04d} {out.stat().st_size / 1024:5.0f} KB  "
+              + "  ".join(f"{d['difficulty']}:{d['answer']}" for d in drops))
+
+    print(f"\nLast generated puzzle: #{last + days}. Files in {PUZZLE_DIR}")
 
 
 # --------------------------------------------------------------------------- #
@@ -354,10 +456,14 @@ def trace_one(lon: float, lat: float) -> None:
 
 
 if __name__ == "__main__":
+    sys.stdout.reconfigure(encoding="utf-8")  # Windows consoles default to cp1252 ("Río" -> "R�o")
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
     sub.add_parser("prepare", help="convert the downloaded datasets to fast GeoParquet caches")
     sub.add_parser("validate", help="trace the known test pins and write out/validation.geojson")
+    g = sub.add_parser("generate", help="write the next batch of daily puzzles to public/data/downstream/")
+    g.add_argument("--days", type=int, default=DEFAULT_DAYS, help=f"puzzles to add (default {DEFAULT_DAYS})")
+    g.add_argument("--seed", type=int, help="random seed (default: last puzzle number, so runs are repeatable)")
     t = sub.add_parser("trace", help="trace one pin")
     t.add_argument("lon", type=float)
     t.add_argument("lat", type=float)
@@ -367,5 +473,7 @@ if __name__ == "__main__":
         prepare()
     elif args.cmd == "validate":
         validate()
+    elif args.cmd == "generate":
+        generate(args.days, args.seed)
     else:
         trace_one(args.lon, args.lat)
