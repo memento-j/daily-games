@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dropEmoji, dropPoints, maxPoints, totalPoints, type DropResult } from "./scoring";
+import { dropEmoji, dropPoints, maxPoints, totalPoints, type DropResult } from "../../../games/downstream/scoring";
 
 const right = (stage: number): DropResult => ({ guess: "Black Sea", stage, correct: true });
 const wrong = (stage: number): DropResult => ({ guess: "Red Sea", stage, correct: false });

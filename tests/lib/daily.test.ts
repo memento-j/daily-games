@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { formatCountdown, getPuzzleNumber, msUntilNextPuzzle, padPuzzleNumber } from "./daily";
+import { formatCountdown, getPuzzleNumber, msUntilNextPuzzle, padPuzzleNumber } from "../../lib/daily";
 
 // Node applies TZ changes at runtime. A zone with daylight saving makes the
 // DST tests meaningful wherever the tests run.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { PRE_LAUNCH_PREVIEW, puzzleToPlay } from "./schedule";
+import { PRE_LAUNCH_PREVIEW, puzzleToPlay } from "../../../games/downstream/schedule";
 
 describe("puzzleToPlay", () => {
   it("plays today's puzzle once launched", () => {

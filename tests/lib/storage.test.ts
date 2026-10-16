@@ -7,7 +7,7 @@ import {
   getResult,
   saveInProgress,
   saveResult,
-} from "./storage";
+} from "../../lib/storage";
 
 // Tests run in Node, which has no localStorage: stand in a simple in-memory one.
 function fakeStorage() {

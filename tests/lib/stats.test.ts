@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeStats } from "./stats";
+import { computeStats } from "../../lib/stats";
 
 const played = (...days: number[]) => Object.fromEntries(days.map((d) => [d, { points: 10 }]));
 

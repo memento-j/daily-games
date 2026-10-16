@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { initialState, isValidState, phase, step, type Action, type GameState } from "./game";
-import type { Drop, Puzzle } from "./types";
+import { initialState, isValidState, phase, step, type Action, type GameState } from "../../../games/downstream/game";
+import type { Drop, Puzzle } from "../../../games/downstream/types";
 
 const drop = (answer: string): Drop => ({
   pin: [0, 0],

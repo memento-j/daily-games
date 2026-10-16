@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { shareText } from "./share";
+import { shareText } from "../../lib/share";
 
 const base = { game: "Downstream", number: 12, marks: ["🟩", "🟨", "🟥", "🟩", "🟧"], points: 14, maxPoints: 20, url: "https://example.com/downstream/" };
 
