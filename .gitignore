@@ -56,3 +56,6 @@ next-env.d.ts
 #markdown files
 AGENTS.md
 CLAUDE.md
+
+#maplibre worker, copied from node_modules by predev/prebuild
+/public/maplibre-gl-worker.mjs

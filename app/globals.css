@@ -1,26 +1,108 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/* Downstream's world: a pale relief map, water in drop-blue, the raindrop and
+   the player's actions in coral, floating white cards. The 3D hero
+   (app/downstream/TrackerScene.tsx) uses the same values for land, sea, shore,
+   coast and water: keep them in step. Full system: DESIGN.md. */
+@theme {
+  --color-land: #eef0ec;
+  --color-land-high: #d9ded6;
+  --color-sea: #d3e4f3;
+  --color-shore: #e6f0f9;
+  --color-coast: #8fa7bf;
+  --color-river: #a9c9ea;
+  /* Coral is the brand's main colour: the raindrop, the player's actions, icons.
+     Drop-blue is the accent, kept for water: routes, rivers, the sea reached. */
+  --color-coral: #f2545b; /* white text on it must be large and bold (3.4:1) */
+  --color-coral-deep: #d93d46; /* hover / pressed; 4.5:1 with white */
+  --color-coral-soft: #fde8e8; /* tint behind coral icons */
+  --color-drop: #155eef;
+  --color-ink: #121a2b;
+  --color-ink-soft: #4a5468; /* secondary text, tinted from the ink */
+  --color-ink-faint: #5f6a7d; /* attribution, metadata (5.5:1 on white, 4.7:1 on land) */
+  --color-card: #ffffff;
+  --color-line: #e3e7ee;
+
+  --font-display: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-hanken), "Helvetica Neue", Arial, sans-serif;
+
+  --shadow-card: 0 18px 50px -18px rgb(18 26 43 / 0.28), 0 3px 10px -4px rgb(18 26 43 / 0.12);
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  background: var(--color-sea);
+  color: var(--color-ink);
+  scrollbar-color: var(--color-ink-faint) var(--color-land);
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-land);
+  font-family: var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-coral);
+  color: #fff;
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-coral-deep);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+a {
+  text-underline-offset: 0.2em;
+  text-decoration-thickness: 1px;
+}
+
+
+/* Homepage mini map: the route draws itself in and the coral raindrop runs it to
+   the sea, repeating gently. With reduced motion both rest at the finished state. */
+.mini-route {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mini-route 5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.mini-drop {
+  offset-rotate: 0deg;
+  animation: mini-drop 5s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+@keyframes mini-route {
+  0%,
+  8% {
+    stroke-dashoffset: 1;
+  }
+  70%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes mini-drop {
+  0%,
+  8% {
+    offset-distance: 0%;
+    opacity: 1;
+  }
+  70% {
+    offset-distance: 100%;
+    opacity: 1;
+  }
+  88%,
+  100% {
+    offset-distance: 100%;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mini-route {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .mini-drop {
+    animation: none;
+    offset-distance: 100%;
+  }
 }

@@ -249,7 +249,32 @@ def build_drop(rivers: Rivers, seas: Seas, c: Candidate, rng: np.random.Generato
         "stages": [round(distance * f) for f in STAGE_FRACTIONS],
         "fact": f"This drop travels {distance:,} km and ends up in {with_article(c.answer)}.",
         "difficulty": c.difficulty,
+        "seaLabels": sea_labels(seas, c.pin, options),
     }
+
+
+def sea_labels(seas: Seas, pin: tuple[float, float], options: list[str]) -> dict[str, list[float]]:
+    """A label point for each option sea, near the pin, so the map can name all four."""
+    labels = {}
+    for name in options:
+        point = seas.label_point(name, *pin)
+        if point:
+            labels[name] = list(point)
+    return labels
+
+
+def add_labels() -> None:
+    """Add seaLabels to puzzle files that don't have them yet (keeps everything else as is)."""
+    seas = Seas()
+    files = sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json"))
+    for f in files:
+        data = json.loads(f.read_text(encoding="utf-8"))
+        todo = [d for d in data["drops"] if "seaLabels" not in d]
+        for d in todo:
+            d["seaLabels"] = sea_labels(seas, tuple(d["pin"]), d["options"])
+        if todo:
+            f.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+        print(f"  {f.name}: {len(todo)} drops labelled")
 
 
 def km_between(a: tuple[float, float], b: tuple[float, float]) -> float:
@@ -464,6 +489,7 @@ if __name__ == "__main__":
     g = sub.add_parser("generate", help="write the next batch of daily puzzles to public/data/downstream/")
     g.add_argument("--days", type=int, default=DEFAULT_DAYS, help=f"puzzles to add (default {DEFAULT_DAYS})")
     g.add_argument("--seed", type=int, help="random seed (default: last puzzle number, so runs are repeatable)")
+    sub.add_parser("label", help="add map label points for each drop's four seas to existing puzzle files")
     t = sub.add_parser("trace", help="trace one pin")
     t.add_argument("lon", type=float)
     t.add_argument("lat", type=float)
@@ -475,5 +501,7 @@ if __name__ == "__main__":
         validate()
     elif args.cmd == "generate":
         generate(args.days, args.seed)
+    elif args.cmd == "label":
+        add_labels()
     else:
         trace_one(args.lon, args.lat)

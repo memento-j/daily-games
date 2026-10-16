@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import math
 import sys
 from pathlib import Path
 
 import geopandas as gpd
 import numpy as np
 import shapely
+import shapely.ops
 from shapely.geometry import Point
 
 from config import SEAS_PARQUET, SEAS_SIMPLE_PARQUET
@@ -80,6 +82,45 @@ class Seas:
         i = int(self.tree.nearest(pt))
         return str(self.names[i]), float(self.tree.geometries[i].distance(pt)) * 111.32
 
+    def simple(self) -> np.ndarray:
+        """Simplified sea outlines (same order as self.names), cached on disk."""
+        if not hasattr(self, "_simple"):
+            # Simplifying 250 MB of coastline takes minutes, so do it once and cache it.
+            if not SEAS_SIMPLE_PARQUET.exists():
+                print("  simplifying sea outlines (one-off, a few minutes)...")
+                self.gdf.assign(geometry=self.gdf.geometry.simplify(0.02)).to_parquet(SEAS_SIMPLE_PARQUET)
+            self._simple = gpd.read_parquet(SEAS_SIMPLE_PARQUET).geometry.to_numpy()
+        return self._simple
+
+    def label_point(self, name: str, lon: float, lat: float) -> tuple[float, float] | None:
+        """Where to letter a sea's display name on a puzzle's map: inside the sea,
+        as close to the pin as possible, but far enough from its coast to fit a label.
+
+        The map tiles letter each sea only once, at its middle, which is often off
+        screen (or missing) when the camera is on one river. None if no such sea.
+        """
+        parts = [g for g, n in zip(self.simple(), self.names) if display_name(str(n)) == name]
+        if not parts:
+            return None
+        sea = shapely.union_all(parts)
+        shapely.prepare(sea)
+        near = shapely.ops.nearest_points(sea, Point(lon, lat))[0]
+        # Candidate spots on a grid around the sea's nearest point to the pin.
+        r, step = 8.0, 0.35
+        xs, ys = np.meshgrid(np.arange(near.x - r, near.x + r, step), np.arange(near.y - r, near.y + r, step))
+        xs, ys = xs.ravel(), ys.ravel()
+        inside = shapely.contains_xy(sea, xs, ys)
+        if not inside.any():
+            p = sea.representative_point()
+            return round(p.x, 2), round(p.y, 2)
+        xs, ys = xs[inside], ys[inside]
+        depth = shapely.distance(sea.boundary, shapely.points(xs, ys))
+        ok = depth >= min(0.9, depth.max() * 0.6)  # room for the label, or as much as there is
+        kx = math.cos(math.radians(lat))
+        gap = np.hypot((xs - lon) * kx, ys - lat)
+        i = np.flatnonzero(ok)[np.argmin(gap[ok])]
+        return round(float(xs[i]), 2), round(float(ys[i]), 2)
+
     def ranked(self, lon: float, lat: float) -> list[str]:
         """Display names of all seas, nearest to the point first (duplicates removed).
 
@@ -87,13 +128,7 @@ class Seas:
         outlines (much faster, same ranking), with the gap measured in real km
         so high-latitude longitudes aren't overstretched.
         """
-        if not hasattr(self, "_simple"):
-            # Simplifying 250 MB of coastline takes minutes, so do it once and cache it.
-            if not SEAS_SIMPLE_PARQUET.exists():
-                print("  simplifying sea outlines (one-off, a few minutes)...")
-                self.gdf.assign(geometry=self.gdf.geometry.simplify(0.02)).to_parquet(SEAS_SIMPLE_PARQUET)
-            self._simple = gpd.read_parquet(SEAS_SIMPLE_PARQUET).geometry.to_numpy()
-        lines = shapely.shortest_line(self._simple, Point(lon, lat))
+        lines = shapely.shortest_line(self.simple(), Point(lon, lat))
         ends = shapely.get_coordinates(lines).reshape(-1, 2, 2)
         km = [haversine_km(e) for e in ends]
         seen, names = set(), []
