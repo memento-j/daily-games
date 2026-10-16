@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "bake:hero": "node --experimental-strip-types --no-warnings scripts/bake-hero-rivers.ts",
     "copy-map-worker": "node -e \"require('fs').copyFileSync('node_modules/maplibre-gl/dist/maplibre-gl-worker.mjs', 'public/maplibre-gl-worker.mjs')\"",
     "predev": "npm run copy-map-worker",
     "dev": "next dev",

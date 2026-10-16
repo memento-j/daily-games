@@ -8,24 +8,24 @@
 
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
-import { getPuzzleNumber, padPuzzleNumber } from "@/lib/daily";
+import { padPuzzleNumber } from "@/lib/daily";
 import { clearInProgress, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase } from "./game";
 import { totalPoints, type DropResult } from "./scoring";
+import { puzzleToPlay } from "./schedule";
 import type { Puzzle } from "./types";
 
 // Storage keys. Previews (?puzzle=N before launch) are kept apart from real
 // results, so playtesting puzzle #1 now doesn't mark the real #1 as played.
 const GAME = "downstream";
 const PREVIEW_GAME = "downstream-preview";
-
 type SavedResult = { results: DropResult[]; points: number };
 
 export type Load =
   | { status: "loading" }
   | { status: "comingSoon" }
   | { status: "missing" }
-  | { status: "ready"; number: number; puzzle: Puzzle };
+  | { status: "ready"; number: number; puzzle: Puzzle; preview: boolean };
 
 export type DownstreamGameState = {
   load: Load;
@@ -38,7 +38,6 @@ export type DownstreamGameState = {
 export function useDownstreamGame(): DownstreamGameState {
   // ?puzzle=3 plays a specific puzzle (for playtesting before launch).
   const override = useSearchParams().get("puzzle");
-  const storageKey = override ? PREVIEW_GAME : GAME;
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [game, setGame] = useState<GameState>(initialState);
 
@@ -47,7 +46,8 @@ export function useDownstreamGame(): DownstreamGameState {
   useEffect(() => {
     let cancelled = false;
     async function loadPuzzle() {
-      const number = override ? Number(override) : getPuzzleNumber();
+      const { number, preview } = puzzleToPlay(override);
+      const storageKey = preview ? PREVIEW_GAME : GAME;
       if (!Number.isInteger(number) || number < 1) {
         setLoad({ status: "comingSoon" });
         return;
@@ -70,17 +70,18 @@ export function useDownstreamGame(): DownstreamGameState {
       if (finished) setGame({ drop: puzzle.drops.length, stage: 0, results: finished.results });
       else if (isValidState(saved, puzzle)) setGame(saved);
       else setGame(initialState);
-      setLoad({ status: "ready", number, puzzle });
+      setLoad({ status: "ready", number, puzzle, preview });
     }
     loadPuzzle();
     return () => {
       cancelled = true;
     };
-  }, [override, storageKey]);
+  }, [override]);
 
   function act(action: Action) {
     if (load.status !== "ready") return;
     const { number, puzzle } = load;
+    const storageKey = load.preview ? PREVIEW_GAME : GAME;
     const next = step(game, action, puzzle);
     if (next === game) return;
     setGame(next);
@@ -96,7 +97,7 @@ export function useDownstreamGame(): DownstreamGameState {
     load,
     game,
     phase: load.status === "ready" ? phase(game, load.puzzle) : null,
-    preview: override !== null,
+    preview: load.status === "ready" ? load.preview : override !== null,
     act,
   };
 }

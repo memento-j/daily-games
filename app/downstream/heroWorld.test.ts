@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { HERO_RIVER_COUNT, roundRiver } from "./heroRivers";
 import { findRivers, height, seededRandom, trace, WORLD } from "./heroWorld";
 
 describe("atlas world", () => {
@@ -29,5 +30,12 @@ describe("atlas world", () => {
     const a = seededRandom(1);
     const b = seededRandom(1);
     expect([a(), a(), a()]).toEqual([b(), b(), b()]);
+  });
+});
+
+describe("baked hero rivers", () => {
+  it("match the world (re-run `npm run bake:hero` after changing heroWorld.ts)", async () => {
+    const baked = (await import("./heroRivers.json")).default;
+    expect(baked).toEqual(findRivers(HERO_RIVER_COUNT).map(roundRiver));
   });
 });

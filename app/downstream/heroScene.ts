@@ -8,7 +8,7 @@ import * as THREE from "three";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
-import { gradient, height, pathLength, trace, WORLD } from "./heroWorld";
+import { height, pathLength, trace, WORLD } from "./heroWorld";
 
 export { THREE, Line2, LineGeometry, LineMaterial };
 
@@ -45,16 +45,29 @@ const SHADE_SIZE = 512;
  * shading is crisp per pixel instead of smeared across big triangles.
  */
 function hillshadeTexture() {
-  const data = new Uint8Array(SHADE_SIZE * SHADE_SIZE);
+  // Sample the height once per texel, then take slopes from neighbouring samples:
+  // ~4x less work than calling gradient() (four height samples) per texel.
+  const N = SHADE_SIZE;
+  const dx = (WORLD.maxX - WORLD.minX) / N;
+  const dz = (WORLD.maxZ - WORLD.minZ) / N;
+  const h = new Float32Array(N * N);
+  for (let j = 0; j < N; j++) {
+    const z = WORLD.minZ + (j + 0.5) * dz;
+    for (let i = 0; i < N; i++) h[j * N + i] = height(WORLD.minX + (i + 0.5) * dx, z);
+  }
+  const data = new Uint8Array(N * N);
   const light = new THREE.Vector3(-0.55, 0.75, -0.4).normalize();
   const n = new THREE.Vector3();
-  for (let j = 0; j < SHADE_SIZE; j++) {
-    const z = WORLD.minZ + ((j + 0.5) / SHADE_SIZE) * (WORLD.maxZ - WORLD.minZ);
-    for (let i = 0; i < SHADE_SIZE; i++) {
-      const x = WORLD.minX + ((i + 0.5) / SHADE_SIZE) * (WORLD.maxX - WORLD.minX);
-      const [gx, gz] = gradient(x, z);
+  for (let j = 0; j < N; j++) {
+    for (let i = 0; i < N; i++) {
+      const l = h[j * N + Math.max(i - 1, 0)];
+      const r = h[j * N + Math.min(i + 1, N - 1)];
+      const u = h[Math.max(j - 1, 0) * N + i];
+      const d = h[Math.min(j + 1, N - 1) * N + i];
+      const gx = (r - l) / (2 * dx);
+      const gz = (d - u) / (2 * dz);
       n.set(-gx * 2.2, 1, -gz * 2.2).normalize();
-      data[j * SHADE_SIZE + i] = Math.round(255 * Math.min(1, Math.max(0, n.dot(light) * 1.35 - 0.2)));
+      data[j * N + i] = Math.round(255 * Math.min(1, Math.max(0, n.dot(light) * 1.35 - 0.2)));
     }
   }
   const texture = new THREE.DataTexture(data, SHADE_SIZE, SHADE_SIZE, THREE.RedFormat);
@@ -239,6 +252,9 @@ export function disposeAll(scene: THREE.Scene, renderer: THREE.WebGLRenderer) {
     else m?.dispose();
   });
   renderer.dispose();
+  // Release the WebGL context now: browsers allow only ~16 at once, and leaked
+  // contexts (page switches, hot reloads) make the oldest map go blank.
+  renderer.forceContextLoss();
   renderer.domElement.remove();
 }
 

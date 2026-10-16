@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { preconnectMapHosts } from "@/games/downstream/preconnect";
 import TrackerHome from "./TrackerHome";
 
 // Downstream's front page. A Server Component: everything live inside it (the 3D
@@ -10,5 +11,6 @@ export const metadata: Metadata = {
 };
 
 export default function DownstreamPage() {
+  preconnectMapHosts(); // the game's map is one click away
   return <TrackerHome />;
 }

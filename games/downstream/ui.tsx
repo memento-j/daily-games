@@ -239,20 +239,20 @@ export function PreviewList() {
 
   // Find which puzzle files exist by checking 0001, 0002, ... until one is missing.
   useEffect(() => {
-    let cancelled = false;
+    // Abort on leave, so a half-finished probe doesn't keep requesting files.
+    const controller = new AbortController();
     async function probe() {
       const found: number[] = [];
       for (let n = 1; n <= MAX_PREVIEWS; n++) {
-        const res = await fetch(`/data/downstream/${padPuzzleNumber(n)}.json`, { method: "HEAD" }).catch(() => null);
+        const res = await fetch(`/data/downstream/${padPuzzleNumber(n)}.json`, { method: "HEAD", signal: controller.signal }).catch(() => null);
+        if (controller.signal.aborted) return;
         if (!res?.ok) break;
         found.push(n);
       }
-      if (!cancelled) setAvailable(found);
+      setAvailable(found);
     }
     probe();
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, []);
 
   if (!available) return null;

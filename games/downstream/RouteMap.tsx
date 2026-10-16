@@ -52,85 +52,109 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
+  // Which route is on screen, and how much of it is drawn.
+  const drawn = useRef<{ route: LngLat[] | null; km: number }>({ route: null, km: 0 });
   const [ready, setReady] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0); // bumped by "Try again" to rebuild the map
   const pad = { top: 60, right: 60, bottom: 60, left: 60, ...padding };
   const padKey = JSON.stringify(pad);
 
-  // Create the map once.
+  // Create the map (again after "Try again").
   useEffect(() => {
     let map: MapLibreMap | undefined;
     let resizeObserver: ResizeObserver | undefined;
     let cancelled = false;
-    import("maplibre-gl").then(({ Map, Marker, setWorkerUrl }) => {
-      if (cancelled || !containerRef.current) return;
-      setWorkerUrl(WORKER_URL);
-      map = new Map({
-        container: containerRef.current,
-        style: downstreamMapStyle(),
-        center: pin,
-        zoom: 3.5,
-        attributionControl: { compact: true },
-        dragRotate: false,
-        pitchWithRotate: false,
+    // If the style hasn't come up after 15 s (a dead network, a blocked host), say so
+    // instead of leaving an empty map.
+    const watchdog = window.setTimeout(() => {
+      if (!cancelled && !mapRef.current) setFailed(true);
+    }, 15000);
+    import("maplibre-gl")
+      .then(({ Map, Marker, setWorkerUrl }) => {
+        if (cancelled || !containerRef.current) return;
+        setWorkerUrl(WORKER_URL);
+        map = new Map({
+          container: containerRef.current,
+          style: downstreamMapStyle(),
+          center: pin,
+          zoom: 3.5,
+          attributionControl: { compact: true },
+          dragRotate: false,
+          pitchWithRotate: false,
+        });
+        map.touchZoomRotate.disableRotation();
+        markerRef.current = new Marker({ element: pinElement() }).setLngLat(pin).addTo(map);
+        // Add our layers as soon as the style is ready. ("load" would wait for every
+        // initial tile, terrain included, so one slow tile held back the route and labels.)
+        map.once("style.load", () => {
+          // The route: a soft glow under a solid core, above every other layer.
+          map!.addSource("route", { type: "geojson", data: EMPTY });
+          map!.addLayer({
+            id: "route-glow",
+            type: "line",
+            source: "route",
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: { "line-color": WATER, "line-width": 14, "line-opacity": 0.16, "line-blur": 2 },
+          });
+          map!.addLayer({
+            id: "route",
+            type: "line",
+            source: "route",
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: { "line-color": WATER, "line-width": 4.5 },
+          });
+          // The four option seas, lettered where the puzzle file says (near the pin).
+          map!.addSource("options", { type: "geojson", data: EMPTY });
+          map!.addLayer({
+            id: "option-labels",
+            type: "symbol",
+            source: "options",
+            // The options are the player's choices, so they're lettered in coral, bold and
+            // larger than the place names. Once decided, the sea reached turns water-blue.
+            layout: {
+              "text-field": ["get", "name"],
+              "text-font": ["Noto Sans Bold"],
+              "text-size": ["case", ["get", "answer"], 20, 17],
+              "text-letter-spacing": 0.04,
+              "text-max-width": 8,
+              "text-allow-overlap": true,
+            },
+            paint: {
+              "text-color": ["case", ["get", "answer"], WATER, CORAL_DEEP],
+              "text-opacity": ["case", ["get", "faded"], 0.4, 1],
+              "text-halo-color": "rgba(255,255,255,0.97)",
+              "text-halo-width": 2.6,
+            },
+          });
+          drawn.current = { route: null, km: 0 }; // a fresh map: redraw the current drop
+          mapRef.current = map!;
+          setReady(true);
+        });
+        // Follow the container's size (layouts settle after the map is created).
+        resizeObserver = new ResizeObserver(() => map?.resize());
+        resizeObserver.observe(containerRef.current);
+      })
+      .catch(() => {
+        // The map code didn't download (offline, flaky network).
+        if (!cancelled) setFailed(true);
       });
-      map.touchZoomRotate.disableRotation();
-      markerRef.current = new Marker({ element: pinElement() }).setLngLat(pin).addTo(map);
-      map.on("load", () => {
-        // The route: a soft glow under a solid core, above every other layer.
-        map!.addSource("route", { type: "geojson", data: EMPTY });
-        map!.addLayer({
-          id: "route-glow",
-          type: "line",
-          source: "route",
-          layout: { "line-cap": "round", "line-join": "round" },
-          paint: { "line-color": WATER, "line-width": 14, "line-opacity": 0.16, "line-blur": 2 },
-        });
-        map!.addLayer({
-          id: "route",
-          type: "line",
-          source: "route",
-          layout: { "line-cap": "round", "line-join": "round" },
-          paint: { "line-color": WATER, "line-width": 4.5 },
-        });
-        // The four option seas, lettered where the puzzle file says (near the pin).
-        map!.addSource("options", { type: "geojson", data: EMPTY });
-        map!.addLayer({
-          id: "option-labels",
-          type: "symbol",
-          source: "options",
-          // The options are the player's choices, so they're lettered in coral, bold and
-          // larger than the place names. Once decided, the sea reached turns water-blue.
-          layout: {
-            "text-field": ["get", "name"],
-            "text-font": ["Noto Sans Bold"],
-            "text-size": ["case", ["get", "answer"], 20, 17],
-            "text-letter-spacing": 0.04,
-            "text-max-width": 8,
-            "text-allow-overlap": true,
-          },
-          paint: {
-            "text-color": ["case", ["get", "answer"], WATER, CORAL_DEEP],
-            "text-opacity": ["case", ["get", "faded"], 0.4, 1],
-            "text-halo-color": "rgba(255,255,255,0.97)",
-            "text-halo-width": 2.6,
-          },
-        });
-        mapRef.current = map!;
-        setReady(true);
-      });
-      // Follow the container's size (layouts settle after the map is created).
-      resizeObserver = new ResizeObserver(() => map?.resize());
-      resizeObserver.observe(containerRef.current);
-    });
     return () => {
       cancelled = true;
+      window.clearTimeout(watchdog);
       resizeObserver?.disconnect();
       map?.remove();
       mapRef.current = null;
     };
-    // The map is created once; later pins/routes are handled by the effect below.
+    // Created once per attempt; later pins/routes are handled by the effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [attempt]);
+
+  function retry() {
+    setFailed(false);
+    setReady(false);
+    setAttempt((a) => a + 1);
+  }
 
   // Letter the option seas, and hide the tiles' own copy of those names so none appears twice.
   const labelKey = JSON.stringify([labels, answer]);
@@ -158,8 +182,6 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
     }
   }, [ready, labelKey]);
 
-  // Which route is on screen, and how much of it is drawn.
-  const drawn = useRef<{ route: LngLat[] | null; km: number }>({ route: null, km: 0 });
 
   // New drop or new reveal: animate the line from what's drawn to revealKm.
   useEffect(() => {
@@ -218,5 +240,24 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
     return () => cancelAnimationFrame(frame);
   }, [ready, pin, route, revealKm, padKey, labelKey]);
 
-  return <div ref={containerRef} className={className} aria-label="Map of the raindrop's route" role="img" />;
+  return (
+    <div className={`relative ${className}`}>
+      <div ref={containerRef} className="h-full w-full" aria-label="Map of the raindrop's route" role="img" />
+      {failed && (
+        <div role="alert" className="absolute inset-0 grid place-items-center bg-land/85 p-4">
+          <div className="rounded-2xl bg-white p-5 text-center shadow-card">
+            <p className="font-semibold">The map didn&apos;t load.</p>
+            <p className="mt-1 text-sm text-ink-soft">Check your connection, then try again.</p>
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-3 rounded-full bg-white px-5 py-2 text-sm font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+            >
+              Try again
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }

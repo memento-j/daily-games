@@ -9,6 +9,7 @@
 // Game rules and loading live in games/downstream (useDownstreamGame); this file
 // only decides how it looks.
 
+import { useEffect } from "react";
 import AdSlot from "@/components/AdSlot";
 import RouteMap from "@/games/downstream/RouteMap";
 import { POINTS_BY_STAGE } from "@/games/downstream/scoring";
@@ -26,6 +27,10 @@ import { useDownstreamGame } from "@/games/downstream/useDownstreamGame";
 
 export default function DownstreamGame() {
   const g = useDownstreamGame();
+  // Start downloading the map code now, alongside the puzzle, not after it.
+  useEffect(() => {
+    import("maplibre-gl").catch(() => {}); // RouteMap shows "Try again" if it really fails
+  }, []);
   if (g.load.status !== "ready") return <GameNotice load={g.load} preview={g.preview} />;
 
   const { number, puzzle } = g.load;

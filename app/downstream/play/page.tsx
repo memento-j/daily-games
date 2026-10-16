@@ -4,6 +4,7 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { preconnectMapHosts } from "@/games/downstream/preconnect";
 import DownstreamGame from "./DownstreamGame";
 
 export const metadata: Metadata = {
@@ -12,6 +13,7 @@ export const metadata: Metadata = {
 };
 
 export default function PlayPage() {
+  preconnectMapHosts();
   return (
     // DownstreamGame reads ?puzzle=N with useSearchParams, which in a static
     // export must sit inside a Suspense boundary.

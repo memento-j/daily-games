@@ -10,6 +10,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { SITE_NAME } from "@/lib/site";
 import TrackerScene, { type TrackerStatus } from "./TrackerScene";
+import { puzzleToPlay } from "@/games/downstream/schedule";
+import { padPuzzleNumber } from "@/lib/daily";
 import { useToday } from "@/lib/useToday";
 
 type Scene = "loading" | "ready" | "unavailable";
@@ -20,6 +22,19 @@ export default function TrackerHome() {
   const [clearLeft, setClearLeft] = useState(0);
   const cardRef = useRef<HTMLElement>(null);
   const today = useToday();
+
+  // Once this page is idle, fetch what the game needs (the map code, today's
+  // puzzle) so pressing Play opens it straight away.
+  useEffect(() => {
+    const warm = () => {
+      import("maplibre-gl").catch(() => {});
+      const { number } = puzzleToPlay(null);
+      fetch(`/data/downstream/${padPuzzleNumber(number)}.json`).catch(() => {});
+    };
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => window.setTimeout(cb, 1500));
+    const id = idle(warm);
+    return () => (window.cancelIdleCallback ?? window.clearTimeout)(id);
+  }, []);
 
   // On wide screens, tell the scene how much of the left the card covers, so the
   // route is always framed beside it, never underneath.

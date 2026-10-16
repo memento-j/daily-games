@@ -42,8 +42,18 @@ export default function TrackerScene({ onStatus, onReady, clearLeft }: Props) {
     let disposed = false;
 
     (async () => {
-      const S = await import("./heroScene");
-      const { findRivers } = await import("./heroWorld");
+      let S: typeof import("./heroScene");
+      let rivers: [number, number][][];
+      try {
+        [S, rivers] = await Promise.all([
+          import("./heroScene"),
+          import("./heroRivers.json").then((m) => m.default as [number, number][][]),
+        ]);
+      } catch {
+        // The 3D code didn't download (offline, flaky network): keep the plain sea.
+        if (!disposed) props.current.onReady(false);
+        return;
+      }
       if (disposed) return;
       const { THREE, Line2, LineGeometry, LineMaterial } = S;
       const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -66,7 +76,8 @@ export default function TrackerScene({ onStatus, onReady, clearLeft }: Props) {
       scene.add(terrain);
 
       const riverMat = new LineMaterial({ color: "#a9c9ea", linewidth: 1.3 });
-      for (const path of findRivers(30)) {
+      // Pre-computed by `npm run bake:hero`: the same rivers, without ~0.3 s of tracing.
+      for (const path of rivers) {
         const g = new LineGeometry();
         g.setPositions(S.toPoints(path));
         scene.add(new Line2(g, riverMat));
