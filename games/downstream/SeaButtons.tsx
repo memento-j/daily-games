@@ -4,7 +4,7 @@
 // Tapping one picks it; the game screen then asks the player to lock it in, so a
 // stray click never costs a drop. "Hide seas" takes them off to see the whole map.
 
-import { useLayoutEffect, useState } from "react";
+import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 import type { GameState } from "./game";
 import type { Project } from "./RouteMap";
 import { sound } from "./sound";
@@ -41,14 +41,37 @@ export function usePick(game: GameState): [string | null, (name: string | null) 
   return [picked, (name) => setPick(name ? { name, at } : null)];
 }
 
-/** Where each option sea is on screen; pass `onCamera` to RouteMap. */
-export function useSeaSpots(labels?: Record<string, LngLat>): [(project: Project) => void, Spot[]] {
-  const [spots, setSpots] = useState<Spot[]>([]);
+/** The option seas' screen positions, which change on every camera frame. */
+export type SpotStore = { get: () => Spot[]; subscribe: (listener: () => void) => () => void };
+
+/**
+ * Where each option sea is on screen; pass `onCamera` to RouteMap and the store to
+ * SeaButtons. The positions live in a small store that only SeaButtons listens to,
+ * so a moving camera re-renders four buttons, not the whole game screen.
+ */
+export function useSeaSpots(labels?: Record<string, LngLat>): [(project: Project) => void, SpotStore] {
+  const [store] = useState(() => {
+    let spots: Spot[] = [];
+    const listeners = new Set<() => void>();
+    return {
+      get: () => spots,
+      set: (next: Spot[]) => {
+        spots = next;
+        listeners.forEach((l) => l());
+      },
+      subscribe: (listener: () => void) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    };
+  });
   const onCamera = (project: Project) => {
-    if (labels) setSpots(Object.entries(labels).map(([name, ll]) => ({ name, ...project(ll) })));
+    if (labels) store.set(Object.entries(labels).map(([name, ll]) => ({ name, ...project(ll) })));
   };
-  return [onCamera, spots];
+  return [onCamera, store];
 }
+
+const NO_SPOTS: Spot[] = [];
 
 /** Keep the sea buttons inside the map's free area and off each other (a simple top-to-bottom nudge). */
 function placeSpots(spots: Spot[], width: number, top: number, bottom: number, big: boolean): Spot[] {
@@ -79,7 +102,7 @@ export function SeaButtons({
 }: {
   /** "sm" on phones (keep the map visible), "md" on desktop's bigger map. */
   size?: "sm" | "md";
-  spots: Spot[];
+  spots: SpotStore;
   /** The map's width, and the free band (in px from its top) the buttons must stay within. */
   width: number;
   top: number;
@@ -87,10 +110,11 @@ export function SeaButtons({
   picked: string | null;
   onPick: (name: string) => void;
 }) {
+  const list = useSyncExternalStore(spots.subscribe, spots.get, () => NO_SPOTS);
   if (!width) return null;
   return (
     <div className="pointer-events-none absolute inset-0 z-[5]" role="group" aria-label="Which sea does this raindrop reach?">
-      {placeSpots(spots, width, top, Math.max(top + 40, bottom), size === "md").map((s) => {
+      {placeSpots(list, width, top, Math.max(top + 40, bottom), size === "md").map((s) => {
         const on = s.name === picked;
         return (
           <button

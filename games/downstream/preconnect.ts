@@ -6,5 +6,4 @@ import { preconnect } from "react-dom";
  */
 export function preconnectMapHosts() {
   preconnect("https://tiles.openfreemap.org", { crossOrigin: "anonymous" });
-  preconnect("https://s3.amazonaws.com", { crossOrigin: "anonymous" });
 }

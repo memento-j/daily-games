@@ -1,7 +1,8 @@
 // Downstream's own MapLibre style: the same world as the 3D hero (pale land, soft
-// blue water, hillshade), with clear labels for oceans, seas and bays (italic,
-// water-blue), countries and cities (ink). Vector tiles and fonts are from
-// OpenFreeMap (free, no key); elevation from AWS Terrain Tiles.
+// blue water), with clear labels for oceans, seas and bays (italic, water-blue),
+// countries and cities (ink). Vector tiles and fonts are from OpenFreeMap (free,
+// no key). No elevation shading: it cost a second tile host and a heavy layer,
+// and the rivers, coasts and labels carry the clues (developer's call, 2026-10-16).
 //
 // It replaces the stock "Liberty" style, which carried roads, POIs and busy
 // colours the game doesn't need. Colours mirror the tokens in app/globals.css.
@@ -15,7 +16,6 @@ const C = {
   coast: "#8fa7bf",
   border: "#b9bfc8",
   ice: "#f7f9fa",
-  park: "#e4ebde",
   ink: "#121a2b",
   inkSoft: "#4a5468",
   waterLabel: "#2e5f95",
@@ -25,23 +25,12 @@ const C = {
 // English name where there is one, otherwise the local name.
 const NAME: ExpressionSpecification = ["coalesce", ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
 
-export const TERRAIN_ATTRIBUTION =
-  '<a href="https://registry.opendata.aws/terrain-tiles/" target="_blank">Terrain Tiles</a> (Mapzen, AWS)';
-
 export function downstreamMapStyle(): StyleSpecification {
   return {
     version: 8,
     glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
     sources: {
       openmaptiles: { type: "vector", url: "https://tiles.openfreemap.org/planet" },
-      terrain: {
-        type: "raster-dem",
-        tiles: ["https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"],
-        encoding: "terrarium",
-        tileSize: 256,
-        maxzoom: 12,
-        attribution: TERRAIN_ATTRIBUTION,
-      },
     },
     layers: [
       { id: "background", type: "background", paint: { "background-color": C.land } },
@@ -52,24 +41,6 @@ export function downstreamMapStyle(): StyleSpecification {
         "source-layer": "landcover",
         filter: ["==", ["get", "class"], "ice"],
         paint: { "fill-color": C.ice },
-      },
-      {
-        id: "park",
-        type: "fill",
-        source: "openmaptiles",
-        "source-layer": "park",
-        paint: { "fill-color": C.park, "fill-opacity": 0.6 },
-      },
-      {
-        id: "hillshade",
-        type: "hillshade",
-        source: "terrain",
-        paint: {
-          "hillshade-exaggeration": 0.55,
-          "hillshade-shadow-color": "#6f7a86",
-          "hillshade-highlight-color": "#ffffff",
-          "hillshade-accent-color": "#9aa4ae",
-        },
       },
       {
         id: "waterway-river",

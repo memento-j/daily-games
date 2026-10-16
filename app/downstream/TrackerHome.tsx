@@ -118,7 +118,7 @@ export default function TrackerHome() {
       </section>
 
       <p className="relative px-5 pb-6 text-[11px] leading-relaxed text-ink-faint lg:absolute lg:right-8 lg:bottom-5 lg:p-0">
-        HydroRIVERS · IHO Sea Areas · © OpenStreetMap · Terrain Tiles.
+        HydroRIVERS · IHO Sea Areas · © OpenStreetMap.
         {scene === "ready" && " Hero map: an illustrative world."}
       </p>
     </div>

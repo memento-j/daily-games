@@ -87,6 +87,13 @@ function pinElement() {
   return wrap;
 }
 
+/** The [southwest, northeast] box around some points. */
+function boundsOf(points: number[][]): [[number, number], [number, number]] {
+  const lons = points.map((c) => c[0]);
+  const lats = points.map((c) => c[1]);
+  return [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
+}
+
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
@@ -111,6 +118,7 @@ export default function RouteMap({
   const markerRef = useRef<Marker | null>(null);
   // Which route is on screen, and how much of it is drawn.
   const drawn = useRef<{ route: LngLat[] | null; km: number }>({ route: null, km: 0 });
+  const headOn = useRef(false); // whether the raindrop is on the map (for its glow)
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0); // bumped by "Try again" to rebuild the map
@@ -139,8 +147,10 @@ export default function RouteMap({
         map = new Map({
           container: containerRef.current,
           style: downstreamMapStyle(),
-          center: pin,
-          zoom: 3.5,
+          // Start already framed on the pin and its four seas. (Starting elsewhere and
+          // flying in downloaded a first set of tiles only to throw them away.)
+          bounds: boundsOf([pin, ...Object.values(labels ?? {})]),
+          fitBoundsOptions: { padding: pad, maxZoom: 6 },
           attributionControl: { compact: true },
           dragRotate: false,
           pitchWithRotate: false,
@@ -148,8 +158,12 @@ export default function RouteMap({
         map.touchZoomRotate.disableRotation();
         markerRef.current = new Marker({ element: pinElement() }).setLngLat(pin).addTo(map);
         // Add our layers as soon as the style is ready. ("load" would wait for every
-        // initial tile, terrain included, so one slow tile held back the route and labels.)
+        // initial tile, so one slow tile held back the route and labels.)
+        // Timing marks for performance checks (DevTools > Performance, or performance.getEntriesByType("mark")).
+        performance.mark("map:created");
+        map.once("load", () => performance.mark("map:loaded")); // style + first tiles drawn
         map.once("style.load", () => {
+          performance.mark("map:style-loaded");
           const m = map!;
           m.addSource("route", { type: "geojson", data: EMPTY });
           m.addSource("head", { type: "geojson", data: EMPTY });
@@ -269,20 +283,23 @@ export default function RouteMap({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
 
-  // The current flows continuously along whatever route is drawn.
+  // The current flows along whatever route is drawn, and the raindrop's glow
+  // breathes. Every paint change makes MapLibre redraw the whole map, so this only
+  // touches the map when there is water (or a raindrop) to animate, and at most
+  // every 55 ms: an always-on 60 fps redraw kept the map from ever resting and
+  // slowed tile loading.
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let frame = 0;
     let step = -1;
     const tick = (now: number) => {
-      const next = Math.floor(now / 55) % CURRENT_DASHES.length;
-      if (next !== step) {
+      const next = Math.floor(now / 55);
+      if (next !== step && drawn.current.km > 0) {
         step = next;
-        map.setPaintProperty("route-current", "line-dasharray", CURRENT_DASHES[step]);
+        map.setPaintProperty("route-current", "line-dasharray", CURRENT_DASHES[step % CURRENT_DASHES.length]);
+        if (headOn.current) map.setPaintProperty("head-glow", "circle-radius", 24 + Math.sin(now / 260) * 6);
       }
-      // The raindrop's glow breathes gently.
-      map.setPaintProperty("head-glow", "circle-radius", 24 + Math.sin(now / 260) * 6);
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
@@ -355,11 +372,6 @@ export default function RouteMap({
     const padding = JSON.parse(padKey) as PaddingOptions;
     const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const seaPoints = Object.values((JSON.parse(labelKey) as [Record<string, LngLat> | undefined])[0] ?? {});
-    const boundsOf = (points: number[][]): [[number, number], [number, number]] => {
-      const lons = points.map((c) => c[0]);
-      const lats = points.map((c) => c[1]);
-      return [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
-    };
     const pinDot = markerRef.current?.getElement().querySelector(".route-pin");
     let frame = 0;
     let rippleFrame = 0;
@@ -371,6 +383,7 @@ export default function RouteMap({
       drawn.current = { route, km: 0 };
       routeSource.setData(EMPTY);
       headSource.setData(EMPTY);
+      headOn.current = false;
       rippleSource.setData(EMPTY);
       markerRef.current?.setLngLat(pin);
       pinDot?.classList.remove("is-origin", "is-landing");
@@ -413,6 +426,7 @@ export default function RouteMap({
       const end = target.geometry.coordinates[target.geometry.coordinates.length - 1];
       if (final) {
         headSource.setData(EMPTY); // the drop has joined the sea
+        headOn.current = false;
         ripple(end, WATER, 2);
       } else {
         ripple(end, CORAL, 1);
@@ -424,6 +438,7 @@ export default function RouteMap({
       routeSource.setData(target);
       const end = target.geometry.coordinates[target.geometry.coordinates.length - 1];
       headSource.setData(final ? EMPTY : { type: "Feature", geometry: { type: "Point", coordinates: end }, properties: {} });
+      headOn.current = !final;
       if (overview) map.jumpTo(overview);
       callbacks.current.onFlowStart?.(0, final);
       finish();
@@ -447,6 +462,7 @@ export default function RouteMap({
       const head = drawnLine.geometry.coordinates[drawnLine.geometry.coordinates.length - 1];
       routeSource.setData(drawnLine);
       headSource.setData({ type: "Feature", geometry: { type: "Point", coordinates: head }, properties: {} });
+      headOn.current = true;
       drawn.current.km = km;
       // Camera: settle into the overview, while leaning in and travelling with the drop
       // mid-flow (sin curve: zero at both ends, so it lands exactly on the overview).

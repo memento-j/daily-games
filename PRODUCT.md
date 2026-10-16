@@ -30,7 +30,7 @@ Downstream's puzzles are real hydrology: every route is traced from a global riv
 ## Capabilities and Constraints
 
 - Puzzles are precomputed offline by a Python pipeline and fetched at runtime; never bundled.
-- Maps use MapLibre GL with free vector tiles (OpenFreeMap) and AWS Terrain Tiles; no API keys.
+- Maps use MapLibre GL with free vector tiles (OpenFreeMap); no API keys. No terrain shading on the game map (removed for speed).
 - AdSense readiness later requires real HTML content: homepage with game descriptions, how-to-play per game, About, Privacy, Contact. Ads must never interrupt play.
 - Undecided: the site/brand name (use a clearly marked placeholder), launch date, final scoring after playtest.
 
