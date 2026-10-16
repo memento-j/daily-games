@@ -153,3 +153,20 @@ button:not(:disabled),
     transition: none;
   }
 }
+
+/* A bar's contents changing in place (the phone game's lock-in step): rise in
+   a few pixels instead of swapping instantly. */
+.rise-in {
+  animation: rise-in 260ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes rise-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rise-in {
+    animation: none;
+  }
+}

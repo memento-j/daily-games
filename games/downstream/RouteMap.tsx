@@ -46,7 +46,10 @@ export function drawDuration(fraction: number, final: boolean): number {
   return Math.min(final ? 4200 : 3200, Math.max(1600, ms));
 }
 
-type Props = {
+/** Where a map position currently is on screen, in CSS pixels from the map's top-left. */
+export type Project = (lngLat: LngLat) => { x: number; y: number };
+
+export type RouteMapProps = {
   pin: LngLat;
   route: LngLat[];
   revealKm: number; // draw the route up to here; Infinity = the whole route
@@ -67,6 +70,10 @@ type Props = {
   onFlowStart?: (ms: number, final: boolean) => void;
   /** The water reached the next stop (or, if `final`, the sea). */
   onFlowEnd?: (final: boolean) => void;
+  /** Hide the map's own lettering of the option seas (when the page draws them as buttons). */
+  hideOptionLabels?: boolean;
+  /** Called whenever the camera moves, so the page can keep things pinned to map positions. */
+  onCamera?: (project: Project) => void;
   className?: string;
 };
 
@@ -95,8 +102,10 @@ export default function RouteMap({
   onLand,
   onFlowStart,
   onFlowEnd,
+  hideOptionLabels = false,
+  onCamera,
   className = "",
-}: Props) {
+}: RouteMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
@@ -108,9 +117,9 @@ export default function RouteMap({
   const pad = { top: 60, right: 60, bottom: 60, left: 60, ...padding };
   const padKey = JSON.stringify(pad);
   // The animation reads the latest callbacks through a ref, kept in sync after each render.
-  const callbacks = useRef({ onLand, onFlowStart, onFlowEnd });
+  const callbacks = useRef({ onLand, onFlowStart, onFlowEnd, onCamera });
   useEffect(() => {
-    callbacks.current = { onLand, onFlowStart, onFlowEnd };
+    callbacks.current = { onLand, onFlowStart, onFlowEnd, onCamera };
   });
 
   // Create the map (again after "Try again").
@@ -232,6 +241,15 @@ export default function RouteMap({
           mapRef.current = m;
           setReady(true);
         });
+        // Tell the page where things are on screen whenever the camera moves.
+        const report = () => callbacks.current.onCamera?.((lngLat) => map!.project(lngLat));
+        map.on("move", report);
+        map.on("resize", report);
+        // The attribution starts open; fold it to its (i) button after a few seconds
+        // so it doesn't sit over the map on small screens. Tapping (i) opens it again.
+        window.setTimeout(() => {
+          containerRef.current?.querySelector(".maplibregl-ctrl-attrib")?.classList.remove("maplibregl-compact-show");
+        }, 4000);
         // Follow the container's size (layouts settle after the map is created).
         resizeObserver = new ResizeObserver(() => map?.resize());
         resizeObserver.observe(containerRef.current);
@@ -316,6 +334,14 @@ export default function RouteMap({
     }
   }, [ready, labelKey]);
 
+  // The page draws the option seas itself (as buttons) and wants the map's copy hidden.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    map.setLayoutProperty("option-labels", "visibility", hideOptionLabels ? "none" : "visible");
+    callbacks.current.onCamera?.((lngLat) => map.project(lngLat));
+  }, [ready, hideOptionLabels]);
+
   // New drop or new reveal: the raindrop leads the water from what's drawn to revealKm.
   useEffect(() => {
     const map = mapRef.current;
@@ -398,7 +424,7 @@ export default function RouteMap({
       routeSource.setData(target);
       const end = target.geometry.coordinates[target.geometry.coordinates.length - 1];
       headSource.setData(final ? EMPTY : { type: "Feature", geometry: { type: "Point", coordinates: end }, properties: {} });
-      if (overview) map.jumpTo({ ...overview, padding });
+      if (overview) map.jumpTo(overview);
       callbacks.current.onFlowStart?.(0, final);
       finish();
       return;
@@ -431,7 +457,8 @@ export default function RouteMap({
       map!.jumpTo({
         center: [lerp(baseLng, head[0], lean * 0.45), lerp(baseLat, head[1], lean * 0.45)],
         zoom: lerp(startZoom, endZoom, settle) + lean * leanZoom,
-        padding,
+        // No `padding` here: cameraForBounds already allowed for it, and jumpTo would
+        // keep it on the map, doubling it in every later framing.
       });
       if (raw < 1) frame = requestAnimationFrame(tick);
       else finish();

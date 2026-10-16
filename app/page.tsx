@@ -44,7 +44,6 @@ export default function Home() {
                   </span>
                   <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
                     A raindrop lands somewhere on Earth. Guess which sea it reaches.
-                    DEPLOY TEST
                   </span>
                   <span className="mt-4 block">
                     <DownstreamStatus />

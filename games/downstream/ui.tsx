@@ -57,7 +57,7 @@ export function SoundToggle({ className = "" }: { className?: string }) {
       aria-pressed={!muted}
       aria-label={muted ? "Turn sound on" : "Turn sound off"}
       title={muted ? "Sound off" : "Sound on"}
-      className={`grid size-12 place-items-center rounded-full bg-white shadow-card transition-[color,transform] duration-200 hover:scale-105 active:scale-95 ${muted ? "text-ink-faint" : "text-coral-deep"} ${className}`}
+      className={`grid size-12 place-items-center rounded-full bg-white shadow-card transition-[color,scale,translate] duration-200 hover:scale-105 active:scale-95 ${muted ? "text-ink-faint" : "text-coral-deep"} ${className}`}
     >
       <svg viewBox="0 0 20 20" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M3.5 8v4h3l4 3.5v-11l-4 3.5h-3Z" fill="currentColor" stroke="none" />
@@ -92,17 +92,21 @@ export function DropTokens({ puzzle, game }: { puzzle: Puzzle; game: GameState }
 }
 
 /**
- * The four seas. While guessing they're plain white tiles; once the drop is
+ * The four seas. While guessing they're plain white tiles, and the one picked
+ * (here or on the map) lights up coral until it's locked in; once the drop is
  * decided, the sea it really reaches turns water-blue and a wrong pick turns coral-soft.
  */
 export function SeaOptions({
   drop,
   result,
+  picked,
   onGuess,
   columns = 2,
 }: {
   drop: Drop;
   result?: DropResult;
+  /** The sea picked but not locked in yet. */
+  picked?: string | null;
   onGuess: (option: string) => void;
   columns?: 1 | 2;
 }) {
@@ -110,9 +114,10 @@ export function SeaOptions({
     <div className={`grid gap-2 ${columns === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
       {drop.options.map((option) => {
         const isAnswer = option === drop.answer;
-        const picked = result?.guess === option;
-        const state = !result ? "open" : isAnswer ? "answer" : picked ? "wrong" : "other";
+        const guessed = result?.guess === option;
+        const state = !result ? (option === picked ? "picked" : "open") : isAnswer ? "answer" : guessed ? "wrong" : "other";
         const cls = {
+          picked: "bg-coral text-white ring-2 ring-coral shadow-[0_8px_20px_-10px_rgb(217_61_70/0.8)]",
           open: "bg-white text-ink ring-1 ring-line hover:ring-2 hover:ring-coral hover:-translate-y-px active:translate-y-0 shadow-[0_2px_6px_-2px_rgb(18_26_43/0.12)]",
           answer: "bg-drop text-white ring-1 ring-drop",
           wrong: "bg-coral-soft text-coral-deep ring-1 ring-coral/40",
@@ -123,16 +128,35 @@ export function SeaOptions({
             key={option}
             type="button"
             disabled={!!result}
+            aria-pressed={result ? undefined : option === picked}
             onClick={() => onGuess(option)}
-            className={`flex min-h-14 items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-[16px] leading-tight font-semibold transition-[transform,box-shadow,background-color] duration-200 ease-out disabled:cursor-default ${cls}`}
+            className={`flex min-h-14 items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-[16px] leading-tight font-semibold transition-[scale,translate,box-shadow,background-color] duration-200 ease-out disabled:cursor-default ${cls}`}
           >
             <span>{option}</span>
             {state === "answer" && <span className="text-xs font-bold tracking-wide uppercase">Reached</span>}
             {state === "wrong" && <span className="text-xs font-bold tracking-wide uppercase">Your pick</span>}
+            {state === "picked" && <span className="text-xs font-bold tracking-wide uppercase">Picked</span>}
           </button>
         );
       })}
     </div>
+  );
+}
+
+/** Confirms the picked sea: the guess only counts once it's locked in. */
+export function LockInButton({ name, points, onLock }: { name: string; points: number; onLock: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onLock}
+      className="rise-in group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral px-5 text-[17px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+    >
+      <span className="truncate">Lock in {name}</span>
+      <span className="shrink-0 font-semibold text-white/80">· {points} pt{points === 1 ? "" : "s"}</span>
+      <svg viewBox="0 0 20 20" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="m4.5 10.5 3.5 3.5 7.5-8" />
+      </svg>
+    </button>
   );
 }
 
@@ -143,7 +167,7 @@ export function FlowButton({ stage, stops, onFlow }: { stage: number; stops: num
     <button
       type="button"
       onClick={onFlow}
-      className="group flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-[box-shadow,transform] duration-200 hover:ring-ink/35 active:scale-[0.99]"
+      className="group flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-[box-shadow,scale,translate] duration-200 hover:ring-ink/35 active:scale-[0.99]"
     >
       {last ? "Show me where it goes" : "Let it flow"}
       <span className="text-ink-faint">{last ? "· no points" : `· stop ${stage + 1} of ${stops}`}</span>
@@ -163,7 +187,7 @@ export function NextButton({ last, onNext }: { last: boolean; onNext: () => void
       type="button"
       onClick={onNext}
       autoFocus
-      className="group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,transform] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+      className="group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-deep active:scale-[0.98]"
     >
       {last ? "See today's results" : "Next drop"}
       <svg viewBox="0 0 20 20" className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
@@ -269,7 +293,7 @@ export function ShareButton({
       onClick={share}
       className={
         primary
-          ? "group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,transform] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+          ? "group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-deep active:scale-[0.98]"
           : "flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
       }
     >

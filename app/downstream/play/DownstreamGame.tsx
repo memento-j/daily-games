@@ -9,7 +9,7 @@
 // Game rules and loading live in games/downstream (useDownstreamGame); this file
 // only decides how it looks.
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import AdSlot from "@/components/AdSlot";
 import RouteMap from "@/games/downstream/RouteMap";
 import { POINTS_BY_STAGE } from "@/games/downstream/scoring";
@@ -19,6 +19,7 @@ import {
   DropTokens,
   FirstTimeHint,
   FlowButton,
+  LockInButton,
   GameNotice,
   GameTopBar,
   NextButton,
@@ -28,11 +29,33 @@ import {
   useFirstTime,
 } from "@/games/downstream/ui";
 import { useDownstreamGame } from "@/games/downstream/useDownstreamGame";
+import { HideSeasToggle, SeaButtons, usePick, useSeaSpots, useSize } from "@/games/downstream/SeaButtons";
+import PhoneGame from "./PhoneGame";
+
+// Phones get their own layout (PhoneGame); this file's split screen is for 1024px and up.
+const DESKTOP = "(min-width: 1024px)";
+function useIsDesktop(): boolean {
+  return useSyncExternalStore(
+    (onChange) => {
+      const mq = matchMedia(DESKTOP);
+      mq.addEventListener("change", onChange);
+      return () => mq.removeEventListener("change", onChange);
+    },
+    () => matchMedia(DESKTOP).matches,
+    () => true,
+  );
+}
 
 export default function DownstreamGame() {
   const g = useDownstreamGame();
   const [firstTime, dismissIntro] = useFirstTime();
   const stopFlow = useRef<() => void>(() => {});
+  const isDesktop = useIsDesktop();
+  // Desktop: the sea picked (on the map or in the sidebar) waits for Lock in.
+  const [picked, setPick] = usePick(g.game);
+  const [seasHidden, setSeasHidden] = useState(false);
+  const [mapRef, mapSize] = useSize<HTMLDivElement>();
+  const [onCamera, spots] = useSeaSpots(g.load.status === "ready" ? g.load.puzzle.drops[Math.min(g.game.drop, g.load.puzzle.drops.length - 1)].seaLabels : undefined);
   // Start downloading the map code now, alongside the puzzle, not after it.
   useEffect(() => {
     import("maplibre-gl").catch(() => {}); // RouteMap shows "Try again" if it really fails
@@ -48,15 +71,63 @@ export default function DownstreamGame() {
   const points = POINTS_BY_STAGE[g.game.stage];
 
   function guess(option: string) {
+    setPick(null);
     if (firstTime) dismissIntro();
     if (option === drop.answer) sound.right();
     else sound.wrong();
     g.act({ type: "guess", option });
   }
+  /** Desktop: pick a sea (map or sidebar); clicking the picked one again un-picks it. */
+  function pickSea(option: string) {
+    sound.tap();
+    if (firstTime) dismissIntro();
+    setPick(option === picked ? null : option);
+  }
   function flow() {
     sound.tap();
     if (firstTime) dismissIntro();
     g.act({ type: "reveal" });
+  }
+  function next() {
+    sound.next();
+    g.act({ type: "next" });
+  }
+  const mapProps = {
+    pin: drop.pin,
+    route: drop.route,
+    revealKm,
+    labels: drop.seaLabels,
+    answer: finished || result ? drop.answer : undefined,
+    interactive: finished || !!result,
+    onLand: () => sound.drip(),
+    onFlowStart: (ms: number) => {
+      stopFlow.current();
+      stopFlow.current = ms > 0 ? sound.flow(ms) : () => {};
+    },
+    onFlowEnd: (final: boolean) => (final ? sound.splash() : sound.chime()),
+  };
+
+  if (!isDesktop) {
+    return (
+      <PhoneGame
+        number={number}
+        preview={g.preview}
+        puzzle={puzzle}
+        game={g.game}
+        drop={drop}
+        result={result}
+        finished={finished}
+        firstTime={firstTime}
+        onDismissIntro={() => {
+          sound.tap();
+          dismissIntro();
+        }}
+        onGuess={guess}
+        onFlow={flow}
+        onNext={next}
+        map={mapProps}
+      />
+    );
   }
 
   return (
@@ -82,10 +153,7 @@ export default function DownstreamGame() {
               <div className="mt-6 flex flex-col gap-4">
                 <ResultText drop={drop} result={result} />
                 <SeaOptions drop={drop} result={result} onGuess={() => {}} columns={1} />
-                <NextButton last={g.game.drop + 1 >= puzzle.drops.length} onNext={() => {
-                    sound.next();
-                    g.act({ type: "next" });
-                  }} />
+                <NextButton last={g.game.drop + 1 >= puzzle.drops.length} onNext={next} />
               </div>
             ) : (
               <>
@@ -115,9 +183,10 @@ export default function DownstreamGame() {
                 </div>
                 <p className="mt-5 text-[15px] text-ink-soft">Which sea does this raindrop reach?</p>
                 <div className="mt-3">
-                  <SeaOptions drop={drop} onGuess={guess} columns={1} />
+                  <SeaOptions drop={drop} picked={picked} onGuess={pickSea} columns={1} />
                 </div>
-                <div className="mt-3">
+                <div className="mt-3 flex flex-col gap-3">
+                  {picked && <LockInButton key={picked} name={picked} points={points} onLock={() => guess(picked)} />}
                   <FlowButton stage={g.game.stage} stops={drop.stages.length} onFlow={flow} />
                 </div>
               </>
@@ -127,22 +196,38 @@ export default function DownstreamGame() {
         <AdSlot className="mt-8 lg:mt-auto lg:pt-8" />
       </section>
 
-      <div className="relative h-[46svh] min-h-[300px] lg:h-full">
+      <div ref={mapRef} className="relative h-[46svh] min-h-[300px] lg:h-full">
         <RouteMap
-          pin={drop.pin}
-          route={drop.route}
-          revealKm={revealKm}
-          labels={drop.seaLabels}
-          answer={finished || result ? drop.answer : undefined}
-          interactive={finished || !!result}
-          onLand={() => sound.drip()}
-          onFlowStart={(ms) => {
-            stopFlow.current();
-            stopFlow.current = ms > 0 ? sound.flow(ms) : () => {};
-          }}
-          onFlowEnd={(final) => (final ? sound.splash() : sound.chime())}
+          {...mapProps}
+          hideOptionLabels={!result && !finished}
+          onCamera={onCamera}
+          padding={{ top: 100, bottom: 100, left: 120, right: 120 }}
           className="h-full w-full"
         />
+        {!result && !finished && !seasHidden && (
+          <SeaButtons
+            size="md"
+            spots={spots}
+            width={mapSize.width}
+            top={40}
+            bottom={mapSize.height - 70}
+            picked={picked}
+            onPick={(name) => {
+              if (firstTime) dismissIntro();
+              setPick(name === picked ? null : name);
+            }}
+          />
+        )}
+        {!result && !finished && (
+          <HideSeasToggle
+            hidden={seasHidden}
+            onToggle={() => {
+              setSeasHidden((h) => !h);
+              setPick(null);
+            }}
+            className="absolute bottom-6 left-6"
+          />
+        )}
         <div className="absolute top-4 right-4 left-4 lg:hidden">
           <GameTopBar number={number} preview={g.preview} />
         </div>

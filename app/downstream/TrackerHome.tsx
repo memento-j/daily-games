@@ -100,7 +100,7 @@ export default function TrackerHome() {
           <>
             <Link
               href="/downstream/play/"
-              className="group mt-6 flex h-14 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,transform] duration-200 ease-out hover:bg-coral-deep active:scale-[0.98]"
+              className="group mt-6 flex h-14 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 ease-out hover:bg-coral-deep active:scale-[0.98]"
             >
               Play today&apos;s drops
               <svg viewBox="0 0 20 20" className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
