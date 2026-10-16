@@ -6,13 +6,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import Countdown from "@/components/Countdown";
 import { padPuzzleNumber } from "@/lib/daily";
+import { shareResult, shareText } from "@/lib/share";
+import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import { useToday } from "@/lib/useToday";
 import type { GameState } from "./game";
-import { dropPoints, maxPoints, totalPoints, type DropResult } from "./scoring";
+import { storageKeyFor } from "./schedule";
+import { dropEmoji, dropPoints, maxPoints, totalPoints, type DropResult } from "./scoring";
+import { isMuted, setMuted, sound } from "./sound";
 import type { Drop, Puzzle } from "./types";
 import type { Load } from "./useDownstreamGame";
+import { useStats } from "./useTodayResult";
 
 const MAX_PREVIEWS = 60;
 
@@ -35,6 +41,29 @@ export function GameTopBar({ number, preview }: { number: number | null; preview
         </span>
       )}
     </div>
+  );
+}
+
+/** Sound on/off, remembered between visits. Big and obvious, pinned to the map's corner. */
+export function SoundToggle({ className = "" }: { className?: string }) {
+  const muted = useSyncExternalStore(subscribe, isMuted, () => false);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        setMuted(!muted);
+        if (muted) sound.tap(); // turning sound on confirms itself
+      }}
+      aria-pressed={!muted}
+      aria-label={muted ? "Turn sound on" : "Turn sound off"}
+      title={muted ? "Sound off" : "Sound on"}
+      className={`grid size-12 place-items-center rounded-full bg-white shadow-card transition-[color,transform] duration-200 hover:scale-105 active:scale-95 ${muted ? "text-ink-faint" : "text-coral-deep"} ${className}`}
+    >
+      <svg viewBox="0 0 20 20" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M3.5 8v4h3l4 3.5v-11l-4 3.5h-3Z" fill="currentColor" stroke="none" />
+        {muted ? <path d="m13.5 7.5 5 5m0-5-5 5" /> : <path d="M13.5 7.2a4 4 0 0 1 0 5.6M15.8 5a7 7 0 0 1 0 10" />}
+      </svg>
+    </button>
   );
 }
 
@@ -159,14 +188,104 @@ export function ResultText({ drop, result }: { drop: Drop; result: DropResult })
           "Here's where it goes."
         )}
       </p>
-      <p className="mt-1 text-[16px] leading-snug text-ink-soft">{drop.fact}</p>
+      <p className="mt-1 text-[16px] leading-snug text-ink-soft">{factLine(drop)}</p>
     </div>
   );
 }
 
-/** The day's results: points, tokens, and each drop's answer. */
-export function DaySummary({ puzzle, game, preview }: { puzzle: Puzzle; game: GameState; preview: boolean }) {
+/** "the Atlantic Ocean", but "Hudson Bay" (as the pipeline writes it). */
+const withArticle = (sea: string) => (sea.endsWith(" Bay") ? sea : `the ${sea}`);
+
+/**
+ * The surprise is the payoff: when the obvious guess (the sea nearest the pin)
+ * isn't where the water goes, lead with that. Otherwise the plain fact.
+ */
+export function factLine(drop: Drop): string {
+  if (drop.nearestSea && drop.nearestSea !== drop.answer) {
+    return `${withArticle(drop.nearestSea).replace(/^the /, "The ")} is the nearest sea, but this water travels ${drop.distanceKm.toLocaleString()} km to ${withArticle(drop.answer)}.`;
+  }
+  return drop.fact;
+}
+
+/** Shown once, on a player's very first drop: how a round works, in one breath. */
+export function FirstTimeHint({ onDismiss }: { onDismiss: () => void }) {
+  return (
+    <div role="note" className="rounded-2xl bg-coral-soft/70 p-4 text-[15px] leading-snug text-ink">
+      <p className="font-semibold">First time? Here&apos;s the idea.</p>
+      <p className="mt-1 text-ink-soft">
+        Rain falls on the coral pin. Guess the sea it ends up in right away for 4 points, or tap{" "}
+        <span className="font-semibold text-ink">Let it flow</span> to watch the water move, for fewer points. One guess
+        per drop.
+      </p>
+      <button type="button" onClick={onDismiss} className="mt-2 text-sm font-semibold text-coral-deep underline">
+        Got it
+      </button>
+    </div>
+  );
+}
+
+const INTRO_SETTING = "introSeen";
+/** Whether the first-time hint should show (hidden during the build and hydration). */
+export function useFirstTime(): [boolean, () => void] {
+  const seen = useSyncExternalStore(subscribe, () => getSetting("downstream", INTRO_SETTING, false), () => true);
+  return [!seen, () => setSetting("downstream", INTRO_SETTING, true)];
+}
+
+/** Share the day's result: the system share sheet on phones, the clipboard elsewhere. */
+export function ShareButton({
+  number,
+  preview,
+  results,
+  maxPointsTotal,
+  primary = true,
+}: {
+  number: number;
+  preview: boolean;
+  results: DropResult[];
+  maxPointsTotal: number;
+  primary?: boolean;
+}) {
+  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
+  async function share() {
+    sound.tap();
+    const text = shareText({
+      game: "Downstream",
+      number,
+      preview,
+      marks: results.map(dropEmoji),
+      points: totalPoints(results),
+      maxPoints: maxPointsTotal,
+      url: `${location.origin}/downstream/`,
+    });
+    const outcome = await shareResult(text);
+    if (outcome !== "shared") {
+      setState(outcome);
+      window.setTimeout(() => setState("idle"), 2200);
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={share}
+      className={
+        primary
+          ? "group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,transform] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+          : "flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+      }
+    >
+      <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M10 13V3.5M6.5 7 10 3.5 13.5 7M4 11v4.5h12V11" />
+      </svg>
+      <span aria-live="polite">{state === "copied" ? "Copied. Paste it anywhere" : state === "failed" ? "Couldn't copy" : "Share your result"}</span>
+    </button>
+  );
+}
+
+/** The day's results: score and share first, then streak and stats, the countdown, and each drop. */
+export function DaySummary({ number, puzzle, game, preview }: { number: number; puzzle: Puzzle; game: GameState; preview: boolean }) {
   const points = totalPoints(game.results);
+  const max = maxPoints(puzzle.drops.length);
+  const stats = useStats(storageKeyFor(preview), number);
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -175,10 +294,34 @@ export function DaySummary({ puzzle, game, preview }: { puzzle: Puzzle; game: Ga
         </h2>
         <p className="font-display mt-2 text-[56px] leading-none font-semibold tracking-[-0.04em]">
           {points}
-          <span className="text-[28px] text-ink-faint"> / {maxPoints(puzzle.drops.length)}</span>
+          <span className="text-[28px] text-ink-faint"> / {max}</span>
         </p>
       </div>
       <DropTokens puzzle={puzzle} game={game} />
+      <ShareButton number={number} preview={preview} results={game.results} maxPointsTotal={max} />
+
+      <dl className="grid grid-cols-4 gap-2 text-center">
+        {[
+          ["Streak", stats?.currentStreak],
+          ["Best", stats?.bestStreak],
+          ["Played", stats?.played],
+          ["Average", stats?.averagePoints ?? "–"],
+        ].map(([label, value]) => (
+          <div key={label as string} className="rounded-2xl bg-white px-1 py-3 ring-1 ring-line">
+            {/* Label first in the markup (dt before dd); shown below the number. */}
+            <div className="flex flex-col-reverse">
+              <dt className="mt-1 text-xs font-semibold text-ink-faint">{label}</dt>
+              <dd className="font-display text-[24px] leading-none font-semibold tracking-[-0.02em]">{value ?? "\u00a0"}</dd>
+            </div>
+          </div>
+        ))}
+      </dl>
+      <p className="-mt-2 text-xs text-ink-faint">Miss a day and your streak survives, once a week.</p>
+
+      <p className="font-display text-[20px] font-semibold tracking-[-0.02em]">
+        <Countdown />
+      </p>
+
       <ol className="divide-y divide-line rounded-2xl bg-white ring-1 ring-line">
         {puzzle.drops.map((drop, i) => {
           const r = game.results[i];
@@ -196,7 +339,6 @@ export function DaySummary({ puzzle, game, preview }: { puzzle: Puzzle; game: Ga
           );
         })}
       </ol>
-      <p className="text-[15px] text-ink-soft">Five new drops tomorrow, at midnight your time.</p>
       {preview && <PreviewList />}
     </div>
   );

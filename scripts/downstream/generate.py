@@ -250,6 +250,9 @@ def build_drop(rivers: Rivers, seas: Seas, c: Candidate, rng: np.random.Generato
         "fact": f"This drop travels {distance:,} km and ends up in {with_article(c.answer)}.",
         "difficulty": c.difficulty,
         "seaLabels": sea_labels(seas, c.pin, options),
+        # The sea a player would naively guess (nearest the pin): when it isn't the
+        # answer, the game can say so, which is the surprise worth sharing.
+        "nearestSea": display_name(drop.nearest_sea),
     }
 
 
@@ -264,14 +267,17 @@ def sea_labels(seas: Seas, pin: tuple[float, float], options: list[str]) -> dict
 
 
 def add_labels() -> None:
-    """Add seaLabels to puzzle files that don't have them yet (keeps everything else as is)."""
+    """Add seaLabels and nearestSea to puzzle files that lack them (keeps everything else as is)."""
     seas = Seas()
     files = sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json"))
     for f in files:
         data = json.loads(f.read_text(encoding="utf-8"))
-        todo = [d for d in data["drops"] if "seaLabels" not in d]
+        todo = [d for d in data["drops"] if "seaLabels" not in d or "nearestSea" not in d]
         for d in todo:
-            d["seaLabels"] = sea_labels(seas, tuple(d["pin"]), d["options"])
+            if "seaLabels" not in d:
+                d["seaLabels"] = sea_labels(seas, tuple(d["pin"]), d["options"])
+            if "nearestSea" not in d:
+                d["nearestSea"] = display_name(seas.name_at(*d["pin"])[0])
         if todo:
             f.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
         print(f"  {f.name}: {len(todo)} drops labelled")
@@ -489,7 +495,7 @@ if __name__ == "__main__":
     g = sub.add_parser("generate", help="write the next batch of daily puzzles to public/data/downstream/")
     g.add_argument("--days", type=int, default=DEFAULT_DAYS, help=f"puzzles to add (default {DEFAULT_DAYS})")
     g.add_argument("--seed", type=int, help="random seed (default: last puzzle number, so runs are repeatable)")
-    sub.add_parser("label", help="add map label points for each drop's four seas to existing puzzle files")
+    sub.add_parser("label", help="add map label points and the nearest sea to existing puzzle files")
     t = sub.add_parser("trace", help="trace one pin")
     t.add_argument("lon", type=float)
     t.add_argument("lat", type=float)

@@ -51,6 +51,7 @@ export function getResult<T>(game: string, day: number): T | null {
 export function saveResult<T>(game: string, day: number, result: T): void {
   write(key(game, "history"), { ...getHistory<T>(game), [day]: result });
   write(key(game, "lastPlayed"), day);
+  notify();
 }
 
 export function getLastPlayed(game: string): number | null {
@@ -69,4 +70,36 @@ export function saveInProgress<T>(game: string, day: number, state: T): void {
 
 export function clearInProgress(game: string): void {
   remove(key(game, "inProgress"));
+}
+
+/** A small per-game setting (sound on/off, intro seen, ...). Use game "site" for site-wide ones. */
+export function getSetting<T>(game: string, name: string, fallback: T): T {
+  return read<T>(key(game, `setting:${name}`)) ?? fallback;
+}
+
+export function setSetting<T>(game: string, name: string, value: T): void {
+  write(key(game, `setting:${name}`), value);
+  notify();
+}
+
+// Change notifications, so components can re-read storage (e.g. with
+// useSyncExternalStore) when a result is saved here or in another tab.
+const EVENT = "dg-storage";
+
+function notify(): void {
+  try {
+    window.dispatchEvent(new Event(EVENT));
+  } catch {
+    // not in a browser (tests, build): nothing to notify
+  }
+}
+
+/** Calls `onChange` whenever stored data changes (this tab or another). Returns an unsubscribe. */
+export function subscribe(onChange: () => void): () => void {
+  window.addEventListener(EVENT, onChange);
+  window.addEventListener("storage", onChange);
+  return () => {
+    window.removeEventListener(EVENT, onChange);
+    window.removeEventListener("storage", onChange);
+  };
 }

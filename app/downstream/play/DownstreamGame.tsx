@@ -9,24 +9,30 @@
 // Game rules and loading live in games/downstream (useDownstreamGame); this file
 // only decides how it looks.
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import AdSlot from "@/components/AdSlot";
 import RouteMap from "@/games/downstream/RouteMap";
 import { POINTS_BY_STAGE } from "@/games/downstream/scoring";
+import { sound } from "@/games/downstream/sound";
 import {
   DaySummary,
   DropTokens,
+  FirstTimeHint,
   FlowButton,
   GameNotice,
   GameTopBar,
   NextButton,
   ResultText,
   SeaOptions,
+  SoundToggle,
+  useFirstTime,
 } from "@/games/downstream/ui";
 import { useDownstreamGame } from "@/games/downstream/useDownstreamGame";
 
 export default function DownstreamGame() {
   const g = useDownstreamGame();
+  const [firstTime, dismissIntro] = useFirstTime();
+  const stopFlow = useRef<() => void>(() => {});
   // Start downloading the map code now, alongside the puzzle, not after it.
   useEffect(() => {
     import("maplibre-gl").catch(() => {}); // RouteMap shows "Try again" if it really fails
@@ -41,6 +47,18 @@ export default function DownstreamGame() {
   const revealKm = finished || result ? Infinity : g.game.stage === 0 ? 0 : drop.stages[g.game.stage - 1];
   const points = POINTS_BY_STAGE[g.game.stage];
 
+  function guess(option: string) {
+    if (firstTime) dismissIntro();
+    if (option === drop.answer) sound.right();
+    else sound.wrong();
+    g.act({ type: "guess", option });
+  }
+  function flow() {
+    sound.tap();
+    if (firstTime) dismissIntro();
+    g.act({ type: "reveal" });
+  }
+
   return (
     <div className="font-sans flex flex-col-reverse bg-land text-ink lg:grid lg:h-svh lg:grid-cols-[440px_1fr] lg:overflow-hidden">
       <section className="relative z-10 -mt-7 flex flex-col rounded-t-[28px] bg-card px-5 pt-6 pb-8 shadow-card lg:mt-0 lg:overflow-y-auto lg:rounded-none lg:p-8 lg:shadow-[8px_0_30px_-18px_rgb(18_26_43/0.3)]">
@@ -49,7 +67,7 @@ export default function DownstreamGame() {
         </div>
         {finished ? (
           <div className="lg:mt-8">
-            <DaySummary puzzle={puzzle} game={g.game} preview={g.preview} />
+            <DaySummary number={number} puzzle={puzzle} game={g.game} preview={g.preview} />
           </div>
         ) : (
           <>
@@ -64,10 +82,23 @@ export default function DownstreamGame() {
               <div className="mt-6 flex flex-col gap-4">
                 <ResultText drop={drop} result={result} />
                 <SeaOptions drop={drop} result={result} onGuess={() => {}} columns={1} />
-                <NextButton last={g.game.drop + 1 >= puzzle.drops.length} onNext={() => g.act({ type: "next" })} />
+                <NextButton last={g.game.drop + 1 >= puzzle.drops.length} onNext={() => {
+                    sound.next();
+                    g.act({ type: "next" });
+                  }} />
               </div>
             ) : (
               <>
+                {firstTime && g.game.drop === 0 && (
+                  <div className="mt-6">
+                    <FirstTimeHint
+                      onDismiss={() => {
+                        sound.tap();
+                        dismissIntro();
+                      }}
+                    />
+                  </div>
+                )}
                 <div className="mt-6 rounded-2xl bg-coral-soft/60 p-4">
                   <div className="flex items-baseline justify-between">
                     <p className="text-sm font-semibold text-coral-deep">A correct call now is worth</p>
@@ -84,10 +115,10 @@ export default function DownstreamGame() {
                 </div>
                 <p className="mt-5 text-[15px] text-ink-soft">Which sea does this raindrop reach?</p>
                 <div className="mt-3">
-                  <SeaOptions drop={drop} onGuess={(option) => g.act({ type: "guess", option })} columns={1} />
+                  <SeaOptions drop={drop} onGuess={guess} columns={1} />
                 </div>
                 <div className="mt-3">
-                  <FlowButton stage={g.game.stage} stops={drop.stages.length} onFlow={() => g.act({ type: "reveal" })} />
+                  <FlowButton stage={g.game.stage} stops={drop.stages.length} onFlow={flow} />
                 </div>
               </>
             )}
@@ -103,11 +134,20 @@ export default function DownstreamGame() {
           revealKm={revealKm}
           labels={drop.seaLabels}
           answer={finished || result ? drop.answer : undefined}
+          interactive={finished || !!result}
+          onLand={() => sound.drip()}
+          onFlowStart={(ms) => {
+            stopFlow.current();
+            stopFlow.current = ms > 0 ? sound.flow(ms) : () => {};
+          }}
+          onFlowEnd={(final) => (final ? sound.splash() : sound.chime())}
           className="h-full w-full"
         />
         <div className="absolute top-4 right-4 left-4 lg:hidden">
           <GameTopBar number={number} preview={g.preview} />
         </div>
+        {/* Sound on/off: big, in the map's top-right corner (below the top bar on phones). */}
+        <SoundToggle className="absolute top-16 right-4 z-10 lg:top-6 lg:right-6" />
       </div>
     </div>
   );

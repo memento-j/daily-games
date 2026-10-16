@@ -13,6 +13,10 @@ import TrackerScene, { type TrackerStatus } from "./TrackerScene";
 import { puzzleToPlay } from "@/games/downstream/schedule";
 import { padPuzzleNumber } from "@/lib/daily";
 import { useToday } from "@/lib/useToday";
+import Countdown from "@/components/Countdown";
+import { dropEmoji, maxPoints, totalPoints, type DropResult } from "@/games/downstream/scoring";
+import { ShareButton } from "@/games/downstream/ui";
+import { useTodayResult } from "@/games/downstream/useTodayResult";
 
 type Scene = "loading" | "ready" | "unavailable";
 
@@ -22,6 +26,7 @@ export default function TrackerHome() {
   const [clearLeft, setClearLeft] = useState(0);
   const cardRef = useRef<HTMLElement>(null);
   const today = useToday();
+  const done = useTodayResult();
 
   // Once this page is idle, fetch what the game needs (the map code, today's
   // puzzle) so pressing Play opens it straight away.
@@ -89,18 +94,25 @@ export default function TrackerHome() {
           A raindrop lands somewhere on Earth. Follow it downhill and guess which sea it reaches.
         </p>
 
-        <Link
-          href="/downstream/play/"
-          className="group mt-6 flex h-14 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,transform] duration-200 ease-out hover:bg-coral-deep active:scale-[0.98]"
-        >
-          Play today&apos;s drops
-          <svg viewBox="0 0 20 20" className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
-            <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </Link>
-        <p className="mt-3 text-center text-sm text-ink-faint">
-          {today ? (today.number ? `No. ${today.number} · ${today.date}` : `Preview · launches ${today.launch}`) : " "}
-        </p>
+        {done?.result ? (
+          <DoneToday number={done.number} preview={done.preview} results={done.result.results} streak={done.stats.currentStreak} />
+        ) : (
+          <>
+            <Link
+              href="/downstream/play/"
+              className="group mt-6 flex h-14 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,transform] duration-200 ease-out hover:bg-coral-deep active:scale-[0.98]"
+            >
+              Play today&apos;s drops
+              <svg viewBox="0 0 20 20" className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
+                <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </Link>
+            <p className="mt-3 text-center text-sm text-ink-faint">
+              {today ? (today.number ? `No. ${today.number} · ${today.date}` : `Preview · launches ${today.launch}`) : " "}
+              {done && done.stats.currentStreak > 1 && ` · ${done.stats.currentStreak}-day streak`}
+            </p>
+          </>
+        )}
 
         <HowItWorks status={scene === "ready" ? status : null} />
       </section>
@@ -175,5 +187,36 @@ function FlagIcon() {
     <svg {...iconProps}>
       <path d="M5 17V3.5M5 4h9l-2 3 2 3H5" />
     </svg>
+  );
+}
+
+/** Today's puzzle is finished: the score, the countdown, and sharing come first. */
+function DoneToday({ number, preview, results, streak }: { number: number; preview: boolean; results: DropResult[]; streak: number }) {
+  const max = maxPoints(results.length);
+  return (
+    <div className="mt-6">
+      <div className="rounded-2xl bg-coral-soft/60 p-4">
+        <p className="flex items-baseline justify-between">
+          <span className="font-semibold text-coral-deep">Done today{streak > 1 ? ` · ${streak}-day streak` : ""}</span>
+          <span className="font-display text-[28px] leading-none font-semibold tracking-[-0.03em]">
+            {totalPoints(results)}
+            <span className="text-base text-ink-faint"> / {max}</span>
+          </span>
+        </p>
+        <p className="mt-2 text-xl tracking-[0.15em]" aria-label="Your marks for today's five drops">
+          {results.map(dropEmoji).join("")}
+        </p>
+        <Countdown className="mt-2 block text-sm font-semibold text-ink-soft" />
+      </div>
+      <div className="mt-4 grid gap-2">
+        <ShareButton number={number} preview={preview} results={results} maxPointsTotal={max} />
+        <Link
+          href="/downstream/play/"
+          className="flex h-12 items-center justify-center rounded-full bg-white text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+        >
+          See your results
+        </Link>
+      </div>
+    </div>
   );
 }

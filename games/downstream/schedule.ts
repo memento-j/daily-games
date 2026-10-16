@@ -12,3 +12,9 @@ export function puzzleToPlay(override: string | null, today = getPuzzleNumber())
   if (today >= 1) return { number: today, preview: false };
   return { number: PRE_LAUNCH_PREVIEW, preview: true };
 }
+
+// Storage keys. Previews (?puzzle=N, or Play before launch) are kept apart from
+// real results, so playtesting puzzle #1 now doesn't mark the real #1 as played.
+export const GAME_KEY = "downstream";
+export const PREVIEW_KEY = "downstream-preview";
+export const storageKeyFor = (preview: boolean) => (preview ? PREVIEW_KEY : GAME_KEY);

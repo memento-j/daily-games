@@ -22,3 +22,18 @@ export function getPuzzleNumber(now = new Date()): number {
 export function padPuzzleNumber(n: number): string {
   return String(n).padStart(4, "0");
 }
+
+/** Milliseconds until the next puzzle: the player's next local midnight. */
+export function msUntilNextPuzzle(now = new Date()): number {
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+  return next.getTime() - now.getTime();
+}
+
+/** "5h 12m", "42m", "under a minute". */
+export function formatCountdown(ms: number): string {
+  const minutes = Math.floor(ms / 60000);
+  if (minutes < 1) return "under a minute";
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  return h ? `${h}h ${m}m` : `${m}m`;
+}

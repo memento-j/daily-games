@@ -12,14 +12,10 @@ import { padPuzzleNumber } from "@/lib/daily";
 import { clearInProgress, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase } from "./game";
 import { totalPoints, type DropResult } from "./scoring";
-import { puzzleToPlay } from "./schedule";
+import { puzzleToPlay, storageKeyFor } from "./schedule";
 import type { Puzzle } from "./types";
 
-// Storage keys. Previews (?puzzle=N before launch) are kept apart from real
-// results, so playtesting puzzle #1 now doesn't mark the real #1 as played.
-const GAME = "downstream";
-const PREVIEW_GAME = "downstream-preview";
-type SavedResult = { results: DropResult[]; points: number };
+export type SavedResult = { results: DropResult[]; points: number };
 
 export type Load =
   | { status: "loading" }
@@ -47,7 +43,7 @@ export function useDownstreamGame(): DownstreamGameState {
     let cancelled = false;
     async function loadPuzzle() {
       const { number, preview } = puzzleToPlay(override);
-      const storageKey = preview ? PREVIEW_GAME : GAME;
+      const storageKey = storageKeyFor(preview);
       if (!Number.isInteger(number) || number < 1) {
         setLoad({ status: "comingSoon" });
         return;
@@ -81,7 +77,7 @@ export function useDownstreamGame(): DownstreamGameState {
   function act(action: Action) {
     if (load.status !== "ready") return;
     const { number, puzzle } = load;
-    const storageKey = load.preview ? PREVIEW_GAME : GAME;
+    const storageKey = storageKeyFor(load.preview);
     const next = step(game, action, puzzle);
     if (next === game) return;
     setGame(next);

@@ -1,5 +1,5 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { getPuzzleNumber, padPuzzleNumber } from "./daily";
+import { formatCountdown, getPuzzleNumber, msUntilNextPuzzle, padPuzzleNumber } from "./daily";
 
 // Node applies TZ changes at runtime. A zone with daylight saving makes the
 // DST tests meaningful wherever the tests run.
@@ -48,5 +48,23 @@ describe("padPuzzleNumber", () => {
     expect(padPuzzleNumber(1)).toBe("0001");
     expect(padPuzzleNumber(42)).toBe("0042");
     expect(padPuzzleNumber(1234)).toBe("1234");
+  });
+});
+
+describe("countdown to the next puzzle", () => {
+  it("runs to the next local midnight", () => {
+    expect(msUntilNextPuzzle(local(2026, 10, 15, 22))).toBe(2 * 60 * 60 * 1000);
+    expect(msUntilNextPuzzle(new Date(2026, 10, 15, 23, 59, 30))).toBe(30 * 1000);
+  });
+
+  it("is a normal length across daylight saving (23 or 25 hours from midnight)", () => {
+    expect(msUntilNextPuzzle(new Date(2027, 2, 14, 0, 0))).toBe(23 * 60 * 60 * 1000); // spring forward
+    expect(msUntilNextPuzzle(new Date(2027, 10, 7, 0, 0))).toBe(25 * 60 * 60 * 1000); // fall back
+  });
+
+  it("formats hours and minutes", () => {
+    expect(formatCountdown((5 * 60 + 12) * 60000 + 30000)).toBe("5h 12m");
+    expect(formatCountdown(42 * 60000)).toBe("42m");
+    expect(formatCountdown(20000)).toBe("under a minute");
   });
 });

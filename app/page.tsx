@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { SITE_NAME } from "@/lib/site";
+import DownstreamStatus from "./DownstreamStatus";
 import TodayDate from "./TodayDate";
 
 // The homepage: a short list of the site's daily games. A Server Component, so
@@ -35,7 +36,7 @@ export default function Home() {
             <li>
               <Link
                 href="/downstream/"
-                className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
+                className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
               >
                 <span>
                   <span className="font-display block text-[34px] leading-none font-semibold tracking-[-0.035em]">
@@ -44,17 +45,8 @@ export default function Home() {
                   <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
                     A raindrop lands somewhere on Earth. Guess which sea it reaches.
                   </span>
-                  <span className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-faint">
-                    <span>5 drops</span>
-                    <span aria-hidden="true">·</span>
-                    <span>2 to 5 minutes</span>
-                    <span aria-hidden="true">·</span>
-                    <span className="flex items-center gap-1 font-semibold text-coral-deep">
-                      Play
-                      <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
-                        <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-                      </svg>
-                    </span>
+                  <span className="mt-4 block">
+                    <DownstreamStatus />
                   </span>
                 </span>
                 <MiniMap />

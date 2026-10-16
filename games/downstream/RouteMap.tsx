@@ -1,8 +1,14 @@
 "use client";
 
 // The Downstream map: the real world in Downstream's own style (labelled seas and
-// cities), the coral raindrop pin, and the water's route in drop-blue, drawn up
-// to `revealKm`.
+// cities), the raindrop, and the water's route.
+//
+// The reveal is the show: the coral raindrop glows at the head of the water and
+// leads the line downhill; white current flows along the river behind it; the
+// camera leans in and travels with the drop, then settles back to the overview;
+// each stop gets a ripple, and reaching the sea a splash of rings while the
+// answer's name swells. Callbacks let the game screen sync sound to it. With
+// prefers-reduced-motion the line and camera jump straight to each stage.
 //
 // MapLibre needs a real browser (window, WebGL), so it's loaded with a dynamic
 // import() inside useEffect, which only runs in the browser after mount. A
@@ -23,9 +29,22 @@ import type { LngLat } from "./types";
 // into public/ (see "copy-map-worker" in package.json) and we point MapLibre at it.
 const WORKER_URL = "/maplibre-gl-worker.mjs";
 const WATER = "#155eef";
+const CORAL = "#f2545b";
 const CORAL_DEEP = "#d93d46";
-const DRAW_MS = 1600; // time to draw each new stretch of route
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+// The flowing-current effect: MapLibre animates a dashed line by stepping through
+// these dash patterns (from MapLibre's "animate a line" example).
+const CURRENT_DASHES = [
+  [0, 4, 3], [0.5, 4, 2.5], [1, 4, 2], [1.5, 4, 1.5], [2, 4, 1], [2.5, 4, 0.5], [3, 4, 0],
+  [0, 0.5, 3, 3.5], [0, 1, 3, 3], [0, 1.5, 3, 2.5], [0, 2, 3, 2], [0, 2.5, 3, 1.5], [0, 3, 3, 1], [0, 3.5, 3, 0.5],
+];
+
+/** How long drawing a stretch takes: longer stretches flow for longer, within limits. */
+export function drawDuration(fraction: number, final: boolean): number {
+  const ms = 1500 + fraction * (final ? 2800 : 2200);
+  return Math.min(final ? 4200 : 3200, Math.max(1600, ms));
+}
 
 type Props = {
   pin: LngLat;
@@ -35,20 +54,49 @@ type Props = {
   labels?: Record<string, LngLat>;
   /** Once the drop is decided: the sea it reached, lettered strongest; the others fade. */
   answer?: string;
+  /**
+   * Whether the player may pan and zoom. Locked while guessing (zooming in to read
+   * the rivers would give the answer away); the camera still moves on its own.
+   */
+  interactive?: boolean;
   /** Screen space covered by UI (a card or sheet), so framing keeps the route clear of it. */
   padding?: Partial<PaddingOptions>;
+  /** A new drop's rain lands on its pin. */
+  onLand?: () => void;
+  /** The water starts flowing for `ms`; `final` = all the way to the sea. */
+  onFlowStart?: (ms: number, final: boolean) => void;
+  /** The water reached the next stop (or, if `final`, the sea). */
+  onFlowEnd?: (final: boolean) => void;
   className?: string;
 };
 
-/** The coral raindrop pin: a white-ringed coral disc. */
+/** The pin. While nothing has flowed it's the raindrop itself (solid coral); once
+ * the water moves on, it becomes a hollow ring marking where the rain fell. */
 function pinElement() {
-  const el = document.createElement("div");
-  el.style.cssText =
-    "width:18px;height:18px;border-radius:9999px;background:#f2545b;border:3px solid #fff;box-shadow:0 2px 8px rgb(18 26 43/.35)";
-  return el;
+  const wrap = document.createElement("div");
+  const dot = document.createElement("div");
+  dot.className = "route-pin";
+  wrap.appendChild(dot);
+  return wrap;
 }
 
-export default function RouteMap({ pin, route, revealKm, labels, answer, padding, className = "" }: Props) {
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const easeOut = (t: number) => 1 - Math.pow(1 - t, 3);
+
+export default function RouteMap({
+  pin,
+  route,
+  revealKm,
+  labels,
+  answer,
+  interactive = true,
+  padding,
+  onLand,
+  onFlowStart,
+  onFlowEnd,
+  className = "",
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapLibreMap | null>(null);
   const markerRef = useRef<Marker | null>(null);
@@ -59,6 +107,11 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
   const [attempt, setAttempt] = useState(0); // bumped by "Try again" to rebuild the map
   const pad = { top: 60, right: 60, bottom: 60, left: 60, ...padding };
   const padKey = JSON.stringify(pad);
+  // The animation reads the latest callbacks through a ref, kept in sync after each render.
+  const callbacks = useRef({ onLand, onFlowStart, onFlowEnd });
+  useEffect(() => {
+    callbacks.current = { onLand, onFlowStart, onFlowEnd };
+  });
 
   // Create the map (again after "Try again").
   useEffect(() => {
@@ -88,25 +141,73 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
         // Add our layers as soon as the style is ready. ("load" would wait for every
         // initial tile, terrain included, so one slow tile held back the route and labels.)
         map.once("style.load", () => {
-          // The route: a soft glow under a solid core, above every other layer.
-          map!.addSource("route", { type: "geojson", data: EMPTY });
-          map!.addLayer({
+          const m = map!;
+          m.addSource("route", { type: "geojson", data: EMPTY });
+          m.addSource("head", { type: "geojson", data: EMPTY });
+          m.addSource("ripple", { type: "geojson", data: EMPTY });
+          // The water: a wide soft glow, a solid core, and white current flowing along it.
+          m.addLayer({
             id: "route-glow",
             type: "line",
             source: "route",
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: { "line-color": WATER, "line-width": 14, "line-opacity": 0.16, "line-blur": 2 },
+            paint: { "line-color": WATER, "line-width": 26, "line-opacity": 0.22, "line-blur": 9 },
           });
-          map!.addLayer({
+          m.addLayer({
             id: "route",
             type: "line",
             source: "route",
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: { "line-color": WATER, "line-width": 4.5 },
+            paint: { "line-color": WATER, "line-width": 6 },
+          });
+          m.addLayer({
+            id: "route-current",
+            type: "line",
+            source: "route",
+            layout: { "line-cap": "round", "line-join": "round" },
+            paint: { "line-color": "#ffffff", "line-width": 2.4, "line-opacity": 0.8, "line-dasharray": CURRENT_DASHES[0] },
+          });
+          // Ripples: a coral ring at a stop, blue rings when the water meets the sea.
+          m.addLayer({
+            id: "ripple",
+            type: "circle",
+            source: "ripple",
+            paint: {
+              "circle-radius": 0,
+              "circle-color": "rgba(0,0,0,0)",
+              "circle-stroke-color": ["get", "color"],
+              "circle-stroke-width": 2.5,
+              "circle-stroke-opacity": 0,
+            },
+          });
+          m.addLayer({
+            id: "ripple-2",
+            type: "circle",
+            source: "ripple",
+            paint: {
+              "circle-radius": 0,
+              "circle-color": "rgba(0,0,0,0)",
+              "circle-stroke-color": ["get", "color"],
+              "circle-stroke-width": 2,
+              "circle-stroke-opacity": 0,
+            },
+          });
+          // The raindrop at the head of the water: a coral glow around a coral drop.
+          m.addLayer({
+            id: "head-glow",
+            type: "circle",
+            source: "head",
+            paint: { "circle-radius": 24, "circle-color": CORAL, "circle-opacity": 0.32, "circle-blur": 0.9 },
+          });
+          m.addLayer({
+            id: "head",
+            type: "circle",
+            source: "head",
+            paint: { "circle-radius": 8.5, "circle-color": CORAL, "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 },
           });
           // The four option seas, lettered where the puzzle file says (near the pin).
-          map!.addSource("options", { type: "geojson", data: EMPTY });
-          map!.addLayer({
+          m.addSource("options", { type: "geojson", data: EMPTY });
+          m.addLayer({
             id: "option-labels",
             type: "symbol",
             source: "options",
@@ -128,7 +229,7 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
             },
           });
           drawn.current = { route: null, km: 0 }; // a fresh map: redraw the current drop
-          mapRef.current = map!;
+          mapRef.current = m;
           setReady(true);
         });
         // Follow the container's size (layouts settle after the map is created).
@@ -149,6 +250,39 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
     // Created once per attempt; later pins/routes are handled by the effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
+
+  // The current flows continuously along whatever route is drawn.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+    let frame = 0;
+    let step = -1;
+    const tick = (now: number) => {
+      const next = Math.floor(now / 55) % CURRENT_DASHES.length;
+      if (next !== step) {
+        step = next;
+        map.setPaintProperty("route-current", "line-dasharray", CURRENT_DASHES[step]);
+      }
+      // The raindrop's glow breathes gently.
+      map.setPaintProperty("head-glow", "circle-radius", 24 + Math.sin(now / 260) * 6);
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [ready]);
+
+  // Lock or unlock the player's pan and zoom.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    const handlers = [map.dragPan, map.scrollZoom, map.boxZoom, map.doubleClickZoom, map.touchZoomRotate, map.keyboard];
+    for (const h of handlers) {
+      if (interactive) h.enable();
+      else h.disable();
+    }
+    map.touchZoomRotate.disableRotation(); // rotation stays off either way
+    map.getCanvas().style.cursor = interactive ? "" : "default";
+  }, [ready, interactive]);
 
   function retry() {
     setFailed(false);
@@ -182,63 +316,148 @@ export default function RouteMap({ pin, route, revealKm, labels, answer, padding
     }
   }, [ready, labelKey]);
 
-
-  // New drop or new reveal: animate the line from what's drawn to revealKm.
+  // New drop or new reveal: the raindrop leads the water from what's drawn to revealKm.
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const source = map.getSource("route") as GeoJSONSource;
+    const routeSource = map.getSource("route") as GeoJSONSource;
+    const headSource = map.getSource("head") as GeoJSONSource;
+    const rippleSource = map.getSource("ripple") as GeoJSONSource;
     const line = lineString(route);
     const totalKm = length(line, { units: "kilometers" });
-    const slice = (km: number): GeoJSON.Feature | GeoJSON.FeatureCollection =>
-      km <= 0 ? EMPTY : lineSliceAlong(line, 0, Math.min(km, totalKm), { units: "kilometers" });
+    const slice = (km: number) => lineSliceAlong(line, 0, Math.min(Math.max(km, 0.01), totalKm), { units: "kilometers" });
     const padding = JSON.parse(padKey) as PaddingOptions;
     const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
     const seaPoints = Object.values((JSON.parse(labelKey) as [Record<string, LngLat> | undefined])[0] ?? {});
-    // Frame these points: always the pin and the four seas' names, plus any route shown.
-    const frameView = (points: LngLat[] | number[][], duration: number) => {
+    const boundsOf = (points: number[][]): [[number, number], [number, number]] => {
       const lons = points.map((c) => c[0]);
       const lats = points.map((c) => c[1]);
-      map.fitBounds(
-        [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
-        { padding, maxZoom: 6, duration: reduceMotion ? 0 : duration },
-      );
+      return [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]];
     };
+    const pinDot = markerRef.current?.getElement().querySelector(".route-pin");
+    let frame = 0;
+    let rippleFrame = 0;
 
     const to = Math.min(revealKm, totalKm);
     if (drawn.current.route !== route) {
-      // A new drop: clear the old line, move the pin, and show it with all four seas.
+      // A new drop: clear the old water, land the rain on the new pin, and show it
+      // with all four seas.
       drawn.current = { route, km: 0 };
-      source.setData(EMPTY);
+      routeSource.setData(EMPTY);
+      headSource.setData(EMPTY);
+      rippleSource.setData(EMPTY);
       markerRef.current?.setLngLat(pin);
-      if (to <= 0) frameView([pin, ...seaPoints], 1200);
+      pinDot?.classList.remove("is-origin", "is-landing");
+      if (to <= 0) {
+        map.fitBounds(boundsOf([pin, ...seaPoints]), { padding, maxZoom: 6, duration: reduceMotion ? 0 : 1200 });
+        if (!reduceMotion) {
+          void (pinDot as HTMLElement | undefined)?.offsetWidth; // restart the landing animation
+          pinDot?.classList.add("is-landing");
+        }
+        callbacks.current.onLand?.();
+      }
     }
 
     const from = drawn.current.km;
     if (to <= from) return;
+    const final = to >= totalKm - 0.01;
+    const target = slice(to);
+    const overview = map.cameraForBounds(boundsOf([pin, ...target.geometry.coordinates, ...seaPoints]), { padding, maxZoom: 6 });
+    pinDot?.classList.add("is-origin"); // the water has left the pin: mark where it fell
 
-    // Frame the stretch we're about to draw (with the pin and seas), then grow the line.
-    const target = slice(to) as GeoJSON.Feature<GeoJSON.LineString>;
-    frameView([pin, ...target.geometry.coordinates, ...seaPoints], 1100);
+    function ripple(at: number[], color: string, rings: number) {
+      rippleSource.setData({ type: "Feature", geometry: { type: "Point", coordinates: at }, properties: { color } });
+      if (reduceMotion) return;
+      const start = performance.now();
+      const run = (now: number) => {
+        const t = (now - start) / 1100;
+        for (const [id, delay] of [["ripple", 0], ["ripple-2", 0.28]] as const) {
+          const p = Math.min(Math.max(t - delay, 0) / (1 - 0.28), 1);
+          const on = id === "ripple" || rings > 1;
+          map!.setPaintProperty(id, "circle-radius", 6 + easeOut(p) * (rings > 1 ? 46 : 34));
+          map!.setPaintProperty(id, "circle-stroke-opacity", on && p > 0 && p < 1 ? 0.85 * (1 - p) : 0);
+        }
+        if (t < 1.3) rippleFrame = requestAnimationFrame(run);
+      };
+      rippleFrame = requestAnimationFrame(run);
+    }
 
-    if (reduceMotion) {
-      source.setData(slice(to));
+    function finish() {
       drawn.current.km = to;
+      const end = target.geometry.coordinates[target.geometry.coordinates.length - 1];
+      if (final) {
+        headSource.setData(EMPTY); // the drop has joined the sea
+        ripple(end, WATER, 2);
+      } else {
+        ripple(end, CORAL, 1);
+      }
+      callbacks.current.onFlowEnd?.(final);
+    }
+
+    if (reduceMotion || !overview) {
+      routeSource.setData(target);
+      const end = target.geometry.coordinates[target.geometry.coordinates.length - 1];
+      headSource.setData(final ? EMPTY : { type: "Feature", geometry: { type: "Point", coordinates: end }, properties: {} });
+      if (overview) map.jumpTo({ ...overview, padding });
+      callbacks.current.onFlowStart?.(0, final);
+      finish();
       return;
     }
+
+    const fraction = (to - from) / totalKm;
+    const ms = drawDuration(fraction, final);
+    // Lean in further for short stretches, so a small river still feels like a journey.
+    const leanZoom = Math.min(1.4, Math.max(0.8, 1.6 - fraction));
+    callbacks.current.onFlowStart?.(ms, final);
+    const startCenter = map.getCenter();
+    const startZoom = map.getZoom();
+    const endCenter = overview.center as { lng: number; lat: number };
+    const endZoom = overview.zoom ?? startZoom;
+    const start = performance.now();
+    const tick = (now: number) => {
+      const raw = Math.min((now - start) / ms, 1);
+      const km = from + (to - from) * easeInOut(raw);
+      const drawnLine = slice(km);
+      const head = drawnLine.geometry.coordinates[drawnLine.geometry.coordinates.length - 1];
+      routeSource.setData(drawnLine);
+      headSource.setData({ type: "Feature", geometry: { type: "Point", coordinates: head }, properties: {} });
+      drawn.current.km = km;
+      // Camera: settle into the overview, while leaning in and travelling with the drop
+      // mid-flow (sin curve: zero at both ends, so it lands exactly on the overview).
+      const settle = easeOut(Math.min(raw / 0.3, 1));
+      const lean = Math.sin(Math.PI * raw);
+      const baseLng = lerp(startCenter.lng, endCenter.lng, settle);
+      const baseLat = lerp(startCenter.lat, endCenter.lat, settle);
+      map!.jumpTo({
+        center: [lerp(baseLng, head[0], lean * 0.45), lerp(baseLat, head[1], lean * 0.45)],
+        zoom: lerp(startZoom, endZoom, settle) + lean * leanZoom,
+        padding,
+      });
+      if (raw < 1) frame = requestAnimationFrame(tick);
+      else finish();
+    };
+    frame = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(frame);
+      cancelAnimationFrame(rippleFrame);
+    };
+  }, [ready, pin, route, revealKm, padKey, labelKey]);
+
+  // When the answer is revealed, its name swells in, then settles.
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map || !answer || matchMedia("(prefers-reduced-motion: reduce)").matches) return;
     let frame = 0;
     const start = performance.now();
     const tick = (now: number) => {
-      const raw = Math.min((now - start) / DRAW_MS, 1);
-      const t = raw < 0.5 ? 4 * raw * raw * raw : 1 - Math.pow(-2 * raw + 2, 3) / 2; // ease in-out
-      const km = from + (to - from) * t;
-      source.setData(slice(km));
-      drawn.current.km = km;
-      if (raw < 1) frame = requestAnimationFrame(tick);
+      const t = Math.min((now - start) / 900, 1);
+      const swell = Math.sin(Math.PI * Math.min(t / 0.7, 1)); // 0 -> 1 -> 0
+      map.setLayoutProperty("option-labels", "text-size", ["case", ["get", "answer"], 20 + swell * 6, 17]);
+      if (t < 1) frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [ready, pin, route, revealKm, padKey, labelKey]);
+  }, [ready, answer]);
 
   return (
     <div className={`relative ${className}`}>
