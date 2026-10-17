@@ -283,6 +283,33 @@ def add_labels() -> None:
         print(f"  {f.name}: {len(todo)} drops labelled")
 
 
+def shuffle_drops(drops: list[dict], puzzle: int) -> None:
+    """Mix a day's drops so the hard ones aren't always last. Seeded by the puzzle
+    number, so the same puzzle always gets the same order (and re-runs agree)."""
+    order = np.random.default_rng(puzzle).permutation(len(drops))
+    drops[:] = [drops[i] for i in order]
+
+
+def shuffle_existing() -> None:
+    """Reorder every existing puzzle's drops with shuffle_drops (from easiest-first or any order)."""
+    for f in sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json")):
+        data = json.loads(f.read_text(encoding="utf-8"))
+        data["drops"].sort(key=lambda d: d["difficulty"])  # a fixed starting point, so this is repeatable
+        shuffle_drops(data["drops"], data["puzzle"])
+        f.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+        print(f"  {f.name}: difficulties in play order {[d['difficulty'] for d in data['drops']]}")
+
+
+def restage() -> None:
+    """Rewrite every puzzle's stop distances from STAGE_FRACTIONS (routes and answers unchanged)."""
+    for f in sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json")):
+        data = json.loads(f.read_text(encoding="utf-8"))
+        for d in data["drops"]:
+            d["stages"] = [round(d["distanceKm"] * frac) for frac in STAGE_FRACTIONS]
+        f.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+        print(f"  {f.name}: stops at {', '.join(str(km) for km in data['drops'][0]['stages'])} km (drop 1)")
+
+
 def km_between(a: tuple[float, float], b: tuple[float, float]) -> float:
     return haversine_km(np.array([a, b]))
 
@@ -371,7 +398,7 @@ def generate(days: int, seed: int | None) -> None:
         if len(drops) < len(DAY_DIFFICULTIES):
             sys.exit(f"Ran out of candidates at puzzle #{puzzle}; raise SCREEN_LIMIT.")
 
-        drops.sort(key=lambda d: d["difficulty"])
+        shuffle_drops(drops, puzzle)
         out = PUZZLE_DIR / f"{puzzle:04d}.json"
         out.write_text(json.dumps({"puzzle": puzzle, "drops": drops}, separators=(",", ":"),
                                   ensure_ascii=False), encoding="utf-8")
@@ -496,6 +523,8 @@ if __name__ == "__main__":
     g.add_argument("--days", type=int, default=DEFAULT_DAYS, help=f"puzzles to add (default {DEFAULT_DAYS})")
     g.add_argument("--seed", type=int, help="random seed (default: last puzzle number, so runs are repeatable)")
     sub.add_parser("label", help="add map label points and the nearest sea to existing puzzle files")
+    sub.add_parser("shuffle", help="mix the drop order of existing puzzles (seeded by puzzle number)")
+    sub.add_parser("restage", help="rewrite existing puzzles' stop distances from STAGE_FRACTIONS")
     t = sub.add_parser("trace", help="trace one pin")
     t.add_argument("lon", type=float)
     t.add_argument("lat", type=float)
@@ -509,5 +538,9 @@ if __name__ == "__main__":
         generate(args.days, args.seed)
     elif args.cmd == "label":
         add_labels()
+    elif args.cmd == "restage":
+        restage()
+    elif args.cmd == "shuffle":
+        shuffle_existing()
     else:
         trace_one(args.lon, args.lat)

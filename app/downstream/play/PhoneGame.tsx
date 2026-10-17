@@ -15,7 +15,7 @@ import type { GameState } from "@/games/downstream/game";
 import { dropPoints, POINTS_BY_STAGE, type DropResult } from "@/games/downstream/scoring";
 import { sound } from "@/games/downstream/sound";
 import type { Drop, Puzzle } from "@/games/downstream/types";
-import { DaySummary, DropTokens, FlowButton, GameTopBar, NextButton, SoundToggle, factLine } from "@/games/downstream/ui";
+import { DaySummary, DropAnnouncer, DropTokens, FlowButton, GameTopBar, NextButton, SoundToggle, factLine } from "@/games/downstream/ui";
 
 type Props = {
   number: number;
@@ -30,6 +30,9 @@ type Props = {
   onGuess: (option: string) => void;
   onFlow: () => void;
   onNext: () => void;
+  /** The day's summary: which drop's route the map is replaying. */
+  viewing: number;
+  onView: (drop: number) => void;
   /** The map's props, minus the layout-specific ones this file sets. */
   map: Omit<RouteMapProps, "className" | "padding" | "hideOptionLabels" | "onCamera">;
 };
@@ -110,13 +113,20 @@ function PhoneResult({ drop, result }: { drop: Drop; result: DropResult }) {
   );
 }
 
-/** First time only: the idea in one line, over the map, out of the way of the controls. */
-function IntroBubble({ onDismiss }: { onDismiss: () => void }) {
+/**
+ * First time only: the idea in two lines, under the top bar. It stays until the
+ * first Lock in (or Let it flow), and the sea buttons start below it.
+ */
+function IntroBubble({ onDismiss, bubbleRef }: { onDismiss: () => void; bubbleRef: (el: HTMLDivElement | null) => void }) {
   return (
-    <div role="note" className="absolute top-[72px] right-3 left-3 z-10 flex items-start gap-3 rounded-2xl bg-white/95 p-3.5 text-[14px] leading-snug shadow-card">
+    <div
+      ref={bubbleRef}
+      role="note"
+      className="absolute top-[104px] right-3 left-3 z-10 flex items-start gap-3 rounded-2xl bg-white/95 p-3.5 text-[14px] leading-snug shadow-card"
+    >
       <p className="flex-1 text-ink-soft">
-        <span className="font-semibold text-ink">Where does this rain end up?</span> Tap a sea on the map now for 4
-        points, or let the water flow first for fewer.
+        <span className="font-semibold text-ink">Where does this rain end up?</span> Pick a sea on the map, then Lock in.
+        Now it&apos;s worth 4 points; each stop of Let it flow costs 1.
       </p>
       <button
         type="button"
@@ -138,38 +148,42 @@ function PhonePlay(p: Props) {
   const [onCamera, spots] = useSeaSpots(p.drop.seaLabels);
   const [picked, setPick] = usePick(p.game);
   const [seasHidden, setSeasHidden] = useState(false);
+  const [bubbleRef, bubble] = useSize<HTMLDivElement>();
   const guessing = !p.result;
   const intro = p.firstTime && p.game.drop === 0 && guessing;
 
   return (
     <div ref={rootRef} className="font-sans relative h-svh overflow-hidden bg-land text-ink">
+      <h1 className="sr-only">
+        Downstream {p.preview ? "preview" : "No."} {p.number}, drop {p.game.drop + 1} of {p.puzzle.drops.length}
+      </h1>
+      {/* The top bar comes first in the markup (and tab order); it floats over the map. */}
+      <MapTopBar number={p.number} preview={p.preview} />
       {/* While guessing the map never letters the option seas itself: the buttons do, or nothing (hidden). */}
       <RouteMap {...p.map} hideOptionLabels={guessing} onCamera={onCamera} padding={MAP_PADDING} className="h-full w-full" />
-      <MapTopBar number={p.number} preview={p.preview} />
-      {intro && <IntroBubble onDismiss={p.onDismissIntro} />}
+      {intro && <IntroBubble onDismiss={p.onDismissIntro} bubbleRef={bubbleRef} />}
+      <DropAnnouncer drop={p.drop} stage={p.game.stage} decided={!guessing} />
 
       {guessing && !seasHidden && (
         <SeaButtons
           spots={spots}
           width={root.width}
-          top={intro ? 160 : 84}
-          bottom={root.height - barHeight - 60}
+          // Below the top bar and Hide seas, or below the first-time tip while it shows.
+          top={intro ? 104 + bubble.height + 26 : 118}
+          bottom={root.height - barHeight - 34}
           picked={picked}
-          onPick={(name) => {
-            if (p.firstTime) p.onDismissIntro();
-            setPick(name);
-          }}
+          onPick={setPick}
         />
       )}
       {guessing && (
+        // Up top, out of the thumb's resting spot (it clears a pick), under the back link.
         <HideSeasToggle
           hidden={seasHidden}
           onToggle={() => {
             setSeasHidden((h) => !h);
             setPick(null);
           }}
-          style={{ bottom: barHeight + 12 }}
-          className="absolute left-3"
+          className="absolute top-[62px] left-3"
         />
       )}
 
@@ -194,7 +208,7 @@ function PhonePlay(p: Props) {
               <NextButton last={p.game.drop + 1 >= p.puzzle.drops.length} onNext={p.onNext} />
             </div>
           ) : picked ? (
-            <div key={picked} className="rise-in flex flex-col gap-2.5" role="group" aria-label="Lock in your answer">
+            <div key={picked} className="rise-in flex flex-col gap-2.5" role="group" aria-label="Lock in your answer" aria-live="polite">
               <p className="text-center text-[15px] text-ink-soft">
                 Lock in <span className="font-semibold text-ink">{picked}</span>?
               </p>
@@ -216,7 +230,7 @@ function PhonePlay(p: Props) {
                     setPick(null);
                     p.onGuess(picked);
                   }}
-                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-coral text-[17px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-deep active:scale-[0.98]"
                 >
                   Lock in
                   <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -224,6 +238,17 @@ function PhonePlay(p: Props) {
                   </svg>
                 </button>
               </div>
+              {/* Not sure yet? Watch more of the route; the pick stays. */}
+              {p.game.stage < p.drop.stages.length && (
+                <button
+                  type="button"
+                  onClick={p.onFlow}
+                  className="mx-auto -mb-1 flex min-h-11 items-center gap-1.5 px-3 text-[14px] font-semibold text-ink-soft transition-colors hover:text-ink"
+                >
+                  Not sure? Let it flow first
+                  <span className="text-ink-faint">· stop {p.game.stage + 1} of {p.drop.stages.length}</span>
+                </button>
+              )}
             </div>
           ) : (
             <div className="rise-in flex flex-col gap-2.5">
@@ -234,7 +259,7 @@ function PhonePlay(p: Props) {
                   </>
                 ) : (
                   <>
-                    <span className="font-semibold text-ink">Tap the sea</span> this raindrop reaches.
+                    <span className="font-semibold text-ink">Pick the sea</span> this raindrop reaches.
                   </>
                 )}
               </p>
@@ -247,16 +272,23 @@ function PhonePlay(p: Props) {
   );
 }
 
-/** The day's results scroll like a page (it's reading, not playing). */
+/**
+ * The day's results scroll like a page (it's reading, not playing). The map up
+ * top replays whichever drop is picked in the list, starting with the day's
+ * biggest surprise; it stays in view while the list scrolls.
+ */
 function PhoneSummary(p: Props): ReactNode {
   return (
     <div className="font-sans flex flex-col bg-land text-ink">
-      <div className="relative h-[34svh] min-h-[220px]">
-        <RouteMap {...p.map} className="h-full w-full" />
+      <h1 className="sr-only">
+        Downstream {p.preview ? "preview" : "No."} {p.number}: today&apos;s results
+      </h1>
+      <div className="sticky top-0 h-[34svh] min-h-[230px]">
         <MapTopBar number={p.number} preview={p.preview} />
+        <RouteMap {...p.map} padding={{ top: 84, bottom: 48, left: 40, right: 40 }} className="h-full w-full" />
       </div>
       <section className="relative z-10 -mt-6 rounded-t-[26px] bg-card px-5 pt-6 pb-16 shadow-card">
-        <DaySummary number={p.number} puzzle={p.puzzle} game={p.game} preview={p.preview} />
+        <DaySummary number={p.number} puzzle={p.puzzle} game={p.game} preview={p.preview} viewing={p.viewing} onView={p.onView} />
       </section>
     </div>
   );

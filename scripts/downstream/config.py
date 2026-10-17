@@ -26,7 +26,7 @@ COORD_DECIMALS = 4  # ~11 m
 
 # --- Puzzle generation ---
 DEFAULT_DAYS = 10
-DAY_DIFFICULTIES = [1, 2, 3, 4, 5]  # one drop per entry, easiest first
+DAY_DIFFICULTIES = [1, 2, 3, 4, 5]  # one drop per difficulty; the day's play order is then shuffled
 MIN_ROUTE_KM = 150  # shorter routes are boring ("3 km creek into the sea")
 RIVER_REUSE_DAYS = 30  # don't reuse a river system within this many days...
 # ...except for hard drops. Surprising drops come from a handful of huge basins (Amazon,
@@ -36,7 +36,11 @@ HARD_DIFFICULTY = 4  # difficulties >= this count as hard
 HARD_RIVER_REUSE_DAYS = 7
 SAME_RIVER_MIN_KM = 500
 MIN_PIN_SEPARATION_KM = 1000  # spread each day's pins across regions
-STAGE_FRACTIONS = [0.15, 0.40, 0.70]  # reveal pauses, as fractions of the route; settle after playtest
+# Reveal pauses, as fractions of the route. Evenly spaced so each stop visibly
+# changes the odds: 15/40/70% made stop 1 a near-invisible squiggle and stop 3 a
+# giveaway (critique, 2026-10-17). Settle after the playtest; `generate.py restage`
+# applies a change to existing puzzles.
+STAGE_FRACTIONS = [0.25, 0.50, 0.75]
 # Screen until each difficulty has this many candidates per drop needed, or until
 # SCREEN_LIMIT. Hard buckets rarely fill, so runs usually stop at the limit (~2 min);
 # each day then gets the hardest drops available (difficulty is relative per day).

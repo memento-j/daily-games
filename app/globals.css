@@ -14,7 +14,7 @@
   /* Coral is the brand's main colour: the raindrop, the player's actions, icons.
      Drop-blue is the accent, kept for water: routes, rivers, the sea reached. */
   --color-coral: #f2545b; /* white text on it must be large and bold (3.4:1) */
-  --color-coral-deep: #d93d46; /* hover / pressed; 4.5:1 with white */
+  --color-coral-deep: #c0303a; /* coral text, hover / pressed: 5.6:1 on white, 4.8:1 on coral-soft (was #d93d46, under 4.5:1) */
   --color-coral-soft: #fde8e8; /* tint behind coral icons */
   --color-drop: #155eef;
   --color-ink: #121a2b;

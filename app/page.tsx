@@ -10,7 +10,7 @@ import TodayDate from "./TodayDate";
 export default function Home() {
   return (
     <div className="font-sans flex min-h-svh flex-col bg-land text-ink">
-      <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-5 pt-6 pb-10 sm:px-8 sm:pt-8">
+      <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-5 pt-6 pb-10 sm:px-8 sm:pt-8 lg:pb-7">
         <header className="flex items-center justify-between">
           <span className="font-display flex items-center gap-2 text-lg font-semibold tracking-[-0.02em]">
             <DropMark />
@@ -19,8 +19,8 @@ export default function Home() {
           <TodayDate />
         </header>
 
-        <section className="mt-[8svh]">
-          <h1 className="font-display max-w-[13ch] text-[clamp(44px,7.4vw,72px)] leading-[0.95] font-semibold tracking-[-0.045em] text-balance">
+        <section className="mt-[8svh] lg:mt-[5svh]">
+          <h1 className="font-display max-w-[13ch] lg:max-w-[19ch] text-[clamp(44px,7.4vw,72px)] leading-[0.95] font-semibold tracking-[-0.045em] text-balance">
             Small daily puzzles about the real world<span className="text-coral">.</span>
           </h1>
           <p className="mt-5 max-w-[46ch] text-lg leading-snug text-ink-soft">
@@ -43,7 +43,7 @@ export default function Home() {
                     Downstream<span className="text-coral">.</span>
                   </span>
                   <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
-                    A raindrop lands somewhere on Earth. Guess which sea it reaches.
+                    A raindrop lands somewhere on Earth. Pick the sea it reaches.
                   </span>
                   <span className="mt-4 block">
                     <DownstreamStatus />

@@ -11,9 +11,17 @@ export default function DownstreamStatus() {
   const t = useTodayResult();
   if (t?.result) {
     return (
-      <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
-        <span className="font-semibold text-coral-deep">Done today · {totalPoints(t.result.results)}/{maxPoints(t.result.results.length)}</span>
-        <span aria-hidden="true" className="text-ink-faint">·</span>
+      // Two short lines rather than one wrapping line (which left a stray "·").
+      <span className="flex flex-col gap-0.5 text-sm">
+        <span className="font-semibold text-coral-deep">
+          Done today · {totalPoints(t.result.results)}/{maxPoints(t.result.results.length)}
+        </span>
+        <span className="flex items-center gap-1 font-semibold text-coral-deep">
+          See results
+          <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
+            <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
         <Countdown className="text-ink-faint" />
       </span>
     );

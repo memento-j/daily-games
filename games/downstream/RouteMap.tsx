@@ -30,7 +30,7 @@ import type { LngLat } from "./types";
 const WORKER_URL = "/maplibre-gl-worker.mjs";
 const WATER = "#155eef";
 const CORAL = "#f2545b";
-const CORAL_DEEP = "#d93d46";
+const CORAL_DEEP = "#c0303a"; // matches --color-coral-deep
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 // The flowing-current effect: MapLibre animates a dashed line by stepping through
@@ -57,6 +57,10 @@ export type RouteMapProps = {
   labels?: Record<string, LngLat>;
   /** Once the drop is decided: the sea it reached, lettered strongest; the others fade. */
   answer?: string;
+  /** A wrong pick, lettered in solid coral so the player sees what they said. */
+  yourPick?: string;
+  /** Show the map's river network. Off while guessing: it would give the answer away. */
+  showRivers?: boolean;
   /**
    * Whether the player may pan and zoom. Locked while guessing (zooming in to read
    * the rivers would give the answer away); the camera still moves on its own.
@@ -104,6 +108,8 @@ export default function RouteMap({
   revealKm,
   labels,
   answer,
+  yourPick,
+  showRivers = true,
   interactive = true,
   padding,
   onLand,
@@ -246,7 +252,7 @@ export default function RouteMap({
             },
             paint: {
               "text-color": ["case", ["get", "answer"], WATER, CORAL_DEEP],
-              "text-opacity": ["case", ["get", "faded"], 0.4, 1],
+              "text-opacity": ["case", ["get", "faded"], 0.3, 1],
               "text-halo-color": "rgba(255,255,255,0.97)",
               "text-halo-width": 2.6,
             },
@@ -317,6 +323,8 @@ export default function RouteMap({
     }
     map.touchZoomRotate.disableRotation(); // rotation stays off either way
     map.getCanvas().style.cursor = interactive ? "" : "default";
+    // A locked map has nothing to do with the keyboard: keep it out of the Tab order.
+    map.getCanvas().tabIndex = interactive ? 0 : -1;
   }, [ready, interactive]);
 
   function retry() {
@@ -326,18 +334,18 @@ export default function RouteMap({
   }
 
   // Letter the option seas, and hide the tiles' own copy of those names so none appears twice.
-  const labelKey = JSON.stringify([labels, answer]);
+  const labelKey = JSON.stringify([labels, answer, yourPick]);
   useEffect(() => {
     const map = mapRef.current;
     if (!ready || !map) return;
-    const [l, a] = JSON.parse(labelKey) as [Record<string, LngLat> | undefined, string | undefined];
+    const [l, a, mine] = JSON.parse(labelKey) as [Record<string, LngLat> | undefined, string | undefined, string | undefined];
     const names = Object.keys(l ?? {});
     (map.getSource("options") as GeoJSONSource).setData({
       type: "FeatureCollection",
       features: Object.entries(l ?? {}).map(([name, coordinates]) => ({
         type: "Feature",
         geometry: { type: "Point", coordinates },
-        properties: { name, answer: name === a, faded: !!a && name !== a },
+        properties: { name, answer: name === a, faded: !!a && name !== a && name !== mine },
       })),
     });
     const tileName = ["coalesce", ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
@@ -350,6 +358,13 @@ export default function RouteMap({
       ] as unknown as FilterSpecification);
     }
   }, [ready, labelKey]);
+
+  // The river network fades in once the drop is decided (hidden while guessing).
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    map.setPaintProperty("waterway-river", "line-opacity", showRivers ? 1 : 0);
+  }, [ready, showRivers]);
 
   // The page draws the option seas itself (as buttons) and wants the map's copy hidden.
   useEffect(() => {
@@ -401,7 +416,22 @@ export default function RouteMap({
     if (to <= from) return;
     const final = to >= totalKm - 0.01;
     const target = slice(to);
-    const overview = map.cameraForBounds(boundsOf([pin, ...target.geometry.coordinates, ...seaPoints]), { padding, maxZoom: 6 });
+    const wide = map.cameraForBounds(boundsOf([pin, ...target.geometry.coordinates, ...seaPoints]), { padding, maxZoom: 6 });
+    // At a stop (not the sea), settle a little closer to the stretch just revealed,
+    // so each stop visibly shows something; the sea buttons stay pinned in view.
+    const near = final ? undefined : map.cameraForBounds(boundsOf([pin, ...target.geometry.coordinates]), { padding, maxZoom: 7 });
+    const overview =
+      wide && near
+        ? (() => {
+            const w = wide.center as { lng: number; lat: number };
+            const n = near.center as { lng: number; lat: number };
+            return {
+              ...wide,
+              center: { lng: lerp(w.lng, n.lng, 0.35), lat: lerp(w.lat, n.lat, 0.35) },
+              zoom: Math.min((wide.zoom ?? 3) + 0.7, near.zoom ?? 7),
+            };
+          })()
+        : wide;
     pinDot?.classList.add("is-origin"); // the water has left the pin: mark where it fell
 
     function ripple(at: number[], color: string, rings: number) {

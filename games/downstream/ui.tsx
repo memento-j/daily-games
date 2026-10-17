@@ -14,8 +14,9 @@ import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import { useToday } from "@/lib/useToday";
 import type { GameState } from "./game";
 import { storageKeyFor } from "./schedule";
-import { dropEmoji, dropPoints, maxPoints, totalPoints, type DropResult } from "./scoring";
+import { dropEmoji, dropPoints, EMOJI_LEGEND, maxPoints, totalPoints, type DropResult } from "./scoring";
 import { isMuted, setMuted, sound } from "./sound";
+import { describeStart, describeStop } from "./describe";
 import type { Drop, Puzzle } from "./types";
 import type { Load } from "./useDownstreamGame";
 import { useStats } from "./useTodayResult";
@@ -33,7 +34,10 @@ export function GameTopBar({ number, preview }: { number: number | null; preview
         <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden="true">
           <path d="M16 10H5M9 5.5 4.5 10 9 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
-        Downstream<span className="text-coral">.</span>
+        {/* One text run, so the flex gap doesn't separate the full stop from the name. */}
+        <span>
+          Downstream<span className="text-coral">.</span>
+        </span>
       </Link>
       {number !== null && (
         <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft shadow-card">
@@ -67,7 +71,11 @@ export function SoundToggle({ className = "" }: { className?: string }) {
   );
 }
 
-/** The day's five drops as tokens: points scored, a miss, the current one, the ones to come. */
+/**
+ * The day's five drops as tokens: the current one ringed, the ones to come
+ * numbered, and decided ones showing "+4" (points), a cross (wrong) or a dash
+ * (no guess). Points carry a "+" so they never read as a drop number.
+ */
 export function DropTokens({ puzzle, game }: { puzzle: Puzzle; game: GameState }) {
   return (
     <ol className="flex items-center gap-1.5" aria-label={`Drop ${Math.min(game.drop + 1, puzzle.drops.length)} of ${puzzle.drops.length}`}>
@@ -77,13 +85,39 @@ export function DropTokens({ puzzle, game }: { puzzle: Puzzle; game: GameState }
         const cls = r
           ? r.correct
             ? "bg-coral text-ink" // ink on coral is 5.1:1; white would only pass at large sizes
-            : "bg-ink/8 text-ink-faint"
+            : r.guess
+              ? "bg-coral-soft text-coral-deep"
+              : "bg-ink/8 text-ink-faint"
           : current
             ? "bg-white text-coral-deep ring-2 ring-coral"
             : "bg-white text-ink-faint ring-1 ring-line";
+        const label = r
+          ? r.correct
+            ? `Drop ${i + 1}: ${dropPoints(r)} points`
+            : r.guess
+              ? `Drop ${i + 1}: wrong`
+              : `Drop ${i + 1}: no guess`
+          : current
+            ? `Drop ${i + 1}: now`
+            : `Drop ${i + 1}: to come`;
         return (
           <li key={i} className={`grid size-7 place-items-center rounded-full text-[12px] font-bold ${cls}`}>
-            {r ? (r.correct ? dropPoints(r) : "–") : i + 1}
+            <span className="sr-only">{label}</span>
+            <span aria-hidden="true" className="contents">
+              {r ? (
+                r.correct ? (
+                  `+${dropPoints(r)}`
+                ) : r.guess ? (
+                  <svg viewBox="0 0 20 20" className="size-3" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" aria-hidden="true">
+                    <path d="m6 6 8 8M14 6l-8 8" />
+                  </svg>
+                ) : (
+                  "–"
+                )
+              ) : (
+                i + 1
+              )}
+            </span>
           </li>
         );
       })}
@@ -92,54 +126,47 @@ export function DropTokens({ puzzle, game }: { puzzle: Puzzle; game: GameState }
 }
 
 /**
- * The four seas. While guessing they're plain white tiles, and the one picked
- * (here or on the map) lights up coral until it's locked in; once the drop is
- * decided, the sea it really reaches turns water-blue and a wrong pick turns coral-soft.
+ * Where the Lock in button goes. Before a pick it's a quiet placeholder of the
+ * same size, so picking a sea never moves the buttons under the cursor.
  */
-export function SeaOptions({
-  drop,
-  result,
-  picked,
-  onGuess,
-  columns = 2,
-}: {
-  drop: Drop;
-  result?: DropResult;
-  /** The sea picked but not locked in yet. */
-  picked?: string | null;
-  onGuess: (option: string) => void;
-  columns?: 1 | 2;
-}) {
+export function LockInSlot({ picked, points, onLock }: { picked: string | null; points: number; onLock: (name: string) => void }) {
+  return picked ? (
+    <LockInButton key={picked} name={picked} points={points} onLock={() => onLock(picked)} />
+  ) : (
+    <p className="flex h-14 items-center justify-center rounded-full border border-dashed border-ink/20 text-[15px] font-semibold text-ink-faint">
+      Pick a sea on the map
+    </p>
+  );
+}
+
+/** A decided drop, compactly: the sea reached (water-blue) and, if it differs, your pick. */
+export function ResultSeas({ drop, result }: { drop: Drop; result: DropResult }) {
   return (
-    <div className={`grid gap-2 ${columns === 2 ? "grid-cols-2" : "grid-cols-1"}`}>
-      {drop.options.map((option) => {
-        const isAnswer = option === drop.answer;
-        const guessed = result?.guess === option;
-        const state = !result ? (option === picked ? "picked" : "open") : isAnswer ? "answer" : guessed ? "wrong" : "other";
-        const cls = {
-          picked: "bg-coral text-white ring-2 ring-coral shadow-[0_8px_20px_-10px_rgb(217_61_70/0.8)]",
-          open: "bg-white text-ink ring-1 ring-line hover:ring-2 hover:ring-coral hover:-translate-y-px active:translate-y-0 shadow-[0_2px_6px_-2px_rgb(18_26_43/0.12)]",
-          answer: "bg-drop text-white ring-1 ring-drop",
-          wrong: "bg-coral-soft text-coral-deep ring-1 ring-coral/40",
-          other: "bg-white/60 text-ink-faint ring-1 ring-line",
-        }[state];
-        return (
-          <button
-            key={option}
-            type="button"
-            disabled={!!result}
-            aria-pressed={result ? undefined : option === picked}
-            onClick={() => onGuess(option)}
-            className={`flex min-h-14 items-center justify-between gap-2 rounded-2xl px-4 py-3 text-left text-[16px] leading-tight font-semibold transition-[scale,translate,box-shadow,background-color] duration-200 ease-out disabled:cursor-default ${cls}`}
-          >
-            <span>{option}</span>
-            {state === "answer" && <span className="text-xs font-bold tracking-wide uppercase">Reached</span>}
-            {state === "wrong" && <span className="text-xs font-bold tracking-wide uppercase">Your pick</span>}
-            {state === "picked" && <span className="text-xs font-bold tracking-wide uppercase">Picked</span>}
-          </button>
-        );
-      })}
-    </div>
+    <dl className="flex flex-col gap-2 text-[15px]">
+      <div className="flex items-center justify-between gap-3 rounded-2xl bg-drop px-4 py-3 text-white">
+        <dt className="text-xs font-bold tracking-wide uppercase opacity-85">Reached</dt>
+        <dd className="font-semibold">{drop.answer}</dd>
+      </div>
+      {result.guess && !result.correct && (
+        <div className="flex items-center justify-between gap-3 rounded-2xl bg-coral-soft px-4 py-3 text-coral-deep">
+          <dt className="text-xs font-bold tracking-wide uppercase">Your pick</dt>
+          <dd className="font-semibold">{result.guess}</dd>
+        </div>
+      )}
+    </dl>
+  );
+}
+
+/**
+ * Says what the map shows, for screen-reader players: at a new drop where each
+ * sea lies from the pin; at each stop how far the water has come and which way.
+ */
+export function DropAnnouncer({ drop, stage, decided }: { drop: Drop; stage: number; decided: boolean }) {
+  const text = decided ? "" : stage === 0 ? describeStart(drop) : describeStop(drop, drop.stages[stage - 1]);
+  return (
+    <p className="sr-only" aria-live="polite">
+      {text}
+    </p>
   );
 }
 
@@ -149,7 +176,7 @@ export function LockInButton({ name, points, onLock }: { name: string; points: n
     <button
       type="button"
       onClick={onLock}
-      className="rise-in group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral px-5 text-[17px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+      className="rise-in group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral px-5 text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale] duration-200 hover:bg-coral-deep active:scale-[0.98]"
     >
       <span className="truncate">Lock in {name}</span>
       <span className="shrink-0 font-semibold text-white/80">· {points} pt{points === 1 ? "" : "s"}</span>
@@ -237,9 +264,9 @@ export function FirstTimeHint({ onDismiss }: { onDismiss: () => void }) {
     <div role="note" className="rounded-2xl bg-coral-soft/70 p-4 text-[15px] leading-snug text-ink">
       <p className="font-semibold">First time? Here&apos;s the idea.</p>
       <p className="mt-1 text-ink-soft">
-        Rain falls on the coral pin. Guess the sea it ends up in right away for 4 points, or tap{" "}
-        <span className="font-semibold text-ink">Let it flow</span> to watch the water move, for fewer points. One guess
-        per drop.
+        Rain falls on the coral pin. Pick the sea you think it reaches on the map, then{" "}
+        <span className="font-semibold text-ink">Lock in</span>. Right now it&apos;s worth 4 points; each stop of{" "}
+        <span className="font-semibold text-ink">Let it flow</span> shows more of the route and costs 1. One answer per drop.
       </p>
       <button type="button" onClick={onDismiss} className="mt-2 text-sm font-semibold text-coral-deep underline">
         Got it
@@ -305,11 +332,31 @@ export function ShareButton({
   );
 }
 
-/** The day's results: score and share first, then streak and stats, the countdown, and each drop. */
-export function DaySummary({ number, puzzle, game, preview }: { number: number; puzzle: Puzzle; game: GameState; preview: boolean }) {
+/**
+ * The day's results. The routes lead: each drop is a row that replays its route
+ * on the map (it opens on the day's biggest surprise). Then the share line,
+ * exactly as it will be sent, with what the squares mean; then streak and stats.
+ */
+export function DaySummary({
+  number,
+  puzzle,
+  game,
+  preview,
+  viewing,
+  onView,
+}: {
+  number: number;
+  puzzle: Puzzle;
+  game: GameState;
+  preview: boolean;
+  /** The drop whose route the map is showing, and how to show another. */
+  viewing?: number;
+  onView?: (drop: number) => void;
+}) {
   const points = totalPoints(game.results);
   const max = maxPoints(puzzle.drops.length);
   const stats = useStats(storageKeyFor(preview), number);
+  const marks = game.results.map(dropEmoji).join("");
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -321,15 +368,73 @@ export function DaySummary({ number, puzzle, game, preview }: { number: number; 
           <span className="text-[28px] text-ink-faint"> / {max}</span>
         </p>
       </div>
-      <DropTokens puzzle={puzzle} game={game} />
-      <ShareButton number={number} preview={preview} results={game.results} maxPointsTotal={max} />
+
+      <div className="flex flex-col gap-2">
+        <ShareButton number={number} preview={preview} results={game.results} maxPointsTotal={max} />
+        <p className="text-center text-sm text-ink-soft">
+          Shares as <span className="font-semibold text-ink" aria-hidden="true">{marks}</span>
+          <span className="sr-only">your five squares and</span> {points}/{max}, never the answers.
+        </p>
+        <p className="text-center text-xs text-ink-faint" aria-hidden="true">
+          {EMOJI_LEGEND.map(([e, meaning]) => `${e} ${meaning}`).join("  ·  ")}
+        </p>
+      </div>
+
+      <div>
+        <p className="text-sm font-semibold text-ink-soft">{onView ? "Your drops · pick one to see its route" : "Your drops"}</p>
+        <ol className="mt-2 divide-y divide-line overflow-hidden rounded-2xl bg-white ring-1 ring-line">
+          {puzzle.drops.map((drop, i) => {
+            const r = game.results[i];
+            const on = viewing === i;
+            const body = (
+              <>
+                <span className={`grid size-6 shrink-0 place-items-center rounded-full text-[11px] font-bold ${on ? "bg-drop text-white" : "bg-ink/6 text-ink-soft"}`}>
+                  {i + 1}
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block font-semibold">{drop.answer}</span>
+                  <span className="block text-sm text-ink-faint">
+                    {drop.distanceKm.toLocaleString()} km
+                    {r?.correct
+                      ? r.stage === 0
+                        ? " · called before it flowed"
+                        : ` · called at stop ${r.stage}`
+                      : r?.guess
+                        ? ` · you said ${r.guess}`
+                        : r
+                          ? " · no guess"
+                          : ""}
+                  </span>
+                </span>
+                <span className={`text-sm font-bold ${r?.correct ? "text-coral-deep" : "text-ink-faint"}`}>{r?.correct ? `+${dropPoints(r)}` : "0"}</span>
+              </>
+            );
+            return (
+              <li key={i}>
+                {onView ? (
+                  <button
+                    type="button"
+                    onClick={() => onView(i)}
+                    aria-pressed={on}
+                    className={`flex w-full items-center gap-3 px-4 py-3 text-left text-[15px] transition-colors ${on ? "bg-shore" : "hover:bg-land"}`}
+                  >
+                    {body}
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-3 px-4 py-3 text-[15px]">{body}</div>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </div>
 
       <dl className="grid grid-cols-4 gap-2 text-center">
         {[
           ["Streak", stats?.currentStreak],
           ["Best", stats?.bestStreak],
           ["Played", stats?.played],
-          ["Average", stats?.averagePoints ?? "–"],
+          ["Avg points", stats?.averagePoints ?? "–"],
         ].map(([label, value]) => (
           <div key={label as string} className="rounded-2xl bg-white px-1 py-3 ring-1 ring-line">
             {/* Label first in the markup (dt before dd); shown below the number. */}
@@ -345,24 +450,6 @@ export function DaySummary({ number, puzzle, game, preview }: { number: number; 
       <p className="font-display text-[20px] font-semibold tracking-[-0.02em]">
         <Countdown />
       </p>
-
-      <ol className="divide-y divide-line rounded-2xl bg-white ring-1 ring-line">
-        {puzzle.drops.map((drop, i) => {
-          const r = game.results[i];
-          return (
-            <li key={i} className="flex items-center justify-between gap-3 px-4 py-3 text-[15px]">
-              <span>
-                <span className="font-semibold">{drop.answer}</span>
-                {r?.guess && !r.correct && <span className="block text-sm text-ink-faint">You said {r.guess}</span>}
-                {r && !r.guess && <span className="block text-sm text-ink-faint">No guess</span>}
-              </span>
-              <span className={`text-sm font-bold ${r?.correct ? "text-coral-deep" : "text-ink-faint"}`}>
-                {r?.correct ? `+${dropPoints(r)}` : "0"}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
       {preview && <PreviewList />}
     </div>
   );

@@ -23,7 +23,7 @@ Downstream's puzzles are real hydrology: every route is traced from a global riv
 ## Operating Context
 
 - One puzzle per day, computed in the browser from the player's local date; nothing is stored server-side.
-- 5 drops per day, ordered easy to hard. One guess per drop; the route reveals in 3 stops; points 4/3/2/1 by how early the correct guess is locked in, 0 for wrong or no guess.
+- 5 drops per day, one of each difficulty, in a mixed order (seeded per puzzle) so the hard one can come at any point. One guess per drop; the route reveals in 3 stops; points 4/3/2/1 by how early the correct guess is locked in, 0 for wrong or no guess.
 - Results are shared as text: puzzle number plus one emoji per drop, never the answers.
 - Static site (Next.js static export), hosted on a static host. No accounts, backend or database.
 

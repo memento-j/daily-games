@@ -81,41 +81,45 @@ export default function TrackerHome() {
         {SITE_NAME}
       </Link>
 
-      <section
-        ref={cardRef}
-        className="relative z-10 -mt-7 rounded-t-[28px] bg-card px-5 pt-7 pb-8 shadow-card lg:absolute lg:top-1/2 lg:left-[max(2rem,6vw)] lg:mt-0 lg:w-[460px] lg:-translate-y-1/2 lg:rounded-[30px] lg:p-9"
-      >
-        <span aria-hidden="true" className="absolute top-3 left-1/2 block h-1 w-10 -translate-x-1/2 rounded-full bg-line lg:hidden" />
+      {/* Desktop: the card is centred in the space below the back link, so a taller
+          card (the done-today state) grows into the free space, never over the link. */}
+      <div className="lg:pointer-events-none lg:absolute lg:inset-y-0 lg:left-[max(2rem,6vw)] lg:flex lg:items-center lg:pt-[76px] lg:pb-6">
+        <section
+          ref={cardRef}
+          className="relative z-10 -mt-7 rounded-t-[28px] bg-card px-5 pt-7 pb-8 shadow-card lg:pointer-events-auto lg:mt-0 lg:max-h-full lg:w-[460px] lg:overflow-y-auto lg:rounded-[30px] lg:p-9"
+        >
+          <span aria-hidden="true" className="absolute top-3 left-1/2 block h-1 w-10 -translate-x-1/2 rounded-full bg-line lg:hidden" />
 
-        <h1 className="font-display text-[56px] leading-[0.92] font-semibold tracking-[-0.04em] lg:text-[66px]">
-          Downstream<span className="text-coral">.</span>
-        </h1>
-        <p className="mt-3.5 text-[18px] leading-snug text-ink-soft">
-          A raindrop lands somewhere on Earth. Follow it downhill and guess which sea it reaches.
-        </p>
+          <h1 className="font-display text-[56px] leading-[0.92] font-semibold tracking-[-0.04em] lg:text-[66px]">
+            Downstream<span className="text-coral">.</span>
+          </h1>
+          <p className="mt-3.5 text-[18px] leading-snug text-ink-soft">
+            A raindrop lands somewhere on Earth. Follow it downhill and pick the sea it reaches.
+          </p>
 
-        {done?.result ? (
-          <DoneToday number={done.number} preview={done.preview} results={done.result.results} streak={done.stats.currentStreak} />
-        ) : (
-          <>
-            <Link
-              href="/downstream/play/"
-              className="group mt-6 flex h-14 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 ease-out hover:bg-coral-deep active:scale-[0.98]"
-            >
-              Play today&apos;s drops
-              <svg viewBox="0 0 20 20" className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
-                <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </Link>
-            <p className="mt-3 text-center text-sm text-ink-faint">
-              {today ? (today.number ? `No. ${today.number} · ${today.date}` : `Preview · launches ${today.launch}`) : " "}
-              {done && done.stats.currentStreak > 1 && ` · ${done.stats.currentStreak}-day streak`}
-            </p>
-          </>
-        )}
+          {done?.result ? (
+            <DoneToday number={done.number} preview={done.preview} results={done.result.results} streak={done.stats.currentStreak} />
+          ) : (
+            <>
+              <Link
+                href="/downstream/play/"
+                className="group mt-6 flex h-14 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 ease-out hover:bg-coral-deep active:scale-[0.98]"
+              >
+                Play today&apos;s drops
+                <svg viewBox="0 0 20 20" className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
+                  <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </Link>
+              <p className="mt-3 text-center text-sm text-ink-faint">
+                {today ? (today.number ? `No. ${today.number} · ${today.date}` : `Preview · launches ${today.launch}`) : " "}
+                {done && done.stats.currentStreak > 1 && ` · ${done.stats.currentStreak}-day streak`}
+              </p>
+            </>
+          )}
 
-        <HowItWorks status={scene === "ready" ? status : null} />
-      </section>
+          <HowItWorks status={scene === "ready" ? status : null} />
+        </section>
+      </div>
 
       <p className="relative px-5 pb-6 text-[11px] leading-relaxed text-ink-faint lg:absolute lg:right-8 lg:bottom-5 lg:p-0">
         HydroRIVERS · IHO Sea Areas · © OpenStreetMap.
@@ -128,7 +132,7 @@ export default function TrackerHome() {
 const STEPS = [
   { icon: <PinIcon />, title: "Rain falls on the pin", body: "Somewhere real on Earth. Four seas are on offer." },
   { icon: <RouteIcon />, title: "Let it flow", body: "The route reveals in three stops, from stream to river to coast." },
-  { icon: <FlagIcon />, title: "Call the sea", body: "One guess per drop. Lock in early for 4, 3, 2 or 1 points." },
+  { icon: <FlagIcon />, title: "Pick the sea", body: "Pick it on the map, then lock it in: 4, 3, 2 or 1 points, the earlier the better." },
 ];
 
 /**

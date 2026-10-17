@@ -6,9 +6,18 @@
 // (If the pipeline's stop count changes, give POINTS_BY_STAGE one entry per stage.)
 
 export const POINTS_BY_STAGE = [4, 3, 2, 1];
-export const EMOJI_BY_STAGE = ["🟩", "🟩", "🟨", "🟧"];
+// One square per score, in clearly different hues (🟨 and 🟧 look alike on
+// Windows, so they're not neighbours): green 4, blue 3, yellow 2, orange 1.
+export const EMOJI_BY_STAGE = ["🟩", "🟦", "🟨", "🟧"];
 export const EMOJI_WRONG = "🟥";
 export const EMOJI_NO_GUESS = "⬜";
+
+/** What each square means, for the legend under the summary's share preview. */
+export const EMOJI_LEGEND: [string, string][] = [
+  ...EMOJI_BY_STAGE.map((e, i): [string, string] => [e, `${POINTS_BY_STAGE[i]}`]),
+  [EMOJI_WRONG, "wrong"],
+  [EMOJI_NO_GUESS, "no guess"],
+];
 
 export type DropResult = {
   guess: string | null; // null = never guessed

@@ -49,7 +49,14 @@ export function downstreamMapStyle(): StyleSpecification {
         "source-layer": "waterway",
         filter: ["all", ["==", ["get", "class"], "river"], ["!=", ["get", "brunnel"], "tunnel"]],
         layout: { "line-cap": "round" },
-        paint: { "line-color": C.river, "line-width": ["interpolate", ["exponential", 1.3], ["zoom"], 4, 0.6, 10, 2, 16, 6] },
+        // Hidden while the player guesses (the river network would give the answer
+        // away); RouteMap fades them in once the drop is decided. Faint context only.
+        paint: {
+          "line-color": C.river,
+          "line-width": ["interpolate", ["exponential", 1.3], ["zoom"], 4, 0.6, 10, 2, 16, 6],
+          "line-opacity": 0,
+          "line-opacity-transition": { duration: 900, delay: 0 },
+        },
       },
       {
         id: "water",

@@ -22,7 +22,7 @@ describe("dropPoints", () => {
 
 describe("dropEmoji", () => {
   it("maps each outcome to its emoji", () => {
-    expect([0, 1, 2, 3].map((s) => dropEmoji(right(s)))).toEqual(["🟩", "🟩", "🟨", "🟧"]);
+    expect([0, 1, 2, 3].map((s) => dropEmoji(right(s)))).toEqual(["🟩", "🟦", "🟨", "🟧"]);
     expect(dropEmoji(wrong(1))).toBe("🟥");
     expect(dropEmoji(noGuess)).toBe("⬜");
   });

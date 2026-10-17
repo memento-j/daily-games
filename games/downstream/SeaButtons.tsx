@@ -31,12 +31,13 @@ export function useSize<T extends HTMLElement>(): [(el: T | null) => void, { wid
 }
 
 /**
- * The sea the player has picked but not locked in. Tied to the current drop and
- * stage, so moving on (or letting the water flow, which changes the points) clears it.
+ * The sea the player has picked but not locked in. It stays picked while the
+ * water flows (a hunch you watch play out; Lock in shows the new points) and is
+ * cleared by the next drop.
  */
 export function usePick(game: GameState): [string | null, (name: string | null) => void] {
   const [pick, setPick] = useState<{ name: string; at: string } | null>(null);
-  const at = `${game.drop}:${game.stage}`;
+  const at = `${game.drop}`;
   const picked = pick?.at === at ? pick.name : null;
   return [picked, (name) => setPick(name ? { name, at } : null)];
 }
@@ -99,7 +100,10 @@ export function SeaButtons({
   picked,
   onPick,
   size = "sm",
+  keys,
 }: {
+  /** Desktop: the option order, shown as number badges for the 1-4 keys. */
+  keys?: string[];
   /** "sm" on phones (keep the map visible), "md" on desktop's bigger map. */
   size?: "sm" | "md";
   spots: SpotStore;
@@ -114,7 +118,10 @@ export function SeaButtons({
   if (!width) return null;
   return (
     <div className="pointer-events-none absolute inset-0 z-[5]" role="group" aria-label="Which sea does this raindrop reach?">
-      {placeSpots(list, width, top, Math.max(top + 40, bottom), size === "md").map((s) => {
+      {placeSpots(list, width, top, Math.max(top + 40, bottom), size === "md")
+        // Tab order follows the 1-4 badges (positions are absolute, so order is free).
+        .sort((a, b) => (keys ? keys.indexOf(a.name) - keys.indexOf(b.name) : 0))
+        .map((s) => {
         const on = s.name === picked;
         return (
           <button
@@ -125,14 +132,23 @@ export function SeaButtons({
               onPick(s.name);
             }}
             aria-pressed={on}
+            data-sea={s.name}
             style={{ left: s.x, top: s.y }}
             // Small to look at, bigger to touch: the ::after extends the tap area.
             className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full text-center leading-[1.15] font-bold ${
-              size === "md" ? "max-w-[176px] px-4 py-2 text-[15px]" : "max-w-[124px] px-2.5 py-1 text-[12.5px]"
-            } shadow-[0_3px_10px_-3px_rgb(18_26_43/0.35)] transition-[scale,background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] after:absolute after:-inset-2 after:content-[''] active:scale-95 active:duration-100 motion-reduce:transition-none ${
-              on ? "z-10 scale-110 bg-coral text-white ring-2 ring-white" : "bg-white/95 text-coral-deep ring-[1.5px] ring-coral/60 hover:bg-coral-soft"
+              size === "md" ? "max-w-[176px] px-4 py-2 text-[15px]" : "max-w-[124px] px-2.5 py-1.5 text-[12.5px]"
+            } shadow-[0_3px_10px_-3px_rgb(18_26_43/0.35)] transition-[scale,background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] active:scale-95 active:duration-100 motion-reduce:transition-none ${
+              on ? "z-10 scale-110 bg-coral-deep text-white ring-2 ring-white" : "bg-white/95 text-coral-deep ring-[1.5px] ring-coral/60 hover:bg-coral-soft"
             }`}
           >
+            {keys && keys.includes(s.name) && (
+              <kbd
+                aria-hidden="true"
+                className={`mr-1.5 inline-grid size-5 place-items-center rounded-full font-sans text-[11px] leading-none font-bold ${on ? "bg-white/25 text-white" : "bg-coral-soft text-coral-deep"}`}
+              >
+                {keys.indexOf(s.name) + 1}
+              </kbd>
+            )}
             {s.name}
           </button>
         );
@@ -160,7 +176,6 @@ export function HideSeasToggle({
         sound.tap();
         onToggle();
       }}
-      aria-pressed={hidden}
       style={style}
       className={`z-10 flex items-center gap-1.5 rounded-full bg-white/95 py-1.5 pr-3 pl-2.5 text-xs font-semibold text-ink-soft shadow-card transition-colors hover:text-coral-deep ${className}`}
     >
