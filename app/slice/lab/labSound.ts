@@ -97,16 +97,15 @@ export const labSound = {
   },
 
   /** The whole reveal, scheduled now on the audio clock (offsets in seconds, matching
-   *  sliceScene.ts): snips along the line, the pieces parting, the people rising, the
-   *  glass sliding in, and a closing phrase for how good the cut was. */
-  reveal({ snips, snipEvery, split, rise, riseFor, people, glass, done, tier }: {
+   *  sliceScene.ts): snips along the line, the pieces parting, the people rising, and
+   *  a closing phrase for how good the cut was. */
+  reveal({ snips, snipEvery, split, rise, riseFor, people, done, tier }: {
     snips: number;
     snipEvery: number;
     split: number;
     rise: number;
     riseFor: number;
     people: boolean;
-    glass: number;
     done: number;
     tier: number;
   }) {
@@ -130,16 +129,21 @@ export const labSound = {
       }
     }
 
-    // The perfect cut slides in: a breath of air and a glassy two-partial chime.
-    hiss(t0 + glass, 0.7, 2400, 0.5, 0.035);
-    note(t0 + glass + 0.45, 1318, 1.1, 0.045);
-    note(t0 + glass + 0.45, 1976, 0.9, 0.025);
-
     // How it went: a bright rising pair for a good cut, a soft falling pair otherwise.
     const good = tier <= 1;
     const pair = good ? [784, 1175] : tier === 2 ? [698, 784] : [440, 349];
     note(t0 + done, pair[0], 0.35, 0.09, "triangle");
     note(t0 + done + 0.13, pair[1], good ? 0.6 : 0.45, 0.09, "triangle");
+  },
+
+  /** "Show perfect cut": a breath of air as it slides, and a glassy chime as it lands. */
+  perfect() {
+    const c = audio();
+    if (!c) return;
+    const t = c.currentTime;
+    hiss(t, 0.9, 2400, 0.5, 0.035);
+    note(t + 0.85, 1318, 1.1, 0.045);
+    note(t + 0.85, 1976, 0.9, 0.025);
   },
 
   /** Ordinary buttons. */

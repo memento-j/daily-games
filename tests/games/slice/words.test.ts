@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { capitalise, fractionWords, instruction, possessive, resultLine } from "../../../games/slice/words";
+import { lineAt } from "../../../games/slice/geometry";
+import { capitalise, fractionWords, instruction, perfectDirection, perfectLineText, possessive, resultLine } from "../../../games/slice/words";
 import type { Round } from "../../../games/slice/types";
 
 const round = (country: string, mode: Round["mode"], target: number): Round => ({
@@ -44,5 +45,26 @@ describe("resultLine", () => {
 describe("capitalise", () => {
   it("upper-cases the first letter only", () => {
     expect(capitalise("the United States")).toBe("The United States");
+  });
+});
+
+describe("perfectDirection", () => {
+  // Board y points down: a normal of (0, 1) points south.
+  it("names the compass direction from the player's line to the perfect one", () => {
+    expect(perfectDirection(lineAt(Math.PI / 2, 300), lineAt(Math.PI / 2, 200))).toBe("north");
+    expect(perfectDirection(lineAt(Math.PI / 2, 300), lineAt(Math.PI / 2, 400))).toBe("south");
+    expect(perfectDirection(lineAt(0, 300), lineAt(0, 500))).toBe("east");
+    expect(perfectDirection(lineAt(Math.PI / 4, 300), lineAt(Math.PI / 4, 350))).toBe("south-east");
+  });
+
+  it("is null when the cut is on the perfect line", () => {
+    expect(perfectDirection(lineAt(0, 300), lineAt(0, 300.2))).toBeNull();
+  });
+});
+
+describe("perfectLineText", () => {
+  it("says where the perfect cut sits", () => {
+    expect(perfectLineText(lineAt(Math.PI / 2, 300), lineAt(Math.PI / 2, 200))).toBe("The perfect cut at your angle sits further north.");
+    expect(perfectLineText(lineAt(0, 300), lineAt(0, 300))).toBe("Your cut sits right on the perfect line.");
   });
 });

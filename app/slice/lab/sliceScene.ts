@@ -4,8 +4,10 @@
 // slab, so the line stays exact); a drag on the slab draws a dashed "cut here" line
 // (raycast onto the slab's top, so it's exact at any tilt). On the reveal: a pair of
 // scissors snips along the line, the slab splits into its two pieces, which slide
-// apart; the people rise as columns; the perfect cut slides in as a glass pane; then
-// the player can orbit and zoom.
+// apart; the people rise as columns; then the player can orbit and zoom. "Show perfect
+// cut" (showPerfect) slides the perfect cut at the player's angle in from their line,
+// as a glass pane or an ink dashed line (lab: both, to compare), with an arrow showing
+// which way it moved and a "Perfect cut · 50%" label.
 //
 // Scoring never happens here: the board maths (games/slice) stays 2D and decides
 // everything. This only shows it.
@@ -15,17 +17,20 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { centroid, dot, segmentInBox, signedArea } from "@/games/slice/geometry";
 import type { Line, PeoplePoint, Point, Ring, Round } from "@/games/slice/types";
+import { formatShare } from "@/games/slice/scoring";
 import { labSound } from "./labSound";
 
 export type Draft = [Point, Point];
+export type PerfectStyle = "glass" | "line";
 
 const WORLD = 10; // the country's longest side, in world units
 const THICK = 0.42; // slab thickness
 const BEVEL = 0.035;
 const TOP = THICK + BEVEL; // the slab's top surface
-const SPLIT = 0.22; // how far the pieces slide apart
+const SPLIT = 0.6; // how far the pieces slide apart
 const COLUMN_MAX = 2.2; // height of the most crowded column
 const GLASS_HEIGHT = 1.3; // the perfect-cut pane
+const PERFECT_SECONDS = 1.1; // the perfect cut's slide from the player's line
 const HANDLE_PX = 30; // touch radius around a handle
 const MIN_CUT_PX = 24;
 const SCISSORS_SIZE = 1.8; // big enough to read on a phone
@@ -40,9 +45,8 @@ const T = {
   split: SNIPS * SNIP_EVERY + 0.05, // the pieces part
   camera: [0.8, 1.7] as const, // start, duration
   rise: 1.9, // people start rising (each column ~0.8 s, staggered over ~1.2 s)
-  glass: 3.4, // the perfect cut slides in (1 s)
-  count: 3.7, // shares count up (0.9 s)
-  done: 4.6, // the camera is the player's
+  count: 3.1, // shares count up (0.9 s)
+  done: 4.0, // the camera is the player's
 };
 
 const COLORS = {
@@ -191,18 +195,29 @@ export class SliceScene {
   private cutFrom = new THREE.Vector3();
   private cutTo = new THREE.Vector3();
   private cutSpan: [Point, Point] | null = null;
-  private glass: THREE.Group | null = null;
-  private glassFrom = 0;
-  private glassTo = 0;
-  private glassDir = new THREE.Vector3();
-  private glassAlong = new THREE.Vector3();
+  // The perfect cut, shown on request: a group holding both styles, an arrow, a label.
+  private perfect: THREE.Group | null = null;
+  private perfectGlass = new THREE.Group();
+  private perfectLine = new THREE.Group();
+  private arrow: THREE.Group | null = null;
+  private perfectFrom = 0; // world offsets along the cut's normal
+  private perfectTo = 0;
+  private arrowFrom = 0;
+  private perfectDir = new THREE.Vector3();
+  private perfectAlong = new THREE.Vector3();
+  private perfectStart = -1;
+  private perfectStyle: PerfectStyle = "glass";
+  private perfectLabel: HTMLElement;
+  private perfectLen = 0;
+  private target = 0.5;
   private shares: [number, number] = [0, 0];
   private onRevealDone: (() => void) | null = null;
   private revealDone = false;
 
-  constructor(container: HTMLElement, labels: HTMLElement[], onDraft: (draft: Draft | null) => void) {
+  constructor(container: HTMLElement, labels: HTMLElement[], perfectLabel: HTMLElement, onDraft: (draft: Draft | null) => void) {
     this.container = container;
     this.labels = labels;
+    this.perfectLabel = perfectLabel;
     this.onDraft = onDraft;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -412,7 +427,7 @@ export class SliceScene {
     // The reveal swings round to any side, so fit the country's whole diagonal (a
     // circle around it) rather than its width or depth.
     const r = Math.hypot(w, h) / 2;
-    this.revealView.radius = (r / Math.sin(Math.min(v, hor))) * 0.92 + COLUMN_MAX * 0.4;
+    this.revealView.radius = ((r + SPLIT / 2) / Math.sin(Math.min(v, hor))) * 0.92 + COLUMN_MAX * 0.4; // + the pieces' spread
   }
 
   private setCamera(view: { radius: number; polar: number; azimuth: number }) {
@@ -631,46 +646,161 @@ export class SliceScene {
       return piece;
     });
 
-    // The perfect cut: a pane of glass with an ink edge, sliding from the player's line to its place.
-    const pspan = segmentInBox(perfect, this.min, this.max);
-    if (pspan) {
-      const len = this.toWorld(pspan[0]).distanceTo(this.toWorld(pspan[1]));
-      const glass = new THREE.Group();
-      const paneMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false });
-      const edgeMat = new THREE.MeshBasicMaterial({ color: COLORS.ink });
-      const rimMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.35 });
-      const paneGeo = new THREE.PlaneGeometry(len, GLASS_HEIGHT);
-      const edgeGeo = new THREE.BoxGeometry(len, 0.05, 0.05);
-      this.disposables.push(paneMat, edgeMat, rimMat, paneGeo, edgeGeo);
-      const pane = new THREE.Mesh(paneGeo, paneMat);
-      pane.position.y = GLASS_HEIGHT / 2;
-      const edge = new THREE.Mesh(edgeGeo, edgeMat);
-      edge.position.y = TOP + 0.03;
-      const rim = new THREE.Mesh(edgeGeo, rimMat);
-      rim.position.y = GLASS_HEIGHT;
-      glass.add(pane, edge, rim);
-      glass.rotation.y = -Math.atan2(pspan[1][1] - pspan[0][1], pspan[1][0] - pspan[0][0]);
-      // The glass slides along the cut's normal: from the player's line to the perfect one,
-      // riding with whichever piece the perfect line falls in. Its position is a point
-      // along the line (the middle of the span) plus `offset` along the normal.
-      this.glassDir = n.clone();
-      const mid = this.toWorld([(pspan[0][0] + pspan[1][0]) / 2, (pspan[0][1] + pspan[1][1]) / 2], 0);
-      this.glassAlong = mid.clone().sub(n.clone().multiplyScalar(mid.dot(n)));
-      this.glassFrom = this.worldOffset(line);
-      const pw = this.worldOffset(perfect);
-      this.glassTo = pw + (pw > this.glassFrom ? SPLIT / 2 : -SPLIT / 2);
-      glass.visible = false;
-      this.glass = glass;
-      this.scene.add(glass);
-    }
+    this.target = this.round.target;
+    this.buildPerfect(line, perfect, n);
 
     this.revealStart = performance.now();
     if (this.reduced) {
       this.revealStart -= 10_000; // straight to the finished state, and only the closing sound
-      labSound.reveal({ snips: 0, snipEvery: 0, split: 0, rise: 0, riseFor: 0, people: false, glass: 0, done: 0.1, tier });
+      labSound.reveal({ snips: 0, snipEvery: 0, split: 0, rise: 0, riseFor: 0, people: false, done: 0.1, tier });
     } else {
-      labSound.reveal({ snips: SNIPS, snipEvery: SNIP_EVERY, split: T.split, rise: T.rise, riseFor: 1.6, people: points.length > 0, glass: T.glass, done: T.done - 0.3, tier });
+      labSound.reveal({ snips: SNIPS, snipEvery: SNIP_EVERY, split: T.split, rise: T.rise, riseFor: 1.6, people: points.length > 0, done: T.done - 0.3, tier });
     }
+  }
+
+  /** The perfect cut at the player's angle, hidden until showPerfect: a glass pane and an
+   *  ink dashed line (one shows, per perfectStyle), plus an arrow from the player's cut.
+   *  It rides with whichever piece it falls in, so its far offset allows for the split. */
+  private buildPerfect(line: Line, perfect: Line, n: THREE.Vector3) {
+    const span = segmentInBox(perfect, this.bmin, this.bmax);
+    if (!span) return;
+    const len = this.toWorld(span[0]).distanceTo(this.toWorld(span[1]));
+    this.perfectLen = len;
+    const group = new THREE.Group();
+    group.rotation.y = -Math.atan2(span[1][1] - span[0][1], span[1][0] - span[0][0]);
+
+    // Glass: a faint pane with a rim along its top.
+    const paneMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false });
+    const rimMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.4 });
+    const paneGeo = new THREE.PlaneGeometry(len, GLASS_HEIGHT);
+    const rimGeo = new THREE.BoxGeometry(len, 0.05, 0.05);
+    const pane = new THREE.Mesh(paneGeo, paneMat);
+    pane.position.y = GLASS_HEIGHT / 2;
+    const rim = new THREE.Mesh(rimGeo, rimMat);
+    rim.position.y = GLASS_HEIGHT;
+    this.perfectGlass = new THREE.Group();
+    this.perfectGlass.add(pane, rim);
+
+    // Line: ink dashes on the slab's surface, like the player's "cut here" line.
+    const dashGeo = new THREE.BoxGeometry(1, 0.025, 1);
+    const dashMat = new THREE.MeshBasicMaterial({ color: COLORS.ink });
+    const dashes = new THREE.InstancedMesh(dashGeo, dashMat, 400);
+    const a = new THREE.Vector3(-len / 2, TOP + 0.015, 0);
+    this.layDashes(dashes, a, new THREE.Vector3(len / 2, TOP + 0.015, 0), a, 0.07);
+    this.perfectLine = new THREE.Group();
+    this.perfectLine.add(dashes);
+
+    group.add(this.perfectGlass, this.perfectLine);
+    this.disposables.push(paneMat, rimMat, paneGeo, rimGeo, dashGeo, dashMat);
+
+    // Its path: from the player's line to the perfect one, along the cut's normal. Its
+    // position is a point along the line (the middle of its span) plus an offset along n.
+    this.perfectDir = n.clone();
+    const mid = this.toWorld([(span[0][0] + span[1][0]) / 2, (span[0][1] + span[1][1]) / 2], 0);
+    this.perfectAlong = mid.clone().sub(n.clone().multiplyScalar(mid.dot(n)));
+    this.perfectFrom = this.worldOffset(line);
+    const pw = this.worldOffset(perfect);
+    const side = pw > this.perfectFrom ? 1 : -1;
+    this.perfectTo = pw + (side * SPLIT) / 2;
+    this.arrowFrom = this.perfectFrom + (side * SPLIT) / 2; // the edge of that piece
+
+    // The arrow: flat on the slab, pointing from the player's cut to the perfect one.
+    if (Math.abs(this.perfectTo - this.arrowFrom) > 0.25) {
+      const inkMat = new THREE.MeshBasicMaterial({ color: COLORS.ink });
+      const shaftGeo = new THREE.BoxGeometry(1, 0.03, 0.07);
+      shaftGeo.translate(0.5, 0, 0); // grows from its start
+      const headGeo = new THREE.ConeGeometry(0.14, 0.3, 3);
+      headGeo.rotateZ(-Math.PI / 2); // point along +x
+      headGeo.rotateX(Math.PI / 2); // lie flat
+      this.disposables.push(inkMat, shaftGeo, headGeo);
+      const arrow = new THREE.Group();
+      const shaft = new THREE.Mesh(shaftGeo, inkMat);
+      const head = new THREE.Mesh(headGeo, inkMat);
+      shaft.name = "shaft";
+      head.name = "head";
+      arrow.add(shaft, head);
+      arrow.rotation.y = -Math.atan2(n.z * side, n.x * side);
+      arrow.visible = false;
+      this.arrow = arrow;
+      this.scene.add(arrow);
+    }
+
+    group.visible = false;
+    this.perfect = group;
+    this.applyPerfectStyle();
+    this.scene.add(group);
+  }
+
+  private applyPerfectStyle() {
+    this.perfectGlass.visible = this.perfectStyle === "glass";
+    this.perfectLine.visible = this.perfectStyle === "line";
+  }
+
+  /** Glass pane or ink dashed line (lab: to compare). Applies at once, even when shown. */
+  setPerfectStyle(style: PerfectStyle) {
+    this.perfectStyle = style;
+    this.applyPerfectStyle();
+  }
+
+  /** "Show perfect cut": slide it in from the player's line, with the arrow and label. */
+  showPerfect() {
+    if (!this.perfect || this.perfectStart >= 0) return;
+    this.perfectStart = performance.now() - (this.reduced ? 10_000 : 0);
+    labSound.perfect();
+  }
+
+  private animatePerfect(now: number) {
+    if (!this.perfect || this.perfectStart < 0) return;
+    const k = easeInOut((now - this.perfectStart) / 1000 / PERFECT_SECONDS);
+    const off = THREE.MathUtils.lerp(this.perfectFrom, this.perfectTo, k);
+    this.perfect.visible = true;
+    this.perfect.position.copy(this.perfectAlong).addScaledVector(this.perfectDir, off);
+    if (this.arrow) {
+      // The arrow grows behind the moving cut, from the edge of the player's piece.
+      const from = this.arrowFrom;
+      const to = THREE.MathUtils.lerp(from, this.perfectTo, k) - Math.sign(this.perfectTo - from) * 0.12;
+      const length = Math.abs(to - from);
+      this.arrow.visible = length > 0.2;
+      this.arrow.position.copy(this.perfectAlong).addScaledVector(this.perfectDir, from).setY(TOP + 0.03);
+      const shaft = this.arrow.getObjectByName("shaft")!;
+      const head = this.arrow.getObjectByName("head")!;
+      shaft.scale.x = Math.max(0.001, length - 0.25);
+      head.position.x = Math.max(0.001, length - 0.15);
+    }
+    // The label floats above the perfect cut, at whichever spot along it (middle or
+    // towards either end) sits furthest from the two pieces' labels on screen.
+    const along = new THREE.Vector3(1, 0, 0).applyQuaternion(this.perfect.quaternion);
+    const y = this.perfectStyle === "glass" ? GLASS_HEIGHT + 0.25 : TOP + 0.45;
+    const others = this.labels.map((el) => el.getBoundingClientRect());
+    const box = this.renderer.domElement.getBoundingClientRect();
+    let best: THREE.Vector2 | null = null;
+    let bestGap = -1;
+    for (const f of [0, -0.35, 0.35]) {
+      const v = this.perfect.position.clone().addScaledVector(along, f * this.perfectLen).setY(y).project(this.camera);
+      const at = new THREE.Vector2(((v.x + 1) / 2) * box.width, ((1 - v.y) / 2) * box.height);
+      if (at.x < 60 || at.x > box.width - 60 || at.y < 0 || at.y > box.height) continue; // keep it on screen
+      const gap = Math.min(...others.map((o) => Math.hypot(at.x - (o.left + o.width / 2 - box.left), at.y - (o.top + o.height / 2 - box.top))));
+      if (gap > bestGap) {
+        bestGap = gap;
+        best = at;
+      }
+    }
+    if (best) {
+      // A short perfect line (narrow Chile) can leave every spot near a piece's label:
+      // step upwards until the two no longer overlap.
+      const w = this.perfectLabel.offsetWidth / 2 + 6;
+      const h = this.perfectLabel.offsetHeight / 2 + 6;
+      const hits = () =>
+        others.some((o) => {
+          const cx = o.left + o.width / 2 - box.left;
+          const cy = o.top + o.height / 2 - box.top;
+          return Math.abs(best!.x - cx) < w + o.width / 2 && Math.abs(best!.y - cy) < h + o.height / 2;
+        });
+      for (let i = 0; i < 30 && hits(); i++) best.y -= 4;
+      this.perfectLabel.style.transform = `translate(-50%, -50%) translate(${best.x}px, ${best.y}px)`;
+    }
+    this.perfectLabel.style.opacity = String(ease((now - this.perfectStart) / 1000 / PERFECT_SECONDS - 0.4));
+    this.perfectLabel.textContent = `Perfect cut · ${formatShare(this.target)}`;
   }
 
   private columns(points: PeoplePoint[], heaviest: number, footprint: number, color: number, piece: Piece): THREE.InstancedMesh {
@@ -752,13 +882,6 @@ export class SliceScene {
         });
         piece.columns.instanceMatrix.needsUpdate = true;
       }
-      // The perfect cut slides in.
-      if (this.glass) {
-        this.glass.visible = t >= T.glass;
-        const k = easeInOut(window01(t, T.glass, 1));
-        const off = THREE.MathUtils.lerp(this.glassFrom, this.glassTo, k);
-        this.glass.position.copy(this.glassAlong).addScaledVector(this.glassDir, off);
-      }
     }
     // Each piece's share counts up above it.
     const count = ease(window01(t, T.count, 0.9));
@@ -785,8 +908,12 @@ export class SliceScene {
   private clearReveal() {
     for (const piece of this.pieces) this.scene.remove(piece.group);
     this.pieces = [];
-    if (this.glass) this.scene.remove(this.glass);
-    this.glass = null;
+    if (this.perfect) this.scene.remove(this.perfect);
+    if (this.arrow) this.scene.remove(this.arrow);
+    this.perfect = null;
+    this.arrow = null;
+    this.perfectStart = -1;
+    this.perfectLabel.style.opacity = "0";
     this.scissors.visible = false;
     this.slit.visible = false;
     this.revealStart = -1;
@@ -809,6 +936,7 @@ export class SliceScene {
     const now = performance.now();
     if (this.phase === "draw" && this.round) this.driftCamera(now);
     this.animateReveal(now);
+    this.animatePerfect(now);
     if (this.controls.enabled) this.controls.update();
     this.renderer.render(this.scene, this.camera);
   };

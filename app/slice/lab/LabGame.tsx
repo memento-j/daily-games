@@ -1,7 +1,8 @@
 "use client";
 
 // The /slice/lab prototype screen: the 3D table (sliceScene.ts) under a thin layer of
-// interface. Pick a sample country, draw, confirm, watch the reveal, orbit, again.
+// interface. Pick a sample country, draw, confirm, watch the reveal, orbit, show the
+// perfect cut (glass pane or ink line, switchable to compare), again.
 // Scoring is the real game's (games/slice); only the presentation is new.
 
 import Link from "next/link";
@@ -10,10 +11,10 @@ import { crosses, perfectLine, share } from "@/games/slice/cut";
 import { lineThrough } from "@/games/slice/geometry";
 import { cutEmoji, scoreCut, type CutResult } from "@/games/slice/scoring";
 import type { Round } from "@/games/slice/types";
-import { instruction, resultLine } from "@/games/slice/words";
+import { instruction, perfectLineText, resultLine } from "@/games/slice/words";
 import { subscribe } from "@/lib/storage";
 import { isMuted, labSound, setMuted } from "./labSound";
-import type { SliceScene } from "./sliceScene";
+import type { PerfectStyle, SliceScene } from "./sliceScene";
 
 const SAMPLES = ["egypt", "canada", "chile", "indonesia", "australia", "italy"];
 const TIER_WORDS = ["Spot on", "Close", "Not bad", "Way off"];
@@ -23,6 +24,7 @@ export default function LabGame() {
   const holder = useRef<HTMLDivElement>(null);
   const labelA = useRef<HTMLDivElement>(null);
   const labelB = useRef<HTMLDivElement>(null);
+  const perfectLabel = useRef<HTMLDivElement>(null);
   const scene = useRef<SliceScene | null>(null);
   const top = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
@@ -33,6 +35,9 @@ export default function LabGame() {
   const [result, setResult] = useState<CutResult | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
+  const [perfectText, setPerfectText] = useState("");
+  const [perfectShown, setPerfectShown] = useState(false);
+  const [style, setStyle] = useState<PerfectStyle>("glass");
 
   // Create the 3D scene once. three.js is imported here, in the browser, never at build time.
   useEffect(() => {
@@ -41,7 +46,7 @@ export default function LabGame() {
     import("./sliceScene")
       .then(({ SliceScene }) => {
         if (cancelled || !holder.current) return;
-        made = new SliceScene(holder.current, [labelA.current!, labelB.current!], (d) => {
+        made = new SliceScene(holder.current, [labelA.current!, labelB.current!], perfectLabel.current!, (d) => {
           setHasDraft(!!d);
           setMessage(null);
         });
@@ -85,6 +90,7 @@ export default function LabGame() {
         setRound(r);
         setPhase("draw");
         setResult(null);
+        setPerfectShown(false);
         const hand = () => {
           if (cancelled) return;
           if (scene.current) scene.current.setRound(r);
@@ -106,13 +112,29 @@ export default function LabGame() {
       return;
     }
     const scored = scoreCut(round, line);
+    const perfect = perfectLine(round, line);
     setResult(scored);
+    setPerfectText(perfectLineText(line, perfect));
+    setPerfectShown(false);
     setPhase("reveal");
-    scene.current?.reveal(line, perfectLine(round, line), share(round, line), scored.positive, scored.tier, () => setPhase("done"));
+    scene.current?.setPerfectStyle(style);
+    scene.current?.reveal(line, perfect, share(round, line), scored.positive, scored.tier, () => setPhase("done"));
+  }
+
+  function showPerfect() {
+    setPerfectShown(true);
+    scene.current?.showPerfect();
+  }
+
+  function pickStyle(next: PerfectStyle) {
+    labSound.tap();
+    setStyle(next);
+    scene.current?.setPerfectStyle(next);
   }
 
   function again() {
     labSound.tap();
+    setPerfectShown(false);
     setPhase("draw");
     setResult(null);
     scene.current?.again();
@@ -126,6 +148,7 @@ export default function LabGame() {
       {/* Piece labels, positioned by the scene every frame. */}
       <div ref={labelA} className={LABEL} style={{ opacity: 0 }} />
       <div ref={labelB} className={LABEL} style={{ opacity: 0 }} />
+      <div ref={perfectLabel} className={`${LABEL} bg-ink! text-[13px]! text-white`} style={{ opacity: 0 }} />
 
       <div ref={top} className="pointer-events-none absolute inset-x-0 top-0 p-4">
         <div className="pointer-events-auto flex items-center justify-between gap-2">
@@ -180,6 +203,34 @@ export default function LabGame() {
               <p className={`text-[14px] text-ink-soft transition-opacity duration-500 ${phase === "done" ? "opacity-100" : "opacity-0"}`}>
                 {round.fact} Drag to look around.
               </p>
+              {phase === "done" &&
+                (perfectShown ? (
+                  <p className="text-[15px] font-semibold" aria-live="polite">
+                    {perfectText}
+                  </p>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={showPerfect}
+                    className="mt-1 h-12 rounded-full bg-white text-[16px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+                  >
+                    Show perfect cut
+                  </button>
+                ))}
+              {/* Lab only: compare the two looks for the perfect cut. */}
+              <div className="flex items-center gap-2 text-xs text-ink-faint">
+                Perfect cut as
+                {(["glass", "line"] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => pickStyle(s)}
+                    className={`rounded-full px-2.5 py-1 font-semibold ${style === s ? "bg-ink text-white" : "bg-white ring-1 ring-ink/15"}`}
+                  >
+                    {s === "glass" ? "Glass pane" : "Dashed line"}
+                  </button>
+                ))}
+              </div>
               <button type="button" onClick={again} className="mt-1 h-12 rounded-full bg-ink text-[17px] font-bold text-white">
                 Cut again
               </button>
