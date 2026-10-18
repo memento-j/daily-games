@@ -112,6 +112,146 @@ button:not(:disabled),
   }
 }
 
+/* Homepage Slice board (MiniSlice in app/page.tsx), one 6 s loop: the dashed cut draws
+   itself across, the slab parts along it and the counted piece blushes coral, the
+   people rise, a hold, then everything settles back. Reduced motion: the finished
+   state (pieces apart, people risen, no line). */
+.mini-slice-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: mini-slice-draw 6s cubic-bezier(0.65, 0, 0.35, 1) infinite;
+}
+.mini-slice-line {
+  animation: mini-slice-line 6s linear infinite;
+}
+.mini-slice-a,
+.mini-slice-b {
+  animation: mini-slice-a 6s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+}
+.mini-slice-b {
+  animation-name: mini-slice-b;
+}
+.mini-slice-tint {
+  animation: mini-slice-tint 6s ease-out infinite;
+}
+.mini-slice-rise {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation: mini-slice-rise 6s cubic-bezier(0.22, 1, 0.36, 1) infinite both; /* both: flat during the stagger delay too */
+}
+/* An uncut copy of the slab under the two halves hides the hairline where they meet,
+   until the cut parts them. */
+.mini-slice-whole {
+  animation: mini-slice-whole 6s linear infinite;
+}
+@keyframes mini-slice-whole {
+  0%,
+  38%,
+  97%,
+  100% {
+    opacity: 1;
+  }
+  40%,
+  95% {
+    opacity: 0;
+  }
+}
+@keyframes mini-slice-draw {
+  0%,
+  8% {
+    stroke-dashoffset: 1;
+  }
+  34%,
+  100% {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes mini-slice-line {
+  0%,
+  38% {
+    opacity: 1;
+  }
+  46%,
+  100% {
+    opacity: 0; /* back to 1 only as the loop restarts, when the cut is undrawn again */
+  }
+}
+/* The cut's normal is (-0.48, 0.88): the upper piece moves against it, the lower along it. */
+@keyframes mini-slice-a {
+  0%,
+  38%,
+  97%,
+  100% {
+    transform: translate(0, 0);
+  }
+  48%,
+  88% {
+    transform: translate(1.9px, -3.5px);
+  }
+}
+@keyframes mini-slice-b {
+  0%,
+  38%,
+  97%,
+  100% {
+    transform: translate(0, 0);
+  }
+  48%,
+  88% {
+    transform: translate(-1.9px, 3.5px);
+  }
+}
+@keyframes mini-slice-tint {
+  0%,
+  40%,
+  96%,
+  100% {
+    fill: #fffaf3;
+  }
+  50%,
+  88% {
+    fill: #ffdcd2;
+  }
+}
+@keyframes mini-slice-rise {
+  0%,
+  48% {
+    transform: scaleY(0);
+  }
+  64%,
+  88% {
+    transform: scaleY(1);
+  }
+  96%,
+  100% {
+    transform: scaleY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .mini-slice-draw,
+  .mini-slice-line,
+  .mini-slice-whole,
+  .mini-slice-tint,
+  .mini-slice-rise {
+    animation: none;
+  }
+  .mini-slice-line,
+  .mini-slice-whole {
+    opacity: 0;
+  }
+  .mini-slice-tint {
+    fill: #ffdcd2;
+  }
+  .mini-slice-a {
+    animation: none;
+    transform: translate(1.9px, -3.5px);
+  }
+  .mini-slice-b {
+    animation: none;
+    transform: translate(-1.9px, 3.5px);
+  }
+}
+
 /* The game map's pin (games/downstream/RouteMap.tsx). Solid coral while it is the
    raindrop; a hollow coral ring once the water has flowed on ("where it fell").
    A new drop lands with a small fall and bounce. */

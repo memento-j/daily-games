@@ -36,25 +36,6 @@ export default function Home() {
           <ul className="mt-4 grid grid-cols-1 gap-3">
             <li>
               <Link
-                href="/downstream/"
-                className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
-              >
-                <span>
-                  <span className="font-display block text-[34px] leading-none font-semibold tracking-[-0.035em]">
-                    Downstream<span className="text-coral">.</span>
-                  </span>
-                  <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
-                    A raindrop lands somewhere on Earth. Pick the sea it reaches.
-                  </span>
-                  <span className="mt-4 block">
-                    <DownstreamStatus />
-                  </span>
-                </span>
-                <MiniMap />
-              </Link>
-            </li>
-            <li>
-              <Link
                 href="/slice/"
                 className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
               >
@@ -70,6 +51,25 @@ export default function Home() {
                   </span>
                 </span>
                 <MiniSlice />
+              </Link>
+            </li>
+            <li>
+              <Link
+                href="/downstream/"
+                className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
+              >
+                <span>
+                  <span className="font-display block text-[34px] leading-none font-semibold tracking-[-0.035em]">
+                    Downstream<span className="text-coral">.</span>
+                  </span>
+                  <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
+                    A raindrop lands somewhere on Earth. Pick the sea it reaches.
+                  </span>
+                  <span className="mt-4 block">
+                    <DownstreamStatus />
+                  </span>
+                </span>
+                <MiniMap />
               </Link>
             </li>
             <ComingSoon number={3} line="Still an idea on a napkin." />
@@ -124,26 +124,80 @@ function MiniMap() {
   );
 }
 
-/** A tiny Slice board: a made-up country, its crowded corner, and one straight cut. */
+/**
+ * A tiny Slice board in the game's look: a paper slab on the sage cutting mat. A dashed
+ * cut draws itself across, the slab parts along it, the crowded corner's people rise
+ * as coral columns (grey on the other piece), then it all settles back and repeats.
+ * Reduced motion: the finished state (pieces apart, people risen). CSS: `.mini-slice-*`.
+ */
 function MiniSlice() {
+  const country = "M30 30 C 48 16, 78 22, 98 18 S 128 30, 124 50 S 112 80, 90 86 S 50 92, 36 78 S 18 44, 30 30 Z";
+  // The cut runs through (20, 18) and (136, 82); each clip keeps one side of it.
+  const upper = "-10,1.4 160,95.3 160,-20 -10,-20";
+  const lower = "-10,1.4 160,95.3 160,124 -10,124";
+  const slab = (clip: string, top: string) => (
+    <g clipPath={`url(#${clip})`}>
+      <path d={country} transform="translate(0 4)" fill="#e9a68c" />
+      <path d={country} fill={top} stroke="rgb(18 26 43 / 0.25)" strokeWidth="0.8" className={clip === "mini-slice-a" ? "mini-slice-tint" : undefined} />
+    </g>
+  );
+  // [x, base y, height]: the crowded corner on the counted piece, a few people elsewhere.
+  const crowd: [number, number, number][] = [
+    [101, 36, 15],
+    [109, 42, 11],
+    [93, 31, 8],
+    [115, 50, 7],
+    [100, 46, 5],
+    [87, 38, 4],
+  ];
+  const sparse: [number, number, number][] = [
+    [58, 64, 4],
+    [74, 76, 3],
+    [48, 52, 3],
+  ];
+  const columns = (list: [number, number, number][], fill: string) =>
+    list.map(([x, y, h], i) => (
+      <rect key={i} x={x - 2} y={y - h} width="4" height={h} rx="0.8" fill={fill} className="mini-slice-rise" style={{ animationDelay: `${i * 70}ms` }} />
+    ));
   return (
     <svg viewBox="0 0 150 104" className="w-[112px] shrink-0 overflow-visible sm:w-[150px]" aria-hidden="true">
-      <rect width="150" height="104" rx="18" fill="var(--color-land)" />
-      <path
-        d="M30 30 C 48 16, 78 22, 98 18 S 128 30, 124 50 S 112 80, 90 86 S 50 92, 36 78 S 18 44, 30 30 Z"
-        fill="var(--color-land-high)"
-        stroke="var(--color-ink)"
-        strokeWidth="1.4"
-      />
-      <path d="M30 30 C 48 16, 78 22, 98 18 S 128 30, 124 50 L 112 66 L 46 30 Z" fill="var(--color-coral-soft)" />
-      <g fill="var(--color-coral)" opacity="0.45">
-        <circle cx="104" cy="34" r="7" />
-        <circle cx="114" cy="44" r="5" />
-        <circle cx="92" cy="30" r="4" />
-        <circle cx="60" cy="62" r="2.5" />
-        <circle cx="76" cy="74" r="2" />
+      <defs>
+        <clipPath id="mini-slice-a">
+          <polygon points={upper} />
+        </clipPath>
+        <clipPath id="mini-slice-b">
+          <polygon points={lower} />
+        </clipPath>
+        <mask id="mini-slice-cut">
+          <path d="M16 15.8 L140 84.2" stroke="#fff" strokeWidth="8" pathLength={1} className="mini-slice-draw" />
+        </mask>
+        <pattern id="mini-slice-grid" width="15" height="15" patternUnits="userSpaceOnUse">
+          <path d="M15 0H0V15" fill="none" stroke="#fff" strokeOpacity="0.3" strokeWidth="0.8" />
+        </pattern>
+      </defs>
+      <rect width="150" height="104" rx="18" fill="#bccdbd" />
+      <rect width="150" height="104" rx="18" fill="url(#mini-slice-grid)" />
+      <g className="mini-slice-b">
+        {slab("mini-slice-b", "#fffaf3")}
+        {columns(sparse, "#7b8597")}
       </g>
-      <line x1="22" y1="12" x2="138" y2="86" stroke="var(--color-coral)" strokeWidth="3" strokeLinecap="round" />
+      <g className="mini-slice-a">
+        {slab("mini-slice-a", "#fffaf3")}
+        {columns(crowd, "var(--color-coral)")}
+      </g>
+      <g className="mini-slice-whole">
+        <path d={country} transform="translate(0 4)" fill="#e9a68c" />
+        <path d={country} fill="#fffaf3" stroke="rgb(18 26 43 / 0.25)" strokeWidth="0.8" />
+      </g>
+      <path
+        d="M16 15.8 L140 84.2"
+        stroke="var(--color-coral)"
+        strokeWidth="2.6"
+        strokeDasharray="5 3.5"
+        strokeLinecap="round"
+        mask="url(#mini-slice-cut)"
+        className="mini-slice-line"
+      />
     </svg>
   );
 }

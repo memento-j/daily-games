@@ -13,7 +13,9 @@ export type GameState = {
   cuts: SavedCut[]; // one per confirmed round
 };
 
-export type Action = { type: "cut"; line: Line } | { type: "next" };
+// "retry" takes back the current round's cut so the same country can be cut again. The
+// screen offers it while ENDLESS_TRIES is on (config.ts; playtesting).
+export type Action = { type: "cut"; line: Line } | { type: "next" } | { type: "retry" };
 
 export type Phase = "cutting" | "result" | "finished";
 
@@ -35,6 +37,7 @@ export function step(state: GameState, action: Action, puzzle: Puzzle): GameStat
     return { ...state, cuts: [...state.cuts, { line: action.line, share, miss, tier }] };
   }
   if (now !== "result") return state;
+  if (action.type === "retry") return { ...state, cuts: state.cuts.slice(0, state.round) };
   return { ...state, round: state.round + 1 };
 }
 

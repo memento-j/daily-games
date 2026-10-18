@@ -17,8 +17,9 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: { default: `Downstream · ${SITE_NAME}`, template: `%s · ${SITE_NAME}` },
-  description: "A raindrop lands somewhere on Earth. Guess which sea it reaches. Five drops a day.",
+  // The site's own name and pitch; each game's page sets its own ("Slice · Daily Games").
+  title: { default: SITE_NAME, template: `%s · ${SITE_NAME}` },
+  description: "Small daily puzzles about the real world. One a day, the same for everyone, a few minutes each.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

@@ -29,6 +29,17 @@ describe("step", () => {
     expect(s.cuts.map((c) => c.tier)).toEqual([0, 3]);
   });
 
+  it("retry takes back the current round's cut, and only in the result phase", () => {
+    const cut = step(initialState, { type: "cut", line: lineAt(0, 70) }, puzzle);
+    const again = step(cut, { type: "retry" }, puzzle);
+    expect(phase(again, puzzle)).toBe("cutting");
+    expect(again.cuts).toEqual([]);
+    expect(step(initialState, { type: "retry" }, puzzle)).toBe(initialState);
+    // An earlier round's cut stays put.
+    const second = step(step(cut, { type: "next" }, puzzle), { type: "cut", line: through }, puzzle);
+    expect(step(second, { type: "retry" }, puzzle).cuts).toEqual([cut.cuts[0]]);
+  });
+
   it("ignores a line that misses the country", () => {
     expect(step(initialState, { type: "cut", line: misses }, puzzle)).toBe(initialState);
   });

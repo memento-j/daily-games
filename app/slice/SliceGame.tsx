@@ -15,7 +15,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import { shareResult, shareText } from "@/lib/share";
 import { subscribe } from "@/lib/storage";
-import { GAME_NAME } from "@/games/slice/config";
+import { ENDLESS_TRIES, GAME_NAME } from "@/games/slice/config";
 import { crosses, perfectLine, share } from "@/games/slice/cut";
 import type { SavedCut } from "@/games/slice/game";
 import { lineThrough } from "@/games/slice/geometry";
@@ -142,6 +142,14 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     g.act({ type: "next" });
   }
 
+  // While ENDLESS_TRIES is on (playtesting): cut the same country again.
+  function retry() {
+    sound.tap();
+    setRevealDone(false);
+    setPerfectShown(false);
+    g.act({ type: "retry" });
+  }
+
   function showPerfect() {
     setPerfectShown(true);
     scene.current?.showPerfect();
@@ -265,6 +273,11 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                   {g.game.round + 1 >= puzzle.rounds.length ? "See results" : "Next round"}
                 </button>
               </div>
+              {ENDLESS_TRIES && (
+                <button type="button" onClick={retry} disabled={!revealDone} className="self-center py-1 text-[13px] font-semibold text-coral-deep">
+                  ↻ Try again
+                </button>
+              )}
             </div>
           ) : null}
         </div>
