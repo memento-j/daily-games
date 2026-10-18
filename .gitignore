@@ -59,3 +59,10 @@ CLAUDE.md
 
 #maplibre worker, copied from node_modules by predev/prebuild
 /public/maplibre-gl-worker.mjs
+
+#slice datasets, caches, previews
+/scripts/slice/GHS_POP_E2025_GLOBE_R2023A_54009_1000_V1_0
+/scripts/slice/ne_10m_admin_0_countries
+/scripts/slice/cache
+/scripts/slice/out
+/scripts/slice/__pycache__

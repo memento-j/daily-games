@@ -1,9 +1,12 @@
-import type { Metadata } from "next";
-import { preconnectMapHosts } from "@/games/downstream/preconnect";
-import TrackerHome from "./TrackerHome";
+// Downstream (/downstream): the game itself, no front page in between (one click
+// less; developer's call, 2026-10-18). A Server Component: it renders the static
+// HTML shell at build time; the game (today's puzzle, the map, saved progress) is a
+// Client Component that takes over in the browser.
 
-// Downstream's front page. A Server Component: everything live inside it (the 3D
-// map, today's date) lives in Client Components and runs in the browser.
+import type { Metadata } from "next";
+import { Suspense } from "react";
+import { preconnectMapHosts } from "@/games/downstream/preconnect";
+import DownstreamGame from "./DownstreamGame";
 
 export const metadata: Metadata = {
   title: "Downstream",
@@ -11,6 +14,12 @@ export const metadata: Metadata = {
 };
 
 export default function DownstreamPage() {
-  preconnectMapHosts(); // the game's map is one click away
-  return <TrackerHome />;
+  preconnectMapHosts();
+  return (
+    // DownstreamGame reads ?puzzle=N with useSearchParams, which in a static
+    // export must sit inside a Suspense boundary.
+    <Suspense fallback={null}>
+      <DownstreamGame />
+    </Suspense>
+  );
 }

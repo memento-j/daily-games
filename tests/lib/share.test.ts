@@ -8,6 +8,12 @@ describe("shareText", () => {
     expect(shareText(base)).toBe("Downstream #12 🟩🟨🟥🟩🟧 14/20\nhttps://example.com/downstream/");
   });
 
+  it("can leave the score out", () => {
+    expect(shareText({ game: "Slice", number: 4, marks: ["🟩", "🟥"], url: "https://example.com/slice/" })).toBe(
+      "Slice #4 🟩🟥\nhttps://example.com/slice/",
+    );
+  });
+
   it("labels previews", () => {
     expect(shareText({ ...base, preview: true }).startsWith("Downstream preview #12 ")).toBe(true);
   });

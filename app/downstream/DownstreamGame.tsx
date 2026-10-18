@@ -1,6 +1,6 @@
 "use client";
 
-// The Downstream game screen (/downstream/play). Phones get PhoneGame; this file
+// The Downstream game screen (/downstream). Phones get PhoneGame; this file
 // is the desktop split screen: a fixed control column on the left and the map in
 // the rest. The seas are picked on the map (one place to choose; developer's call,
 // 2026-10-17); the column holds what a correct call is worth, Lock in, Let it flow,

@@ -1,9 +1,7 @@
 @import "tailwindcss";
 
 /* Downstream's world: a pale relief map, water in drop-blue, the raindrop and
-   the player's actions in coral, floating white cards. The 3D hero
-   (app/downstream/TrackerScene.tsx) uses the same values for land, sea, shore,
-   coast and water: keep them in step. Full system: DESIGN.md. */
+   the player's actions in coral, floating white cards. Full system: DESIGN.md. */
 @theme {
   --color-land: #eef0ec;
   --color-land-high: #d9ded6;
@@ -167,6 +165,23 @@ button:not(:disabled),
 }
 @media (prefers-reduced-motion: reduce) {
   .rise-in {
+    animation: none;
+  }
+}
+
+/* Slice: the people fade in on the reveal (SliceBoard). */
+.slice-heat {
+  animation: slice-heat 900ms ease-out both;
+}
+
+@keyframes slice-heat {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slice-heat {
     animation: none;
   }
 }

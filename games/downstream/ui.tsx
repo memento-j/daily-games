@@ -23,12 +23,13 @@ import { useStats } from "./useTodayResult";
 
 const MAX_PREVIEWS = 60;
 
-/** The small top bar: back to Downstream's front page, and which puzzle this is. */
+/** The small top bar: back to the list of games, and which puzzle this is. */
 export function GameTopBar({ number, preview }: { number: number | null; preview: boolean }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <Link
-        href="/downstream/"
+        href="/"
+        aria-label="Downstream: back to all games"
         className="group flex items-center gap-1.5 rounded-full bg-white py-1.5 pr-3.5 pl-2.5 text-xs font-semibold shadow-card transition-colors hover:text-coral-deep"
       >
         <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden="true">

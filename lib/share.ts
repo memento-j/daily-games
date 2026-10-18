@@ -1,19 +1,20 @@
 // Share-text generation, shared by all games. Never includes answers: only the
-// puzzle number, one mark per round, the score and the link.
+// puzzle number, one mark per round, the score (if the game shows one) and the link.
 
 export type ShareInput = {
   game: string; // "Downstream"
   number: number;
   preview?: boolean;
   marks: string[]; // one emoji per round
-  points: number;
-  maxPoints: number;
+  points?: number; // left out: the marks alone ("Slice #4 🟩🟦🟩🟥")
+  maxPoints?: number;
   url: string;
 };
 
 export function shareText({ game, number, preview, marks, points, maxPoints, url }: ShareInput): string {
   const title = preview ? `${game} preview #${number}` : `${game} #${number}`;
-  return `${title} ${marks.join("")} ${points}/${maxPoints}\n${url}`;
+  const score = points !== undefined && maxPoints !== undefined ? ` ${points}/${maxPoints}` : "";
+  return `${title} ${marks.join("")}${score}\n${url}`;
 }
 
 export type ShareOutcome = "shared" | "copied" | "failed";

@@ -1,0 +1,824 @@
+// The /slice/lab prototype's 3D scene (plain three.js, no React). The country is a
+// thick paper-white slab on a sage cutting mat. While drawing, the camera looks down
+// at a gentle tilt and drifts a little to feel alive (the camera moves, never the
+// slab, so the line stays exact); a drag on the slab draws a dashed "cut here" line
+// (raycast onto the slab's top, so it's exact at any tilt). On the reveal: a pair of
+// scissors snips along the line, the slab splits into its two pieces, which slide
+// apart; the people rise as columns; the perfect cut slides in as a glass pane; then
+// the player can orbit and zoom.
+//
+// Scoring never happens here: the board maths (games/slice) stays 2D and decides
+// everything. This only shows it.
+
+import polygonClipping, { type MultiPolygon, type Polygon as PcPolygon } from "polygon-clipping";
+import * as THREE from "three";
+import { OrbitControls } from "three/addons/controls/OrbitControls.js";
+import { centroid, dot, segmentInBox, signedArea } from "@/games/slice/geometry";
+import type { Line, PeoplePoint, Point, Ring, Round } from "@/games/slice/types";
+import { labSound } from "./labSound";
+
+export type Draft = [Point, Point];
+
+const WORLD = 10; // the country's longest side, in world units
+const THICK = 0.42; // slab thickness
+const BEVEL = 0.035;
+const TOP = THICK + BEVEL; // the slab's top surface
+const SPLIT = 0.22; // how far the pieces slide apart
+const COLUMN_MAX = 2.2; // height of the most crowded column
+const GLASS_HEIGHT = 1.3; // the perfect-cut pane
+const HANDLE_PX = 30; // touch radius around a handle
+const MIN_CUT_PX = 24;
+const SCISSORS_SIZE = 1.8; // big enough to read on a phone
+const DASH = 0.16; // the "cut here" line: dash and gap lengths (world units)
+const GAP = 0.11;
+
+// The reveal's timing, in seconds after Cut. labSound.reveal plays to the same clock.
+const SNIP_EVERY = 0.2; // one snip per scissor close
+const SNIPS = 6;
+const T = {
+  travel: SNIPS * SNIP_EVERY, // scissors cross the country
+  split: SNIPS * SNIP_EVERY + 0.05, // the pieces part
+  camera: [0.8, 1.7] as const, // start, duration
+  rise: 1.9, // people start rising (each column ~0.8 s, staggered over ~1.2 s)
+  glass: 3.4, // the perfect cut slides in (1 s)
+  count: 3.7, // shares count up (0.9 s)
+  done: 4.6, // the camera is the player's
+};
+
+const COLORS = {
+  mat: 0xbccdbd,
+  top: 0xfffaf3,
+  side: 0xe9a68c,
+  countedTop: 0xffdcd2,
+  coral: 0xf2545b,
+  otherPeople: 0x7b8597,
+  ink: 0x1d2a44,
+  slit: 0x5b463c,
+};
+
+type Piece = { group: THREE.Group; dir: THREE.Vector3; columns: THREE.InstancedMesh | null; heights: number[]; delays: number[]; centre: THREE.Vector3; positions: THREE.Vector3[] };
+
+const clamp01 = (t: number) => Math.min(1, Math.max(0, t));
+const ease = (t: number) => 1 - Math.pow(1 - clamp01(t), 3); // ease-out cubic
+const easeInOut = (t: number) => {
+  const x = clamp01(t);
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+};
+const window01 = (t: number, start: number, length: number) => (t - start) / length;
+
+/** Group flat rings into polygons (outer ring + its holes): rings wound like the
+ *  biggest one are outer rings, the others holes of the outer ring they sit in. */
+function toPolygons(rings: Ring[]): PcPolygon[] {
+  const sign = Math.sign(signedArea(rings.reduce((a, b) => (Math.abs(signedArea(b)) > Math.abs(signedArea(a)) ? b : a))));
+  const outers = rings.filter((r) => Math.sign(signedArea(r)) === sign);
+  const polys: PcPolygon[] = outers.map((r) => [r]);
+  for (const hole of rings.filter((r) => Math.sign(signedArea(r)) !== sign)) {
+    const i = outers.findIndex((o) => inside(hole[0], o));
+    if (i >= 0) polys[i].push(hole);
+  }
+  return polys;
+}
+
+function inside([x, y]: Point, ring: Ring): boolean {
+  let hit = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > y !== yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) hit = !hit;
+  }
+  return hit;
+}
+
+/** The half-plane on the line's positive side, as a huge quad. */
+function halfPlane(line: Line): PcPolygon {
+  const [nx, ny] = line.normal;
+  const o = line.offset;
+  const B = 1e5;
+  const p: Point = [nx * o, ny * o];
+  const d: Point = [-ny, nx];
+  return [
+    [
+      [p[0] + d[0] * B, p[1] + d[1] * B],
+      [p[0] + d[0] * B + nx * B, p[1] + d[1] * B + ny * B],
+      [p[0] - d[0] * B + nx * B, p[1] - d[1] * B + ny * B],
+      [p[0] - d[0] * B, p[1] - d[1] * B],
+      [p[0] + d[0] * B, p[1] + d[1] * B],
+    ],
+  ];
+}
+
+/** A self-healing cutting mat: sage with a faint white grid, every fifth line stronger. */
+function matTexture(anisotropy: number): THREE.CanvasTexture {
+  const size = 512;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const g = canvas.getContext("2d")!;
+  g.fillStyle = `#${COLORS.mat.toString(16)}`;
+  g.fillRect(0, 0, size, size);
+  for (let i = 0; i <= 10; i++) {
+    const p = (i / 10) * size;
+    const major = i % 5 === 0;
+    g.strokeStyle = major ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.22)";
+    g.lineWidth = major ? 3 : 1.5;
+    g.beginPath();
+    g.moveTo(p, 0);
+    g.lineTo(p, size);
+    g.moveTo(0, p);
+    g.lineTo(size, p);
+    g.stroke();
+  }
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+  tex.repeat.set(40, 40); // 200-unit mat, a 5-unit tile with lines every half unit
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = anisotropy;
+  return tex;
+}
+
+export class SliceScene {
+  private renderer: THREE.WebGLRenderer;
+  private scene = new THREE.Scene();
+  private camera = new THREE.PerspectiveCamera(30, 1, 0.1, 400);
+  private controls: OrbitControls;
+  private raf = 0;
+  private container: HTMLElement;
+  private onDraft: (draft: Draft | null) => void;
+  private labels: HTMLElement[];
+  private reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  // Lab only: ?freeze=0.6 holds the reveal at that moment, for inspecting a frame.
+  private freeze = Number(new URLSearchParams(location.search).get("freeze") ?? NaN);
+  private disposables: { dispose(): void }[] = [];
+
+  // The current round, and how its board coordinates map onto the table.
+  private round: Round | null = null;
+  private s = 1;
+  private c: Point = [500, 500];
+  private min: Point = [0, 0]; // the board's frame (outline + margin)
+  private max: Point = [1000, 1000];
+  private bmin: Point = [0, 0]; // the outline's own bounds
+  private bmax: Point = [1000, 1000];
+  private polygons: PcPolygon[] = [];
+  private slab: THREE.Group | null = null;
+
+  // Drawing
+  private phase: "draw" | "reveal" = "draw";
+  private draft: Draft | null = null;
+  private dragging: 0 | 1 | null = null;
+  private draftGroup = new THREE.Group();
+  private dashes: THREE.InstancedMesh; // the drawn part of the line
+  private trail: THREE.InstancedMesh; // the line carried on across the board
+  private drawnDashes = 0;
+  private lastTick = 0;
+  private handles: THREE.Group[] = [];
+  private topPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP);
+  private raycaster = new THREE.Raycaster();
+
+  // Camera: the drawing view drifts gently (and leans towards a hovering mouse).
+  private drawView = { radius: 20, polar: 0.42, azimuth: 0 };
+  private revealView = { radius: 22, polar: 0.95, azimuth: 0.55 };
+  private cameraFrom = { radius: 20, polar: 0.42, azimuth: 0 };
+  private drift = 1; // 0 while a finger is down
+  private insets = { top: 0, bottom: 0 };
+  private hover = new THREE.Vector2();
+  private hoverAim = new THREE.Vector2();
+
+  // Reveal
+  private revealStart = -1;
+  private pieces: Piece[] = [];
+  private scissors: THREE.Group;
+  private scissorHalves: THREE.Group[] = [];
+  private slit: THREE.Mesh;
+  private cutFrom = new THREE.Vector3();
+  private cutTo = new THREE.Vector3();
+  private cutSpan: [Point, Point] | null = null;
+  private glass: THREE.Group | null = null;
+  private glassFrom = 0;
+  private glassTo = 0;
+  private glassDir = new THREE.Vector3();
+  private glassAlong = new THREE.Vector3();
+  private shares: [number, number] = [0, 0];
+  private onRevealDone: (() => void) | null = null;
+  private revealDone = false;
+
+  constructor(container: HTMLElement, labels: HTMLElement[], onDraft: (draft: Draft | null) => void) {
+    this.container = container;
+    this.labels = labels;
+    this.onDraft = onDraft;
+
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFShadowMap; // r186 dropped PCFSoftShadowMap; radius softens instead
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 1.05;
+    this.renderer.setClearColor(COLORS.mat);
+    this.renderer.domElement.style.touchAction = "none";
+    this.renderer.domElement.style.display = "block";
+    container.appendChild(this.renderer.domElement);
+    this.scene.fog = new THREE.Fog(COLORS.mat, 40, 110); // the mat fades out at the horizon
+
+    // A warm room: soft sky light and one sun with a soft shadow on the mat.
+    this.scene.add(new THREE.HemisphereLight(0xfff6ea, 0xb9c4b3, 1.5));
+    const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+    sun.position.set(-7, 16, 9);
+    sun.castShadow = true;
+    sun.shadow.mapSize.set(2048, 2048);
+    sun.shadow.camera.left = -12;
+    sun.shadow.camera.right = 12;
+    sun.shadow.camera.top = 12;
+    sun.shadow.camera.bottom = -12;
+    sun.shadow.bias = -0.0004;
+    sun.shadow.normalBias = 0.02;
+    sun.shadow.radius = 4;
+    this.scene.add(sun);
+    const mat = new THREE.Mesh(
+      new THREE.PlaneGeometry(200, 200),
+      new THREE.MeshStandardMaterial({ map: matTexture(this.renderer.capabilities.getMaxAnisotropy()), roughness: 0.95 }),
+    );
+    mat.rotation.x = -Math.PI / 2;
+    mat.receiveShadow = true;
+    this.scene.add(mat);
+
+    // The "cut here" line: coral dashes between the handles, fainter ones across the board.
+    const dashGeo = new THREE.BoxGeometry(1, 0.025, 1);
+    this.dashes = new THREE.InstancedMesh(dashGeo, new THREE.MeshBasicMaterial({ color: COLORS.coral }), 400);
+    this.trail = new THREE.InstancedMesh(dashGeo, new THREE.MeshBasicMaterial({ color: COLORS.coral, transparent: true, opacity: 0.4 }), 400);
+    this.dashes.count = this.trail.count = 0;
+    this.draftGroup.add(this.trail, this.dashes);
+    for (let i = 0; i < 2; i++) {
+      const handle = new THREE.Group();
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 32), new THREE.MeshBasicMaterial({ color: COLORS.coral }));
+      const dotMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 32), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+      handle.add(ring, dotMesh);
+      this.handles.push(handle);
+      this.draftGroup.add(handle);
+    }
+    this.draftGroup.visible = false;
+    this.scene.add(this.draftGroup);
+
+    this.slit = new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 1), new THREE.MeshBasicMaterial({ color: COLORS.slit }));
+    this.slit.visible = false;
+    this.scene.add(this.slit);
+    this.scissors = this.makeScissors();
+    this.scene.add(this.scissors);
+
+    this.controls = new OrbitControls(this.camera, this.renderer.domElement);
+    this.controls.enabled = false;
+    this.controls.enableDamping = true;
+    this.controls.enablePan = false;
+    this.controls.minPolarAngle = 0.15;
+    this.controls.maxPolarAngle = 1.35;
+    this.controls.autoRotateSpeed = 0.6;
+    this.controls.addEventListener("start", () => (this.controls.autoRotate = false));
+
+    const el = this.renderer.domElement;
+    el.addEventListener("pointerdown", this.down);
+    el.addEventListener("pointermove", this.move);
+    el.addEventListener("pointerup", this.up);
+    el.addEventListener("pointercancel", this.up);
+    el.addEventListener("pointerleave", () => this.hoverAim.set(0, 0));
+
+    this.resize();
+    new ResizeObserver(() => this.resize()).observe(container);
+    this.loop();
+  }
+
+  /** Paper scissors: two steel blades on a pivot with coral handles. Local +x is
+   *  where the tips point; each half opens around the pivot (y axis). */
+  private makeScissors(): THREE.Group {
+    const steel = new THREE.MeshStandardMaterial({ color: 0xe3e7ec, metalness: 0.85, roughness: 0.25 });
+    const grip = new THREE.MeshStandardMaterial({ color: COLORS.coral, roughness: 0.45 });
+    const blade = new THREE.Shape([new THREE.Vector2(0, -0.06), new THREE.Vector2(1.05, 0), new THREE.Vector2(0, 0.06)]);
+    const bladeGeo = new THREE.ExtrudeGeometry(blade, { depth: 0.025, bevelEnabled: false });
+    bladeGeo.rotateX(-Math.PI / 2);
+    const shankGeo = new THREE.BoxGeometry(0.28, 0.025, 0.05);
+    const ringGeo = new THREE.TorusGeometry(0.13, 0.035, 10, 28);
+    ringGeo.rotateX(Math.PI / 2);
+    const screw = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.08, 16), steel);
+    const scissors = new THREE.Group();
+    for (const side of [1, -1]) {
+      const half = new THREE.Group();
+      const b = new THREE.Mesh(bladeGeo, steel);
+      b.position.y = side > 0 ? 0.0 : 0.026;
+      const shank = new THREE.Mesh(shankGeo, steel);
+      shank.position.set(-0.14, b.position.y, side * 0.04);
+      shank.rotation.y = side * 0.35;
+      const ring = new THREE.Mesh(ringGeo, grip);
+      ring.position.set(-0.36, b.position.y, side * 0.14);
+      for (const m of [b, shank, ring]) m.castShadow = true;
+      half.add(b, shank, ring);
+      this.scissorHalves.push(half);
+      scissors.add(half);
+    }
+    scissors.add(screw);
+    scissors.visible = false;
+    this.disposables.push(steel, grip, bladeGeo, shankGeo, ringGeo);
+    return scissors;
+  }
+
+  // --- Mapping between the board (0..1000, y down) and the table (x, z) ---
+
+  private toWorld([bx, by]: Point, y = TOP): THREE.Vector3 {
+    return new THREE.Vector3((bx - this.c[0]) * this.s, y, (by - this.c[1]) * this.s);
+  }
+
+  private toBoard(v: THREE.Vector3): Point {
+    return [v.x / this.s + this.c[0], v.z / this.s + this.c[1]];
+  }
+
+  /** A line's offset measured on the table (world units, from the table's centre). */
+  private worldOffset(line: Line): number {
+    return this.s * (line.offset - dot(this.c, line.normal));
+  }
+
+  // --- Building the country ---
+
+  setRound(round: Round) {
+    this.clearReveal();
+    if (this.slab) this.scene.remove(this.slab);
+    this.round = round;
+    let x0 = Infinity;
+    let y0 = Infinity;
+    let x1 = -Infinity;
+    let y1 = -Infinity;
+    for (const r of round.outline)
+      for (const [x, y] of r) {
+        x0 = Math.min(x0, x);
+        y0 = Math.min(y0, y);
+        x1 = Math.max(x1, x);
+        y1 = Math.max(y1, y);
+      }
+    this.c = [(x0 + x1) / 2, (y0 + y1) / 2];
+    this.s = WORLD / Math.max(x1 - x0, y1 - y0);
+    const pad = Math.max(x1 - x0, y1 - y0) * 0.08;
+    this.bmin = [x0, y0];
+    this.bmax = [x1, y1];
+    this.min = [x0 - pad, y0 - pad];
+    this.max = [x1 + pad, y1 + pad];
+    this.polygons = toPolygons(round.outline);
+    this.slab = this.extrude(this.polygons, COLORS.top);
+    this.scene.add(this.slab);
+    this.fitViews();
+    this.phase = "draw";
+    this.setDraft(null);
+  }
+
+  private extrude(polys: PcPolygon[], topColor: number): THREE.Group {
+    const shapes: THREE.Shape[] = [];
+    for (const poly of polys) {
+      const ring = (r: Point[]) => {
+        const pts = r.map(([bx, by]) => new THREE.Vector2((bx - this.c[0]) * this.s, -(by - this.c[1]) * this.s));
+        if (pts.length > 1 && pts[0].equals(pts[pts.length - 1])) pts.pop();
+        return pts;
+      };
+      const shape = new THREE.Shape(ring(poly[0] as Point[]));
+      for (const hole of poly.slice(1)) shape.holes.push(new THREE.Path(ring(hole as Point[])));
+      shapes.push(shape);
+    }
+    const geo = new THREE.ExtrudeGeometry(shapes, {
+      depth: THICK - BEVEL,
+      bevelEnabled: true,
+      bevelThickness: BEVEL,
+      bevelSize: 0.025,
+      bevelSegments: 2,
+      curveSegments: 1,
+    });
+    geo.rotateX(-Math.PI / 2); // shape (x, y) lies flat as table (x, -z); extrusion points up
+    geo.translate(0, BEVEL, 0);
+    geo.computeVertexNormals();
+    const top = new THREE.MeshStandardMaterial({ color: topColor, roughness: 0.82, metalness: 0 });
+    const side = new THREE.MeshStandardMaterial({ color: COLORS.side, roughness: 0.7, metalness: 0 });
+    this.disposables.push(geo, top, side);
+    const mesh = new THREE.Mesh(geo, [top, side]);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const group = new THREE.Group();
+    group.add(mesh);
+    return group;
+  }
+
+  /** Camera distances that fit the country into the free band between the interface
+   *  at the top and the card at the bottom (`insets`), for the drawing view and the reveal. */
+  private fitViews() {
+    const w = (this.max[0] - this.min[0]) * this.s;
+    const h = (this.max[1] - this.min[1]) * this.s;
+    const aspect = this.camera.aspect || 1;
+    const screenH = this.container.clientHeight || 1;
+    const free = Math.max(0.3, (screenH - this.insets.top - this.insets.bottom) / screenH);
+    const v = Math.atan(Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * free); // the band's half-angle
+    const hor = Math.atan(Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * aspect);
+    // Drawing: seen from the south at a gentle tilt, the board's depth looks shorter by cos(tilt).
+    this.drawView.radius = Math.max(w / 2 / Math.tan(hor), (h * Math.cos(this.drawView.polar)) / 2 / Math.tan(v) + TOP) * 1.08;
+    // The reveal swings round to any side, so fit the country's whole diagonal (a
+    // circle around it) rather than its width or depth.
+    const r = Math.hypot(w, h) / 2;
+    this.revealView.radius = (r / Math.sin(Math.min(v, hor))) * 0.92 + COLUMN_MAX * 0.4;
+  }
+
+  private setCamera(view: { radius: number; polar: number; azimuth: number }) {
+    const p = new THREE.Vector3().setFromSphericalCoords(view.radius, view.polar, view.azimuth);
+    this.camera.position.copy(p);
+    this.camera.lookAt(0, TOP * 0.5, 0);
+    this.controls.target.set(0, TOP * 0.5, 0);
+  }
+
+  /** The drawing view, drifting slowly so the slab feels like an object on a table,
+   *  and leaning a touch towards a hovering mouse. Calm while a finger is down. */
+  private driftCamera(now: number) {
+    const t = now / 1000;
+    this.drift += ((this.dragging === null && !this.reduced ? 1 : 0) - this.drift) * 0.08;
+    this.hover.lerp(this.hoverAim, 0.05);
+    this.setCamera({
+      radius: this.drawView.radius,
+      polar: this.drawView.polar + (0.03 * Math.sin(t * 0.31 + 1) + 0.04 * this.hover.y) * this.drift,
+      azimuth: this.drawView.azimuth + (0.06 * Math.sin(t * 0.43) + 0.07 * this.hover.x) * this.drift,
+    });
+  }
+
+  /** Screen space covered by the interface (px): the country is framed between them. */
+  setInsets(insets: { top: number; bottom: number }) {
+    if (insets.top === this.insets.top && insets.bottom === this.insets.bottom) return;
+    this.insets = insets;
+    this.resize();
+  }
+
+  private resize() {
+    const { clientWidth: w, clientHeight: h } = this.container;
+    if (!w || !h) return;
+    this.renderer.setSize(w, h);
+    this.camera.aspect = w / h;
+    // Centre the picture in the free band rather than the screen: shift the view so the
+    // camera's centre lands halfway between the top interface and the bottom card.
+    const shift = (this.insets.top - this.insets.bottom) / 2;
+    if (shift) this.camera.setViewOffset(w, h, 0, -shift, w, h);
+    else this.camera.clearViewOffset();
+    this.camera.updateProjectionMatrix();
+    if (this.round) this.fitViews();
+  }
+
+  // --- Drawing the cut ---
+
+  private boardPoint(e: PointerEvent): Point | null {
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    this.raycaster.setFromCamera(ndc, this.camera);
+    const hit = new THREE.Vector3();
+    if (!this.raycaster.ray.intersectPlane(this.topPlane, hit)) return null;
+    const [bx, by] = this.toBoard(hit);
+    return [Math.min(this.max[0], Math.max(this.min[0], bx)), Math.min(this.max[1], Math.max(this.min[1], by))];
+  }
+
+  private screenOf(p: Point): THREE.Vector2 {
+    const v = this.toWorld(p).project(this.camera);
+    const r = this.renderer.domElement.getBoundingClientRect();
+    return new THREE.Vector2(((v.x + 1) / 2) * r.width, ((1 - v.y) / 2) * r.height);
+  }
+
+  private down = (e: PointerEvent) => {
+    labSound.wake();
+    if (this.phase !== "draw") return;
+    const p = this.boardPoint(e);
+    if (!p) return;
+    const r = this.renderer.domElement.getBoundingClientRect();
+    const at = new THREE.Vector2(e.clientX - r.left, e.clientY - r.top);
+    const near = this.draft?.findIndex((h) => this.screenOf(h).distanceTo(at) < HANDLE_PX) ?? -1;
+    if (this.draft && near >= 0) {
+      this.dragging = near as 0 | 1;
+      labSound.grab();
+    } else {
+      this.dragging = 1;
+      this.drawnDashes = 0;
+      this.setDraft([p, p]);
+    }
+    this.renderer.domElement.setPointerCapture(e.pointerId);
+  };
+
+  private move = (e: PointerEvent) => {
+    if (e.pointerType === "mouse" && this.dragging === null) {
+      const r = this.renderer.domElement.getBoundingClientRect();
+      this.hoverAim.set(((e.clientX - r.left) / r.width) * 2 - 1, ((e.clientY - r.top) / r.height) * 2 - 1);
+    }
+    if (this.phase !== "draw" || this.dragging === null || !this.draft) return;
+    const p = this.boardPoint(e);
+    if (!p) return;
+    this.setDraft(this.dragging === 0 ? [p, this.draft[1]] : [this.draft[0], p]);
+  };
+
+  private up = () => {
+    if (this.dragging === null) return;
+    this.dragging = null;
+    if (this.draft && this.screenOf(this.draft[0]).distanceTo(this.screenOf(this.draft[1])) < MIN_CUT_PX) this.setDraft(null);
+  };
+
+  private setDraft(draft: Draft | null) {
+    this.draft = draft;
+    this.onDraft(draft);
+    const long = draft && Math.hypot(draft[1][0] - draft[0][0], draft[1][1] - draft[0][1]) > 1e-6;
+    this.draftGroup.visible = !!long;
+    for (const h of this.handles) h.visible = true;
+    if (!draft || !long) {
+      this.dashes.count = this.trail.count = 0;
+      return;
+    }
+    const [a, b] = draft;
+    const dx = b[0] - a[0];
+    const dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy);
+    const normal: Point = [-dy / len, dx / len];
+    const span = segmentInBox({ normal, offset: dot(a, normal) }, this.min, this.max);
+    const wa = this.toWorld(a, TOP + 0.02);
+    const n = this.layDashes(this.dashes, wa, this.toWorld(b, TOP + 0.02), wa, 0.075);
+    if (span) this.layDashes(this.trail, this.toWorld(span[0], TOP + 0.012), this.toWorld(span[1], TOP + 0.012), wa, 0.05);
+    this.handles[0].position.copy(this.toWorld(a, TOP + 0.04));
+    this.handles[1].position.copy(this.toWorld(b, TOP + 0.04));
+    // A ratchet tick for each new dash while drawing, like paper being scored.
+    const now = performance.now();
+    if (this.dragging !== null && n !== this.drawnDashes && now - this.lastTick > 28) {
+      labSound.tick();
+      this.lastTick = now;
+    }
+    this.drawnDashes = n;
+  }
+
+  /** Dashes from `a` to `b`, the pattern anchored at `anchor` so it never crawls while
+   *  an end is dragged. Returns how many were laid. */
+  private layDashes(mesh: THREE.InstancedMesh, a: THREE.Vector3, b: THREE.Vector3, anchor: THREE.Vector3, width: number): number {
+    const dir = b.clone().sub(a);
+    const len = dir.length();
+    if (len < 1e-6) {
+      mesh.count = 0;
+      return 0;
+    }
+    dir.divideScalar(len);
+    const period = DASH + GAP;
+    const phase = anchor.clone().sub(a).dot(dir);
+    let start = phase - Math.ceil(phase / period) * period;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), -Math.atan2(dir.z, dir.x));
+    let n = 0;
+    for (; start < len && n < mesh.instanceMatrix.count; start += period) {
+      const s0 = Math.max(start, 0);
+      const s1 = Math.min(start + DASH, len);
+      if (s1 - s0 < 0.01) continue;
+      const mid = a.clone().addScaledVector(dir, (s0 + s1) / 2);
+      m.compose(mid, q, new THREE.Vector3(s1 - s0, 1, width));
+      mesh.setMatrixAt(n++, m);
+    }
+    mesh.count = n;
+    mesh.instanceMatrix.needsUpdate = true;
+    return n;
+  }
+
+  getDraft(): Draft | null {
+    return this.draft;
+  }
+
+  // --- The reveal ---
+
+  reveal(line: Line, perfect: Line, positiveShare: number, positiveCounts: boolean, tier: number, onDone: () => void) {
+    if (!this.round) return;
+    this.phase = "reveal";
+    this.dragging = null;
+    this.onRevealDone = onDone;
+    this.revealDone = false;
+    this.shares = [positiveShare, 1 - positiveShare];
+    this.cameraFrom = {
+      radius: this.drawView.radius,
+      polar: Math.acos(this.camera.position.y / this.camera.position.length()), // where the drift left it
+      azimuth: Math.atan2(this.camera.position.x, this.camera.position.z),
+    };
+    // Swing round to look along the cut (a little to one side), so the gap between the
+    // pieces faces the camera; of the cut's two ends, the one nearer the current view.
+    let az = Math.atan2(-line.normal[1], line.normal[0]) + 0.8;
+    const wrap = (a: number) => Math.atan2(Math.sin(a), Math.cos(a));
+    if (Math.abs(wrap(az - this.cameraFrom.azimuth)) > Math.PI / 2) az += Math.PI;
+    this.revealView.azimuth = this.cameraFrom.azimuth + wrap(az - this.cameraFrom.azimuth);
+    this.revealView.polar = 0.95;
+
+    // The scissors cross the country along the line (its chord through the outline's box).
+    this.cutSpan = segmentInBox(line, this.bmin, this.bmax);
+    if (this.cutSpan) {
+      this.cutFrom = this.toWorld(this.cutSpan[0], TOP);
+      this.cutTo = this.toWorld(this.cutSpan[1], TOP);
+      this.scissors.rotation.set(0, -Math.atan2(this.cutTo.z - this.cutFrom.z, this.cutTo.x - this.cutFrom.x), 0);
+    }
+    this.dashes.count = 0;
+    for (const h of this.handles) h.visible = false;
+
+    // The two pieces, each its own slab, with the people standing on it.
+    const n = new THREE.Vector3(line.normal[0], 0, line.normal[1]);
+    const sides = [line, { normal: [-line.normal[0], -line.normal[1]] as Point, offset: -line.offset }];
+    const points = this.round.mode === "population" ? (this.round.points ?? []) : [];
+    const heaviest = points.reduce((m, p) => Math.max(m, p[2]), 1);
+    const footprint = Math.min(0.12, Math.max(0.04, (WORLD / Math.sqrt(Math.max(points.length, 1))) * 0.4));
+    this.pieces = sides.map((side, i) => {
+      let polys: MultiPolygon = [];
+      try {
+        polys = polygonClipping.intersection(this.polygons, halfPlane(side));
+      } catch {
+        polys = [];
+      }
+      const counted = (i === 0) === positiveCounts;
+      const group = this.extrude(polys, counted ? COLORS.countedTop : COLORS.top);
+      const mine = points.filter((p) => p[0] * side.normal[0] + p[1] * side.normal[1] > side.offset);
+      const piece: Piece = { group, dir: i === 0 ? n.clone() : n.clone().negate(), columns: null, heights: [], delays: [], centre: new THREE.Vector3(), positions: [] };
+      if (mine.length) piece.columns = this.columns(mine, heaviest, footprint, counted ? COLORS.coral : COLORS.otherPeople, piece);
+      const rings = polys.flatMap((poly) => poly) as Ring[];
+      const c = centroid(rings) ?? [this.c[0], this.c[1]];
+      piece.centre = this.toWorld(c, TOP);
+      this.scene.add(group);
+      group.visible = false;
+      return piece;
+    });
+
+    // The perfect cut: a pane of glass with an ink edge, sliding from the player's line to its place.
+    const pspan = segmentInBox(perfect, this.min, this.max);
+    if (pspan) {
+      const len = this.toWorld(pspan[0]).distanceTo(this.toWorld(pspan[1]));
+      const glass = new THREE.Group();
+      const paneMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.07, side: THREE.DoubleSide, depthWrite: false });
+      const edgeMat = new THREE.MeshBasicMaterial({ color: COLORS.ink });
+      const rimMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.35 });
+      const paneGeo = new THREE.PlaneGeometry(len, GLASS_HEIGHT);
+      const edgeGeo = new THREE.BoxGeometry(len, 0.05, 0.05);
+      this.disposables.push(paneMat, edgeMat, rimMat, paneGeo, edgeGeo);
+      const pane = new THREE.Mesh(paneGeo, paneMat);
+      pane.position.y = GLASS_HEIGHT / 2;
+      const edge = new THREE.Mesh(edgeGeo, edgeMat);
+      edge.position.y = TOP + 0.03;
+      const rim = new THREE.Mesh(edgeGeo, rimMat);
+      rim.position.y = GLASS_HEIGHT;
+      glass.add(pane, edge, rim);
+      glass.rotation.y = -Math.atan2(pspan[1][1] - pspan[0][1], pspan[1][0] - pspan[0][0]);
+      // The glass slides along the cut's normal: from the player's line to the perfect one,
+      // riding with whichever piece the perfect line falls in. Its position is a point
+      // along the line (the middle of the span) plus `offset` along the normal.
+      this.glassDir = n.clone();
+      const mid = this.toWorld([(pspan[0][0] + pspan[1][0]) / 2, (pspan[0][1] + pspan[1][1]) / 2], 0);
+      this.glassAlong = mid.clone().sub(n.clone().multiplyScalar(mid.dot(n)));
+      this.glassFrom = this.worldOffset(line);
+      const pw = this.worldOffset(perfect);
+      this.glassTo = pw + (pw > this.glassFrom ? SPLIT / 2 : -SPLIT / 2);
+      glass.visible = false;
+      this.glass = glass;
+      this.scene.add(glass);
+    }
+
+    this.revealStart = performance.now();
+    if (this.reduced) {
+      this.revealStart -= 10_000; // straight to the finished state, and only the closing sound
+      labSound.reveal({ snips: 0, snipEvery: 0, split: 0, rise: 0, riseFor: 0, people: false, glass: 0, done: 0.1, tier });
+    } else {
+      labSound.reveal({ snips: SNIPS, snipEvery: SNIP_EVERY, split: T.split, rise: T.rise, riseFor: 1.6, people: points.length > 0, glass: T.glass, done: T.done - 0.3, tier });
+    }
+  }
+
+  private columns(points: PeoplePoint[], heaviest: number, footprint: number, color: number, piece: Piece): THREE.InstancedMesh {
+    const geo = new THREE.BoxGeometry(footprint, 1, footprint);
+    geo.translate(0, 0.5, 0);
+    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
+    this.disposables.push(geo, mat);
+    const mesh = new THREE.InstancedMesh(geo, mat, points.length);
+    mesh.castShadow = true;
+    mesh.receiveShadow = true;
+    const m = new THREE.Matrix4();
+    points.forEach((p, i) => {
+      const pos = this.toWorld([p[0], p[1]], TOP);
+      piece.positions.push(pos);
+      piece.heights.push(Math.max(0.015, (p[2] / heaviest) * COLUMN_MAX));
+      // Columns rise from the busiest outwards: big ones first.
+      piece.delays.push((1 - Math.sqrt(p[2] / heaviest)) * 0.9 + Math.random() * 0.3);
+      m.compose(pos, new THREE.Quaternion(), new THREE.Vector3(1, 0.0001, 1));
+      mesh.setMatrixAt(i, m);
+    });
+    piece.group.add(mesh);
+    return mesh;
+  }
+
+  private animateReveal(now: number) {
+    if (this.revealStart < 0) return;
+    const t = Number.isFinite(this.freeze) ? this.freeze : (now - this.revealStart) / 1000;
+
+    // Once the reveal has played, the camera is the player's: stop placing it (and
+    // re-posing every column) each frame. Only the labels keep following the view.
+    if (!this.revealDone) {
+      // 0 - 1.2 s: the scissors snip along the line, leaving a slit; the dashes ahead remain.
+      const travel = clamp01(t / T.travel);
+      const at = this.cutFrom.clone().lerp(this.cutTo, travel);
+      const lift = ease(window01(t, T.travel, 0.35));
+      this.scissors.visible = !!this.cutSpan && t < T.travel + 0.35;
+      this.scissors.position.copy(at).setY(TOP + 0.12 + lift * 1.4);
+      this.scissors.scale.setScalar(SCISSORS_SIZE * (1 - lift * 0.6));
+      const open = 0.5 * (0.5 - 0.5 * Math.cos((2 * Math.PI * t) / SNIP_EVERY)) * (1 - lift);
+      this.scissorHalves[0].rotation.y = open / 2;
+      this.scissorHalves[1].rotation.y = -open / 2;
+      if (this.cutSpan && t < T.split) {
+        this.slit.visible = travel > 0.01;
+        const a = this.cutFrom.clone().setY(TOP + 0.006);
+        const b = at.clone().setY(TOP + 0.006);
+        this.slit.position.copy(a).add(b).multiplyScalar(0.5);
+        this.slit.rotation.set(0, -Math.atan2(b.z - a.z, b.x - a.x), 0);
+        this.slit.scale.set(Math.max(a.distanceTo(b), 1e-4), 1, 0.03);
+        this.layDashes(this.trail, at.clone().setY(TOP + 0.012), this.cutTo.clone().setY(TOP + 0.012), this.cutFrom, 0.05);
+      } else {
+        this.slit.visible = false;
+        this.draftGroup.visible = false;
+      }
+
+      // 1.25 s: the slab becomes two pieces, which slide apart.
+      const split = t >= T.split;
+      if (this.slab) this.slab.visible = !split;
+      const apart = ease(window01(t, T.split, 0.8));
+      for (const piece of this.pieces) {
+        piece.group.visible = split;
+        piece.group.position.copy(piece.dir).multiplyScalar((SPLIT / 2) * apart);
+      }
+      // The camera swings round to a three-quarter view.
+      const cam = easeInOut(window01(t, T.camera[0], T.camera[1]));
+      this.setCamera({
+        radius: THREE.MathUtils.lerp(this.cameraFrom.radius, this.revealView.radius, cam),
+        polar: THREE.MathUtils.lerp(this.cameraFrom.polar, this.revealView.polar, cam),
+        azimuth: THREE.MathUtils.lerp(this.cameraFrom.azimuth, this.revealView.azimuth, cam),
+      });
+      // The people rise.
+      const m = new THREE.Matrix4();
+      const q = new THREE.Quaternion();
+      for (const piece of this.pieces) {
+        if (!piece.columns) continue;
+        piece.positions.forEach((pos, i) => {
+          const k = ease(window01(t, T.rise + piece.delays[i], 0.8));
+          m.compose(pos, q, new THREE.Vector3(1, Math.max(0.0001, piece.heights[i] * k), 1));
+          piece.columns!.setMatrixAt(i, m);
+        });
+        piece.columns.instanceMatrix.needsUpdate = true;
+      }
+      // The perfect cut slides in.
+      if (this.glass) {
+        this.glass.visible = t >= T.glass;
+        const k = easeInOut(window01(t, T.glass, 1));
+        const off = THREE.MathUtils.lerp(this.glassFrom, this.glassTo, k);
+        this.glass.position.copy(this.glassAlong).addScaledVector(this.glassDir, off);
+      }
+    }
+    // Each piece's share counts up above it.
+    const count = ease(window01(t, T.count, 0.9));
+    this.labels.forEach((el, i) => {
+      const piece = this.pieces[i];
+      if (!piece) return;
+      const pos = piece.centre.clone().add(piece.group.position);
+      pos.y = TOP + 0.5;
+      const v = pos.project(this.camera);
+      const r = this.renderer.domElement.getBoundingClientRect();
+      el.style.transform = `translate(-50%, -50%) translate(${((v.x + 1) / 2) * r.width}px, ${((1 - v.y) / 2) * r.height}px)`;
+      el.style.opacity = String(count);
+      el.textContent = `${(this.shares[i] * 100 * count).toFixed(1)}%`;
+    });
+    // Hand the camera to the player.
+    if (t >= T.done && !this.revealDone) {
+      this.revealDone = true;
+      this.controls.enabled = true;
+      this.controls.autoRotate = !this.reduced;
+      this.onRevealDone?.();
+    }
+  }
+
+  private clearReveal() {
+    for (const piece of this.pieces) this.scene.remove(piece.group);
+    this.pieces = [];
+    if (this.glass) this.scene.remove(this.glass);
+    this.glass = null;
+    this.scissors.visible = false;
+    this.slit.visible = false;
+    this.revealStart = -1;
+    this.controls.enabled = false;
+    this.controls.autoRotate = false;
+    for (const el of this.labels) el.style.opacity = "0";
+    if (this.slab) this.slab.visible = true;
+  }
+
+  /** Back to drawing on the same country. */
+  again() {
+    this.clearReveal();
+    this.phase = "draw";
+    this.setDraft(null);
+  }
+
+  private loop = () => {
+    this.raf = requestAnimationFrame(this.loop);
+    if (document.hidden) return;
+    const now = performance.now();
+    if (this.phase === "draw" && this.round) this.driftCamera(now);
+    this.animateReveal(now);
+    if (this.controls.enabled) this.controls.update();
+    this.renderer.render(this.scene, this.camera);
+  };
+
+  dispose() {
+    cancelAnimationFrame(this.raf);
+    this.controls.dispose();
+    for (const d of this.disposables) d.dispose();
+    this.renderer.dispose();
+    this.renderer.forceContextLoss(); // browsers allow ~16 WebGL contexts; don't leak this one
+    this.renderer.domElement.remove();
+  }
+}
