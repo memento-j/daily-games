@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineAt } from "../../../games/slice/geometry";
-import { capitalise, fractionWords, instruction, perfectDirection, perfectLineText, possessive, resultLine } from "../../../games/slice/words";
+import { capitalise, fractionWords, instruction, perfectDirection, perfectLineText, possessive } from "../../../games/slice/words";
 import type { Round } from "../../../games/slice/types";
 
 const round = (country: string, mode: Round["mode"], target: number): Round => ({
@@ -33,12 +33,6 @@ describe("instruction", () => {
   it("says what to cut off, of land or of people", () => {
     expect(instruction(round("Egypt", "population", 1 / 3))).toBe("Cut off a third of Egypt's people.");
     expect(instruction(round("the United Kingdom", "area", 0.5))).toBe("Cut off half of the United Kingdom's land.");
-  });
-});
-
-describe("resultLine", () => {
-  it("gives the share cut off and the target", () => {
-    expect(resultLine(0.314, 1 / 3)).toBe("You cut off 31.4%. Target 33.3%.");
   });
 });
 

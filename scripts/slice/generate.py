@@ -40,7 +40,8 @@ Usage (from the repo root):
 # Per batch (generate):
 #   1. Read existing puzzle files: the last number, and which countries were used lately.
 #   2. Each day, draw countries from the pool (big enough, not contested, not used in
-#      the last COUNTRY_REUSE_DAYS), favouring populous ones and one per continent.
+#      the last COUNTRY_REUSE_DAYS), favouring populous ones and one per continent. The
+#      first WELL_KNOWN_DAYS puzzles draw only from the WELL_KNOWN list.
 #   3. Build them, order them by how far people and land disagree (easiest first), and
 #      give each a round from DAY_ROUNDS.
 
@@ -59,7 +60,7 @@ from shapely.geometry import MultiPolygon
 from config import (
     BOX, CONTESTED, COUNTRY_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
     OUTLINE_SIMPLIFY, POOL_MIN_KM2, POOL_MIN_PEOPLE, POPULATION_TIF, POPULATION_TOLERANCE, PUZZLE_DIR,
-    VALIDATION_COUNTRIES,
+    VALIDATION_COUNTRIES, WELL_KNOWN, WELL_KNOWN_DAYS,
 )
 from countries import find, load_countries, mainland, parts
 from cuts import people_share, perfect_cut, surprise
@@ -257,6 +258,8 @@ def read_existing() -> tuple[int, dict[str, int]]:
 def pick_day(candidates: list, used: dict[str, int], day: int, rng: np.random.Generator) -> list:
     """Draw len(DAY_ROUNDS) countries, populous ones more often, one per continent where
     the pool allows."""
+    if day <= WELL_KNOWN_DAYS:
+        candidates = [c for c in candidates if c.ADMIN in WELL_KNOWN]
     fresh = [c for c in candidates if day - used.get(c.ADMIN, -10**6) > COUNTRY_REUSE_DAYS]
     if len(fresh) < len(DAY_ROUNDS):
         raise SystemExit(f"Day {day}: only {len(fresh)} countries unused in {COUNTRY_REUSE_DAYS} days; lower "
@@ -281,6 +284,9 @@ def pick_day(candidates: list, used: dict[str, int], day: int, rng: np.random.Ge
 def generate(days: int, seed: int | None) -> None:
     countries = load_countries()
     candidates = pool(countries)
+    unknown = WELL_KNOWN - {c.ADMIN for c in candidates}
+    if unknown:  # a typo, or a country that left the pool, would silently shrink the list
+        raise SystemExit(f"WELL_KNOWN names not in the pool: {sorted(unknown)}")
     last, used = read_existing()
     rng = np.random.default_rng(last if seed is None else seed)
     PUZZLE_DIR.mkdir(parents=True, exist_ok=True)

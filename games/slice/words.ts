@@ -28,11 +28,6 @@ export function instruction(round: Round): string {
   return `Cut off ${fractionWords(round.target)} of ${possessive(round.country)} ${what}.`;
 }
 
-/** "You cut off 31.4%. Target 33.3%." */
-export function resultLine(share: number, target: number): string {
-  return `You cut off ${formatShare(share)}. Target ${formatShare(target)}.`;
-}
-
 /** "the United States" -> "The United States", for the start of a sentence. */
 export function capitalise(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);

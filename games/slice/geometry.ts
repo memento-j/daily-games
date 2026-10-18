@@ -81,11 +81,6 @@ export function clipRings(rings: Ring[], line: Line): Ring[] {
   return rings.map((r) => clipRing(r, line)).filter((r) => r.length >= 3);
 }
 
-/** The line flipped to face the other way (same place, opposite positive side). */
-export function flip(line: Line): Line {
-  return { normal: [-line.normal[0], -line.normal[1]], offset: -line.offset };
-}
-
 /** The lowest and highest offset of any outline point along `normal`: every line at
  *  this angle that touches the outline has an offset between the two. */
 export function offsetRange(rings: Ring[], normal: Point): [number, number] {

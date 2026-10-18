@@ -1,4 +1,4 @@
-// Synthesized sounds for the /slice/lab prototype (Web Audio, no files), in the
+// Slice's synthesized sounds (Web Audio, no files), in the
 // spirit of Downstream's games/downstream/sound.ts: everything follows a tap or a
 // drag, and the whole reveal is scheduled on the audio clock the moment you cut, so
 // it stays in step with the animation.
@@ -74,7 +74,7 @@ function snipAt(at: number) {
   note(at, 3150 + Math.random() * 250, 0.05, 0.03, "triangle");
 }
 
-export const labSound = {
+export const sound = {
   /** Wake the audio on the first touch, so the first real sound isn't lost. */
   wake() {
     audio();
@@ -97,7 +97,7 @@ export const labSound = {
   },
 
   /** The whole reveal, scheduled now on the audio clock (offsets in seconds, matching
-   *  sliceScene.ts): snips along the line, the pieces parting, the people rising, and
+   *  scene.ts): snips along the line, the pieces parting, the people rising, and
    *  a closing phrase for how good the cut was. */
   reveal({ snips, snipEvery, split, rise, riseFor, people, done, tier }: {
     snips: number;
@@ -144,6 +144,25 @@ export const labSound = {
     hiss(t, 0.9, 2400, 0.5, 0.035);
     note(t + 0.85, 1318, 1.1, 0.045);
     note(t + 0.85, 1976, 0.9, 0.025);
+  },
+
+  /** A new question: a people round chimes bright and upward, a land round low and
+   *  woody, so the ear hears which kind it is before the eye has read it. */
+  announce(mode: "area" | "population") {
+    // Before any tap the browser holds audio back and would play this late, on the
+    // first tap: skip it then (the badge and highlight still show).
+    if (!navigator.userActivation?.hasBeenActive) return;
+    const c = audio();
+    if (!c) return;
+    const t = c.currentTime + 0.25; // as the highlight sweeps in
+    if (mode === "population") {
+      note(t, 784, 0.18, 0.07, "triangle");
+      note(t + 0.11, 1175, 0.35, 0.07, "triangle");
+      note(t + 0.11, 2350, 0.25, 0.015);
+    } else {
+      note(t, 392, 0.22, 0.09, "triangle", 380);
+      note(t + 0.13, 294, 0.4, 0.09, "triangle", 290);
+    }
   },
 
   /** Ordinary buttons. */

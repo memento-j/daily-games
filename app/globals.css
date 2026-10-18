@@ -169,19 +169,28 @@ button:not(:disabled),
   }
 }
 
-/* Slice: the people fade in on the reveal (SliceBoard). */
-.slice-heat {
-  animation: slice-heat 900ms ease-out both;
+/* Slice: the question's key words ("a third", "people") get a coral highlight that
+   sweeps in from the left, so the round's kind is noticed before cutting. */
+.slice-mark {
+  --mark: color-mix(in srgb, var(--color-coral) 26%, transparent);
+  color: var(--color-coral-deep);
+  background: linear-gradient(var(--mark), var(--mark)) no-repeat left 60% / 0% 78%;
+  border-radius: 6px;
+  padding: 0 0.12em;
+  margin: 0 -0.04em;
+  animation: slice-mark 520ms cubic-bezier(0.22, 1, 0.36, 1) 260ms forwards;
 }
-
-@keyframes slice-heat {
-  from {
-    opacity: 0;
+.slice-mark-late {
+  animation-delay: 420ms;
+}
+@keyframes slice-mark {
+  to {
+    background-size: 100% 78%;
   }
 }
-
 @media (prefers-reduced-motion: reduce) {
-  .slice-heat {
+  .slice-mark {
     animation: none;
+    background-size: 100% 78%;
   }
 }

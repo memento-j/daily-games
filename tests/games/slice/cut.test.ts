@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { areaShare, crosses, peopleShare, perfectLine, positiveCounts, share } from "../../../games/slice/cut";
-import { flip, lineAt, lineThrough } from "../../../games/slice/geometry";
-import type { PeoplePoint, Ring, Round } from "../../../games/slice/types";
+import { lineAt, lineThrough } from "../../../games/slice/geometry";
+import type { Line, PeoplePoint, Ring, Round } from "../../../games/slice/types";
+
+/** The same line facing the other way (same place, opposite positive side). */
+const flip = (line: Line): Line => ({ normal: [-line.normal[0], -line.normal[1]], offset: -line.offset });
 
 const square: Ring = [
   [0, 0],

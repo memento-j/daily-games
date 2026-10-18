@@ -1,4 +1,4 @@
-// The /slice/lab prototype's 3D scene (plain three.js, no React). The country is a
+// Slice's 3D board (plain three.js, no React; app/slice/SliceGame.tsx drives it). The country is a
 // thick paper-white slab on a sage cutting mat. While drawing, the camera looks down
 // at a gentle tilt and drifts a little to feel alive (the camera moves, never the
 // slab, so the line stays exact); a drag on the slab draws a dashed "cut here" line
@@ -6,7 +6,7 @@
 // scissors snips along the line, the slab splits into its two pieces, which slide
 // apart; the people rise as columns; then the player can orbit and zoom. "Show perfect
 // cut" (showPerfect) slides the perfect cut at the player's angle in from their line,
-// as a glass pane or an ink dashed line (lab: both, to compare), with an arrow showing
+// as an ink dashed line (a tester preferred it to a glass pane), with an arrow showing
 // which way it moved and a "Perfect cut · 50%" label.
 //
 // Scoring never happens here: the board maths (games/slice) stays 2D and decides
@@ -15,13 +15,12 @@
 import polygonClipping, { type MultiPolygon, type Polygon as PcPolygon } from "polygon-clipping";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { centroid, dot, segmentInBox, signedArea } from "@/games/slice/geometry";
-import type { Line, PeoplePoint, Point, Ring, Round } from "@/games/slice/types";
-import { formatShare } from "@/games/slice/scoring";
-import { labSound } from "./labSound";
+import { centroid, dot, segmentInBox, signedArea } from "./geometry";
+import { formatShare } from "./scoring";
+import { sound } from "./sound";
+import type { Line, PeoplePoint, Point, Ring, Round } from "./types";
 
-export type Draft = [Point, Point];
-export type PerfectStyle = "glass" | "line";
+type Draft = [Point, Point];
 
 const WORLD = 10; // the country's longest side, in world units
 const THICK = 0.42; // slab thickness
@@ -29,7 +28,6 @@ const BEVEL = 0.035;
 const TOP = THICK + BEVEL; // the slab's top surface
 const SPLIT = 0.6; // how far the pieces slide apart
 const COLUMN_MAX = 2.2; // height of the most crowded column
-const GLASS_HEIGHT = 1.3; // the perfect-cut pane
 const PERFECT_SECONDS = 1.1; // the perfect cut's slide from the player's line
 const HANDLE_PX = 30; // touch radius around a handle
 const MIN_CUT_PX = 24;
@@ -37,7 +35,7 @@ const SCISSORS_SIZE = 1.8; // big enough to read on a phone
 const DASH = 0.16; // the "cut here" line: dash and gap lengths (world units)
 const GAP = 0.11;
 
-// The reveal's timing, in seconds after Cut. labSound.reveal plays to the same clock.
+// The reveal's timing, in seconds after Cut. sound.reveal plays to the same clock.
 const SNIP_EVERY = 0.2; // one snip per scissor close
 const SNIPS = 6;
 const T = {
@@ -149,8 +147,6 @@ export class SliceScene {
   private onDraft: (draft: Draft | null) => void;
   private labels: HTMLElement[];
   private reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
-  // Lab only: ?freeze=0.6 holds the reveal at that moment, for inspecting a frame.
-  private freeze = Number(new URLSearchParams(location.search).get("freeze") ?? NaN);
   private disposables: { dispose(): void }[] = [];
 
   // The current round, and how its board coordinates map onto the table.
@@ -187,7 +183,9 @@ export class SliceScene {
   private hoverAim = new THREE.Vector2();
 
   // Reveal
-  private revealStart = -1;
+  // When the reveal / perfect cut started (performance.now() ms), or null before. Not -1:
+  // an instant start is now - 10 s, which is negative right after a page load.
+  private revealStart: number | null = null;
   private pieces: Piece[] = [];
   private scissors: THREE.Group;
   private scissorHalves: THREE.Group[] = [];
@@ -195,18 +193,15 @@ export class SliceScene {
   private cutFrom = new THREE.Vector3();
   private cutTo = new THREE.Vector3();
   private cutSpan: [Point, Point] | null = null;
-  // The perfect cut, shown on request: a group holding both styles, an arrow, a label.
+  // The perfect cut, shown on request: a dashed line, an arrow, a label.
   private perfect: THREE.Group | null = null;
-  private perfectGlass = new THREE.Group();
-  private perfectLine = new THREE.Group();
   private arrow: THREE.Group | null = null;
   private perfectFrom = 0; // world offsets along the cut's normal
   private perfectTo = 0;
   private arrowFrom = 0;
   private perfectDir = new THREE.Vector3();
   private perfectAlong = new THREE.Vector3();
-  private perfectStart = -1;
-  private perfectStyle: PerfectStyle = "glass";
+  private perfectStart: number | null = null;
   private perfectLabel: HTMLElement;
   private perfectLen = 0;
   private target = 0.5;
@@ -427,7 +422,16 @@ export class SliceScene {
     // The reveal swings round to any side, so fit the country's whole diagonal (a
     // circle around it) rather than its width or depth.
     const r = Math.hypot(w, h) / 2;
-    this.revealView.radius = ((r + SPLIT / 2) / Math.sin(Math.min(v, hor))) * 0.92 + COLUMN_MAX * 0.4; // + the pieces' spread
+    // 0.8: let the circle's corners crop a little; the country itself still fits.
+    this.revealView.radius = ((r + SPLIT / 2) / Math.sin(Math.min(v, hor))) * 0.8 + COLUMN_MAX * 0.25; // + the pieces' spread
+    // Orbiting after the reveal: zoom in close enough to read a city's column, out far
+    // enough to see the whole country with room around it, never further either way.
+    this.controls.minDistance = this.revealView.radius * 0.3;
+    this.controls.maxDistance = this.revealView.radius * 1.3;
+    // The mat fades into the distance, but never the country, even fully zoomed out.
+    const fog = this.scene.fog as THREE.Fog;
+    fog.near = this.controls.maxDistance + WORLD;
+    fog.far = fog.near + 70;
   }
 
   private setCamera(view: { radius: number; polar: number; azimuth: number }) {
@@ -490,7 +494,7 @@ export class SliceScene {
   }
 
   private down = (e: PointerEvent) => {
-    labSound.wake();
+    sound.wake();
     if (this.phase !== "draw") return;
     const p = this.boardPoint(e);
     if (!p) return;
@@ -499,7 +503,7 @@ export class SliceScene {
     const near = this.draft?.findIndex((h) => this.screenOf(h).distanceTo(at) < HANDLE_PX) ?? -1;
     if (this.draft && near >= 0) {
       this.dragging = near as 0 | 1;
-      labSound.grab();
+      sound.grab();
     } else {
       this.dragging = 1;
       this.drawnDashes = 0;
@@ -549,7 +553,7 @@ export class SliceScene {
     // A ratchet tick for each new dash while drawing, like paper being scored.
     const now = performance.now();
     if (this.dragging !== null && n !== this.drawnDashes && now - this.lastTick > 28) {
-      labSound.tick();
+      sound.tick();
       this.lastTick = now;
     }
     this.drawnDashes = n;
@@ -590,18 +594,25 @@ export class SliceScene {
 
   // --- The reveal ---
 
-  reveal(line: Line, perfect: Line, positiveShare: number, positiveCounts: boolean, tier: number, onDone: () => void) {
+  /** Play the cut. `instant` jumps to the finished state in silence (a round seen again
+   *  from the day's summary, or a resumed game). */
+  reveal(line: Line, perfect: Line, positiveShare: number, positiveCounts: boolean, tier: number, onDone: () => void, instant = false) {
     if (!this.round) return;
     this.phase = "reveal";
     this.dragging = null;
     this.onRevealDone = onDone;
     this.revealDone = false;
     this.shares = [positiveShare, 1 - positiveShare];
-    this.cameraFrom = {
-      radius: this.drawView.radius,
-      polar: Math.acos(this.camera.position.y / this.camera.position.length()), // where the drift left it
-      azimuth: Math.atan2(this.camera.position.x, this.camera.position.z),
-    };
+    // Swing from where the drift left the camera; a board shown straight into a reveal
+    // (a resumed game) has never placed it, so start from the drawing view.
+    const placed = this.camera.position.lengthSq() > 1e-6;
+    this.cameraFrom = placed
+      ? {
+          radius: this.drawView.radius,
+          polar: Math.acos(this.camera.position.y / this.camera.position.length()),
+          azimuth: Math.atan2(this.camera.position.x, this.camera.position.z),
+        }
+      : { ...this.drawView };
     // Swing round to look along the cut (a little to one side), so the gap between the
     // pieces faces the camera; of the cut's two ends, the one nearer the current view.
     let az = Math.atan2(-line.normal[1], line.normal[0]) + 0.8;
@@ -649,18 +660,19 @@ export class SliceScene {
     this.target = this.round.target;
     this.buildPerfect(line, perfect, n);
 
-    this.revealStart = performance.now();
-    if (this.reduced) {
-      this.revealStart -= 10_000; // straight to the finished state, and only the closing sound
-      labSound.reveal({ snips: 0, snipEvery: 0, split: 0, rise: 0, riseFor: 0, people: false, done: 0.1, tier });
-    } else {
-      labSound.reveal({ snips: SNIPS, snipEvery: SNIP_EVERY, split: T.split, rise: T.rise, riseFor: 1.6, people: points.length > 0, done: T.done - 0.3, tier });
+    // Instant (already seen) and reduced motion both start at the finished state; instant
+    // is silent, reduced motion plays only the closing sound.
+    this.revealStart = performance.now() - (instant || this.reduced ? 10_000 : 0);
+    if (this.reduced && !instant) {
+      sound.reveal({ snips: 0, snipEvery: 0, split: 0, rise: 0, riseFor: 0, people: false, done: 0.1, tier });
+    } else if (!instant) {
+      sound.reveal({ snips: SNIPS, snipEvery: SNIP_EVERY, split: T.split, rise: T.rise, riseFor: 1.6, people: points.length > 0, done: T.done - 0.3, tier });
     }
   }
 
-  /** The perfect cut at the player's angle, hidden until showPerfect: a glass pane and an
-   *  ink dashed line (one shows, per perfectStyle), plus an arrow from the player's cut.
-   *  It rides with whichever piece it falls in, so its far offset allows for the split. */
+  /** The perfect cut at the player's angle, hidden until showPerfect: ink dashes on the
+   *  slab like the player's "cut here" line, plus an arrow from the player's cut. It
+   *  rides with whichever piece it falls in, so its far offset allows for the split. */
   private buildPerfect(line: Line, perfect: Line, n: THREE.Vector3) {
     const span = segmentInBox(perfect, this.bmin, this.bmax);
     if (!span) return;
@@ -668,30 +680,13 @@ export class SliceScene {
     this.perfectLen = len;
     const group = new THREE.Group();
     group.rotation.y = -Math.atan2(span[1][1] - span[0][1], span[1][0] - span[0][0]);
-
-    // Glass: a faint pane with a rim along its top.
-    const paneMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.08, side: THREE.DoubleSide, depthWrite: false });
-    const rimMat = new THREE.MeshBasicMaterial({ color: COLORS.ink, transparent: true, opacity: 0.4 });
-    const paneGeo = new THREE.PlaneGeometry(len, GLASS_HEIGHT);
-    const rimGeo = new THREE.BoxGeometry(len, 0.05, 0.05);
-    const pane = new THREE.Mesh(paneGeo, paneMat);
-    pane.position.y = GLASS_HEIGHT / 2;
-    const rim = new THREE.Mesh(rimGeo, rimMat);
-    rim.position.y = GLASS_HEIGHT;
-    this.perfectGlass = new THREE.Group();
-    this.perfectGlass.add(pane, rim);
-
-    // Line: ink dashes on the slab's surface, like the player's "cut here" line.
     const dashGeo = new THREE.BoxGeometry(1, 0.025, 1);
     const dashMat = new THREE.MeshBasicMaterial({ color: COLORS.ink });
     const dashes = new THREE.InstancedMesh(dashGeo, dashMat, 400);
     const a = new THREE.Vector3(-len / 2, TOP + 0.015, 0);
     this.layDashes(dashes, a, new THREE.Vector3(len / 2, TOP + 0.015, 0), a, 0.07);
-    this.perfectLine = new THREE.Group();
-    this.perfectLine.add(dashes);
-
-    group.add(this.perfectGlass, this.perfectLine);
-    this.disposables.push(paneMat, rimMat, paneGeo, rimGeo, dashGeo, dashMat);
+    group.add(dashes);
+    this.disposables.push(dashGeo, dashMat);
 
     // Its path: from the player's line to the perfect one, along the cut's normal. Its
     // position is a point along the line (the middle of its span) plus an offset along n.
@@ -727,31 +722,21 @@ export class SliceScene {
 
     group.visible = false;
     this.perfect = group;
-    this.applyPerfectStyle();
     this.scene.add(group);
   }
 
-  private applyPerfectStyle() {
-    this.perfectGlass.visible = this.perfectStyle === "glass";
-    this.perfectLine.visible = this.perfectStyle === "line";
-  }
-
-  /** Glass pane or ink dashed line (lab: to compare). Applies at once, even when shown. */
-  setPerfectStyle(style: PerfectStyle) {
-    this.perfectStyle = style;
-    this.applyPerfectStyle();
-  }
-
-  /** "Show perfect cut": slide it in from the player's line, with the arrow and label. */
-  showPerfect() {
-    if (!this.perfect || this.perfectStart >= 0) return;
-    this.perfectStart = performance.now() - (this.reduced ? 10_000 : 0);
-    labSound.perfect();
+  /** "Show perfect cut": slide it in from the player's line, with the arrow and label.
+   *  `instant` puts it in place silently (the day's summary). */
+  showPerfect(instant = false) {
+    if (!this.perfect || this.perfectStart !== null) return;
+    this.perfectStart = performance.now() - (this.reduced || instant ? 10_000 : 0);
+    if (!instant) sound.perfect();
   }
 
   private animatePerfect(now: number) {
-    if (!this.perfect || this.perfectStart < 0) return;
-    const k = easeInOut((now - this.perfectStart) / 1000 / PERFECT_SECONDS);
+    if (!this.perfect || this.perfectStart === null) return;
+    const started = this.perfectStart;
+    const k = easeInOut((now - started) / 1000 / PERFECT_SECONDS);
     const off = THREE.MathUtils.lerp(this.perfectFrom, this.perfectTo, k);
     this.perfect.visible = true;
     this.perfect.position.copy(this.perfectAlong).addScaledVector(this.perfectDir, off);
@@ -770,7 +755,7 @@ export class SliceScene {
     // The label floats above the perfect cut, at whichever spot along it (middle or
     // towards either end) sits furthest from the two pieces' labels on screen.
     const along = new THREE.Vector3(1, 0, 0).applyQuaternion(this.perfect.quaternion);
-    const y = this.perfectStyle === "glass" ? GLASS_HEIGHT + 0.25 : TOP + 0.45;
+    const y = TOP + 0.45;
     const others = this.labels.map((el) => el.getBoundingClientRect());
     const box = this.renderer.domElement.getBoundingClientRect();
     let best: THREE.Vector2 | null = null;
@@ -799,7 +784,7 @@ export class SliceScene {
       for (let i = 0; i < 30 && hits(); i++) best.y -= 4;
       this.perfectLabel.style.transform = `translate(-50%, -50%) translate(${best.x}px, ${best.y}px)`;
     }
-    this.perfectLabel.style.opacity = String(ease((now - this.perfectStart) / 1000 / PERFECT_SECONDS - 0.4));
+    this.perfectLabel.style.opacity = String(ease((now - started) / 1000 / PERFECT_SECONDS - 0.4));
     this.perfectLabel.textContent = `Perfect cut · ${formatShare(this.target)}`;
   }
 
@@ -826,8 +811,8 @@ export class SliceScene {
   }
 
   private animateReveal(now: number) {
-    if (this.revealStart < 0) return;
-    const t = Number.isFinite(this.freeze) ? this.freeze : (now - this.revealStart) / 1000;
+    if (this.revealStart === null) return;
+    const t = (now - this.revealStart) / 1000;
 
     // Once the reveal has played, the camera is the player's: stop placing it (and
     // re-posing every column) each frame. Only the labels keep following the view.
@@ -912,22 +897,15 @@ export class SliceScene {
     if (this.arrow) this.scene.remove(this.arrow);
     this.perfect = null;
     this.arrow = null;
-    this.perfectStart = -1;
+    this.perfectStart = null;
     this.perfectLabel.style.opacity = "0";
     this.scissors.visible = false;
     this.slit.visible = false;
-    this.revealStart = -1;
+    this.revealStart = null;
     this.controls.enabled = false;
     this.controls.autoRotate = false;
     for (const el of this.labels) el.style.opacity = "0";
     if (this.slab) this.slab.visible = true;
-  }
-
-  /** Back to drawing on the same country. */
-  again() {
-    this.clearReveal();
-    this.phase = "draw";
-    this.setDraft(null);
   }
 
   private loop = () => {

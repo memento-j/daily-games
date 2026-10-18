@@ -4,14 +4,16 @@ import {
   centroid,
   clipRing,
   clipRings,
-  flip,
   lineAt,
   lineThrough,
   offsetRange,
   segmentInBox,
   signedArea,
 } from "../../../games/slice/geometry";
-import type { Ring } from "../../../games/slice/types";
+import type { Line, Ring } from "../../../games/slice/types";
+
+/** The same line facing the other way (same place, opposite positive side). */
+const flip = (line: Line): Line => ({ normal: [-line.normal[0], -line.normal[1]], offset: -line.offset });
 
 const square: Ring = [
   [0, 0],

@@ -62,6 +62,18 @@ POOL_MIN_PEOPLE = 1_000_000
 # reach the 60 days first hoped for: the pool runs dry after ~30.
 COUNTRY_REUSE_DAYS = 28
 
+# The first WELL_KNOWN_DAYS puzzles only use countries most players can picture, so
+# nobody's first week is spent guessing at shapes they've never seen (developer's call,
+# 2026-10-18). 36 countries: enough for 4 a day for 7 days under the 28-day reuse rule.
+WELL_KNOWN_DAYS = 7
+WELL_KNOWN = {
+    "United States of America", "Canada", "Mexico", "Brazil", "Argentina", "Chile", "Peru", "Colombia",
+    "United Kingdom", "France", "Germany", "Italy", "Spain", "Portugal", "Ireland", "Norway", "Sweden",
+    "Finland", "Poland", "Greece", "Turkey", "Egypt", "South Africa", "Nigeria", "Kenya", "Ethiopia",
+    "Saudi Arabia", "Iran", "Japan", "South Korea", "Thailand", "Vietnam", "Indonesia", "Philippines",
+    "Australia", "New Zealand",
+}
+
 # --- Daily puzzles ---
 DEFAULT_DAYS = 10
 # One round per entry, in play order: (mode, share to cut off). The last round cuts off
