@@ -122,7 +122,7 @@ function IntroBubble({ onDismiss, bubbleRef }: { onDismiss: () => void; bubbleRe
     <div
       ref={bubbleRef}
       role="note"
-      className="absolute top-[104px] right-3 left-3 z-10 flex items-start gap-3 rounded-2xl bg-white/95 p-3.5 text-[14px] leading-snug shadow-card"
+      className="absolute top-[104px] right-3 left-3 z-10 flex items-start gap-3 rounded-2xl bg-card/95 p-3.5 text-[14px] leading-snug shadow-card"
     >
       <p className="flex-1 text-ink-soft">
         <span className="font-semibold text-ink">Where does this rain end up?</span> Pick a sea on the map, then Lock in.
@@ -219,7 +219,7 @@ function PhonePlay(p: Props) {
                     sound.tap();
                     setPick(null);
                   }}
-                  className="h-12 rounded-full bg-white px-5 text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+                  className="h-12 rounded-full bg-card px-5 text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
                 >
                   Change
                 </button>
@@ -230,7 +230,7 @@ function PhonePlay(p: Props) {
                     setPick(null);
                     p.onGuess(picked);
                   }}
-                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+                  className="flex h-12 flex-1 items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-strong active:scale-[0.98]"
                 >
                   Lock in
                   <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

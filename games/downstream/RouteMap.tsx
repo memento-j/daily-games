@@ -21,16 +21,14 @@ import { length } from "@turf/length";
 import { lineSliceAlong } from "@turf/line-slice-along";
 import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, Marker, PaddingOptions } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
-import { downstreamMapStyle } from "./mapStyle";
+import { useTheme } from "@/lib/useTheme";
+import { downstreamMapStyle, MAP_PALETTES, themePaint } from "./mapStyle";
 import type { LngLat } from "./types";
 
 // MapLibre processes tiles in a web worker, which it looks for next to its own
 // file. The bundler can't see that, so `npm run dev`/`build` copy the worker
 // into public/ (see "copy-map-worker" in package.json) and we point MapLibre at it.
 const WORKER_URL = "/maplibre-gl-worker.mjs";
-const WATER = "#155eef";
-const CORAL = "#f2545b";
-const CORAL_DEEP = "#c0303a"; // matches --color-coral-deep
 const EMPTY: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
 // The flowing-current effect: MapLibre animates a dashed line by stepping through
@@ -128,6 +126,10 @@ export default function RouteMap({
   const [ready, setReady] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0); // bumped by "Try again" to rebuild the map
+  // Light or dark (mapStyle.ts has both palettes). Read through a ref by the map setup
+  // and the animations, and applied to a live map in place by the effect below.
+  const theme = useTheme();
+  const colors = useRef(MAP_PALETTES[theme]);
   const pad = { top: 60, right: 60, bottom: 60, left: 60, ...padding };
   const padKey = JSON.stringify(pad);
   // The animation reads the latest callbacks through a ref, kept in sync after each render.
@@ -152,7 +154,7 @@ export default function RouteMap({
         setWorkerUrl(WORKER_URL);
         map = new Map({
           container: containerRef.current,
-          style: downstreamMapStyle(),
+          style: downstreamMapStyle(theme),
           // Start already framed on the pin and its four seas. (Starting elsewhere and
           // flying in downloaded a first set of tiles only to throw them away.)
           bounds: boundsOf([pin, ...Object.values(labels ?? {})]),
@@ -180,14 +182,14 @@ export default function RouteMap({
             type: "line",
             source: "route",
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: { "line-color": WATER, "line-width": 26, "line-opacity": 0.22, "line-blur": 9 },
+            paint: { "line-color": colors.current.route, "line-width": 26, "line-opacity": 0.22, "line-blur": 9 },
           });
           m.addLayer({
             id: "route",
             type: "line",
             source: "route",
             layout: { "line-cap": "round", "line-join": "round" },
-            paint: { "line-color": WATER, "line-width": 6 },
+            paint: { "line-color": colors.current.route, "line-width": 6 },
           });
           m.addLayer({
             id: "route-current",
@@ -226,13 +228,13 @@ export default function RouteMap({
             id: "head-glow",
             type: "circle",
             source: "head",
-            paint: { "circle-radius": 24, "circle-color": CORAL, "circle-opacity": 0.32, "circle-blur": 0.9 },
+            paint: { "circle-radius": 24, "circle-color": colors.current.coral, "circle-opacity": 0.32, "circle-blur": 0.9 },
           });
           m.addLayer({
             id: "head",
             type: "circle",
             source: "head",
-            paint: { "circle-radius": 8.5, "circle-color": CORAL, "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 },
+            paint: { "circle-radius": 8.5, "circle-color": colors.current.coral, "circle-stroke-color": "#ffffff", "circle-stroke-width": 3 },
           });
           // The four option seas, lettered where the puzzle file says (near the pin).
           m.addSource("options", { type: "geojson", data: EMPTY });
@@ -251,9 +253,9 @@ export default function RouteMap({
               "text-allow-overlap": true,
             },
             paint: {
-              "text-color": ["case", ["get", "answer"], WATER, CORAL_DEEP],
+              "text-color": ["case", ["get", "answer"], colors.current.route, colors.current.optionText],
               "text-opacity": ["case", ["get", "faded"], 0.3, 1],
-              "text-halo-color": "rgba(255,255,255,0.97)",
+              "text-halo-color": colors.current.optionHalo,
               "text-halo-width": 2.6,
             },
           });
@@ -288,6 +290,17 @@ export default function RouteMap({
     // Created once per attempt; later pins/routes are handled by the effects below.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attempt]);
+
+  // Light or dark: repaint the live map in place (no style reload, no tile refetch).
+  useEffect(() => {
+    colors.current = MAP_PALETTES[theme];
+    const map = mapRef.current;
+    if (!ready || !map) return;
+    for (const [layer, property, value] of themePaint(theme)) {
+      type Paint = Parameters<MapLibreMap["setPaintProperty"]>;
+      if (map.getLayer(layer)) map.setPaintProperty(layer, property as Paint[1], value as Paint[2]);
+    }
+  }, [ready, theme]);
 
   // The current flows along whatever route is drawn, and the raindrop's glow
   // breathes. Every paint change makes MapLibre redraw the whole map, so this only
@@ -457,9 +470,9 @@ export default function RouteMap({
       if (final) {
         headSource.setData(EMPTY); // the drop has joined the sea
         headOn.current = false;
-        ripple(end, WATER, 2);
+        ripple(end, colors.current.route, 2);
       } else {
-        ripple(end, CORAL, 1);
+        ripple(end, colors.current.coral, 1);
       }
       callbacks.current.onFlowEnd?.(final);
     }
@@ -537,13 +550,13 @@ export default function RouteMap({
       <div ref={containerRef} className="h-full w-full" aria-label="Map of the raindrop's route" role="img" />
       {failed && (
         <div role="alert" className="absolute inset-0 grid place-items-center bg-land/85 p-4">
-          <div className="rounded-2xl bg-white p-5 text-center shadow-card">
+          <div className="rounded-2xl bg-card p-5 text-center shadow-card">
             <p className="font-semibold">The map didn&apos;t load.</p>
             <p className="mt-1 text-sm text-ink-soft">Check your connection, then try again.</p>
             <button
               type="button"
               onClick={retry}
-              className="mt-3 rounded-full bg-white px-5 py-2 text-sm font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+              className="mt-3 rounded-full bg-card px-5 py-2 text-sm font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
             >
               Try again
             </button>

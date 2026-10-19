@@ -18,6 +18,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { centroid, dot, segmentInBox, signedArea } from "./geometry";
 import { formatShare } from "./scoring";
 import { sound } from "./sound";
+import type { Theme } from "../../lib/theme";
 import type { Line, PeoplePoint, Point, Ring, Round } from "./types";
 
 type Draft = [Point, Point];
@@ -47,16 +48,61 @@ const T = {
   done: 4.0, // the camera is the player's
 };
 
-const COLORS = {
-  mat: 0xbccdbd,
-  top: 0xfffaf3,
-  side: 0xe9a68c,
-  countedTop: 0xffdcd2,
-  coral: 0xf2545b,
-  otherPeople: 0x7b8597,
-  ink: 0x1d2a44,
-  slit: 0x5b463c,
+// The table in each theme (the same values as the --color-mat / --color-slab tokens in
+// app/globals.css). At night the mat goes deep green-black, the slab stays paper, a
+// lit object on it, and a cooler sky light stands in for the warm room.
+type Palette = {
+  mat: number;
+  grid: [string, string]; // the mat's minor and major grid lines
+  top: number;
+  side: number;
+  countedTop: number;
+  coral: number;
+  otherPeople: number;
+  ink: number;
+  slit: number;
+  steel: number;
+  sky: number;
+  ground: number;
+  skyLight: number; // hemisphere intensity
+  sunLight: number;
 };
+const PALETTES: Record<Theme, Palette> = {
+  light: {
+    mat: 0xbccdbd,
+    grid: ["rgba(255,255,255,0.22)", "rgba(255,255,255,0.5)"],
+    top: 0xfffaf3,
+    side: 0xe9a68c,
+    countedTop: 0xffdcd2,
+    coral: 0xf2545b,
+    otherPeople: 0x7b8597,
+    ink: 0x1d2a44,
+    slit: 0x5b463c,
+    steel: 0xe3e7ec,
+    sky: 0xfff6ea,
+    ground: 0xb9c4b3,
+    skyLight: 1.5,
+    sunLight: 2.4,
+  },
+  dark: {
+    mat: 0x1d2925,
+    grid: ["rgba(255,255,255,0.06)", "rgba(255,255,255,0.13)"],
+    top: 0xebe4d8,
+    side: 0xc98a72,
+    countedTop: 0xf4c9bd,
+    coral: 0xf2545b,
+    otherPeople: 0x9aa4b6,
+    ink: 0x1d2a44,
+    slit: 0x5b463c,
+    steel: 0xd0d5dc,
+    sky: 0xc9d3e6,
+    ground: 0x22302b,
+    skyLight: 0.95,
+    sunLight: 2.1,
+  },
+};
+// The palette colours a material can take; it keeps its role so setTheme can recolour it.
+type Role = "top" | "side" | "countedTop" | "coral" | "otherPeople" | "ink" | "slit" | "steel";
 
 type Piece = { group: THREE.Group; dir: THREE.Vector3; columns: THREE.InstancedMesh | null; heights: number[]; delays: number[]; centre: THREE.Vector3; positions: THREE.Vector3[] };
 
@@ -110,23 +156,23 @@ function halfPlane(line: Line): PcPolygon {
 }
 
 /** A self-healing cutting mat: sage with a faint white grid, every fifth line stronger. */
-function matTexture(anisotropy: number): THREE.CanvasTexture {
+function matTexture(p: Palette, anisotropy: number): THREE.CanvasTexture {
   const size = 512;
   const canvas = document.createElement("canvas");
   canvas.width = canvas.height = size;
   const g = canvas.getContext("2d")!;
-  g.fillStyle = `#${COLORS.mat.toString(16)}`;
+  g.fillStyle = `#${p.mat.toString(16).padStart(6, "0")}`;
   g.fillRect(0, 0, size, size);
   for (let i = 0; i <= 10; i++) {
-    const p = (i / 10) * size;
+    const at = (i / 10) * size;
     const major = i % 5 === 0;
-    g.strokeStyle = major ? "rgba(255,255,255,0.5)" : "rgba(255,255,255,0.22)";
+    g.strokeStyle = major ? p.grid[1] : p.grid[0];
     g.lineWidth = major ? 3 : 1.5;
     g.beginPath();
-    g.moveTo(p, 0);
-    g.lineTo(p, size);
-    g.moveTo(0, p);
-    g.lineTo(size, p);
+    g.moveTo(at, 0);
+    g.lineTo(at, size);
+    g.moveTo(0, at);
+    g.lineTo(size, at);
     g.stroke();
   }
   const tex = new THREE.CanvasTexture(canvas);
@@ -148,6 +194,10 @@ export class SliceScene {
   private labels: HTMLElement[];
   private reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
   private disposables: { dispose(): void }[] = [];
+  private palette: Palette;
+  private sky: THREE.HemisphereLight;
+  private sun: THREE.DirectionalLight;
+  private mat: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
 
   // The current round, and how its board coordinates map onto the table.
   private round: Round | null = null;
@@ -209,7 +259,8 @@ export class SliceScene {
   private onRevealDone: (() => void) | null = null;
   private revealDone = false;
 
-  constructor(container: HTMLElement, labels: HTMLElement[], perfectLabel: HTMLElement, onDraft: (draft: Draft | null) => void) {
+  constructor(container: HTMLElement, labels: HTMLElement[], perfectLabel: HTMLElement, onDraft: (draft: Draft | null) => void, theme: Theme = "light") {
+    this.palette = PALETTES[theme];
     this.container = container;
     this.labels = labels;
     this.perfectLabel = perfectLabel;
@@ -221,15 +272,17 @@ export class SliceScene {
     this.renderer.shadowMap.type = THREE.PCFShadowMap; // r186 dropped PCFSoftShadowMap; radius softens instead
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.setClearColor(COLORS.mat);
+    this.renderer.setClearColor(this.palette.mat);
     this.renderer.domElement.style.touchAction = "none";
     this.renderer.domElement.style.display = "block";
     container.appendChild(this.renderer.domElement);
-    this.scene.fog = new THREE.Fog(COLORS.mat, 40, 110); // the mat fades out at the horizon
+    this.scene.fog = new THREE.Fog(this.palette.mat, 40, 110); // the mat fades out at the horizon
 
     // A warm room: soft sky light and one sun with a soft shadow on the mat.
-    this.scene.add(new THREE.HemisphereLight(0xfff6ea, 0xb9c4b3, 1.5));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+    this.sky = new THREE.HemisphereLight(this.palette.sky, this.palette.ground, this.palette.skyLight);
+    this.scene.add(this.sky);
+    const sun = new THREE.DirectionalLight(0xffffff, this.palette.sunLight);
+    this.sun = sun;
     sun.position.set(-7, 16, 9);
     sun.castShadow = true;
     sun.shadow.mapSize.set(2048, 2048);
@@ -241,23 +294,23 @@ export class SliceScene {
     sun.shadow.normalBias = 0.02;
     sun.shadow.radius = 4;
     this.scene.add(sun);
-    const mat = new THREE.Mesh(
+    this.mat = new THREE.Mesh(
       new THREE.PlaneGeometry(200, 200),
-      new THREE.MeshStandardMaterial({ map: matTexture(this.renderer.capabilities.getMaxAnisotropy()), roughness: 0.95 }),
+      new THREE.MeshStandardMaterial({ map: matTexture(this.palette, this.renderer.capabilities.getMaxAnisotropy()), roughness: 0.95 }),
     );
-    mat.rotation.x = -Math.PI / 2;
-    mat.receiveShadow = true;
-    this.scene.add(mat);
+    this.mat.rotation.x = -Math.PI / 2;
+    this.mat.receiveShadow = true;
+    this.scene.add(this.mat);
 
     // The "cut here" line: coral dashes between the handles, fainter ones across the board.
     const dashGeo = new THREE.BoxGeometry(1, 0.025, 1);
-    this.dashes = new THREE.InstancedMesh(dashGeo, new THREE.MeshBasicMaterial({ color: COLORS.coral }), 400);
-    this.trail = new THREE.InstancedMesh(dashGeo, new THREE.MeshBasicMaterial({ color: COLORS.coral, transparent: true, opacity: 0.4 }), 400);
+    this.dashes = new THREE.InstancedMesh(dashGeo, this.tint(new THREE.MeshBasicMaterial(), "coral"), 400);
+    this.trail = new THREE.InstancedMesh(dashGeo, this.tint(new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.4 }), "coral"), 400);
     this.dashes.count = this.trail.count = 0;
     this.draftGroup.add(this.trail, this.dashes);
     for (let i = 0; i < 2; i++) {
       const handle = new THREE.Group();
-      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 32), new THREE.MeshBasicMaterial({ color: COLORS.coral }));
+      const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 32), this.tint(new THREE.MeshBasicMaterial(), "coral"));
       const dotMesh = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.08, 32), new THREE.MeshBasicMaterial({ color: 0xffffff }));
       handle.add(ring, dotMesh);
       this.handles.push(handle);
@@ -266,7 +319,7 @@ export class SliceScene {
     this.draftGroup.visible = false;
     this.scene.add(this.draftGroup);
 
-    this.slit = new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 1), new THREE.MeshBasicMaterial({ color: COLORS.slit }));
+    this.slit = new THREE.Mesh(new THREE.BoxGeometry(1, 0.02, 1), this.tint(new THREE.MeshBasicMaterial(), "slit"));
     this.slit.visible = false;
     this.scene.add(this.slit);
     this.scissors = this.makeScissors();
@@ -293,11 +346,42 @@ export class SliceScene {
     this.loop();
   }
 
+  /** Give a material its palette colour, and remember the role for setTheme. */
+  private tint<M extends THREE.MeshBasicMaterial | THREE.MeshStandardMaterial>(material: M, role: Role): M {
+    material.userData.role = role;
+    material.color.set(this.palette[role]);
+    return material;
+  }
+
+  /** Light or dark: recolour the mat, the lights and every tinted material in place, so
+   *  a round in progress (or a reveal on screen) just changes its lighting. */
+  setTheme(theme: Theme) {
+    const p = PALETTES[theme];
+    if (p === this.palette) return;
+    this.palette = p;
+    this.renderer.setClearColor(p.mat);
+    (this.scene.fog as THREE.Fog).color.set(p.mat);
+    this.mat.material.map?.dispose();
+    this.mat.material.map = matTexture(p, this.renderer.capabilities.getMaxAnisotropy());
+    this.mat.material.needsUpdate = true;
+    this.sky.color.set(p.sky);
+    this.sky.groundColor.set(p.ground);
+    this.sky.intensity = p.skyLight;
+    this.sun.intensity = p.sunLight;
+    this.scene.traverse((object) => {
+      const material = (object as THREE.Mesh).material;
+      for (const m of Array.isArray(material) ? material : material ? [material] : []) {
+        const role = m.userData.role as Role | undefined;
+        if (role) (m as THREE.MeshBasicMaterial).color.set(p[role]);
+      }
+    });
+  }
+
   /** Paper scissors: two steel blades on a pivot with coral handles. Local +x is
    *  where the tips point; each half opens around the pivot (y axis). */
   private makeScissors(): THREE.Group {
-    const steel = new THREE.MeshStandardMaterial({ color: 0xe3e7ec, metalness: 0.85, roughness: 0.25 });
-    const grip = new THREE.MeshStandardMaterial({ color: COLORS.coral, roughness: 0.45 });
+    const steel = this.tint(new THREE.MeshStandardMaterial({ metalness: 0.85, roughness: 0.25 }), "steel");
+    const grip = this.tint(new THREE.MeshStandardMaterial({ roughness: 0.45 }), "coral");
     const blade = new THREE.Shape([new THREE.Vector2(0, -0.06), new THREE.Vector2(1.05, 0), new THREE.Vector2(0, 0.06)]);
     const bladeGeo = new THREE.ExtrudeGeometry(blade, { depth: 0.025, bevelEnabled: false });
     bladeGeo.rotateX(-Math.PI / 2);
@@ -366,14 +450,14 @@ export class SliceScene {
     this.min = [x0 - pad, y0 - pad];
     this.max = [x1 + pad, y1 + pad];
     this.polygons = toPolygons(round.outline);
-    this.slab = this.extrude(this.polygons, COLORS.top);
+    this.slab = this.extrude(this.polygons, "top");
     this.scene.add(this.slab);
     this.fitViews();
     this.phase = "draw";
     this.setDraft(null);
   }
 
-  private extrude(polys: PcPolygon[], topColor: number): THREE.Group {
+  private extrude(polys: PcPolygon[], topRole: Role): THREE.Group {
     const shapes: THREE.Shape[] = [];
     for (const poly of polys) {
       const ring = (r: Point[]) => {
@@ -396,8 +480,8 @@ export class SliceScene {
     geo.rotateX(-Math.PI / 2); // shape (x, y) lies flat as table (x, -z); extrusion points up
     geo.translate(0, BEVEL, 0);
     geo.computeVertexNormals();
-    const top = new THREE.MeshStandardMaterial({ color: topColor, roughness: 0.82, metalness: 0 });
-    const side = new THREE.MeshStandardMaterial({ color: COLORS.side, roughness: 0.7, metalness: 0 });
+    const top = this.tint(new THREE.MeshStandardMaterial({ roughness: 0.82, metalness: 0 }), topRole);
+    const side = this.tint(new THREE.MeshStandardMaterial({ roughness: 0.7, metalness: 0 }), "side");
     this.disposables.push(geo, top, side);
     const mesh = new THREE.Mesh(geo, [top, side]);
     mesh.castShadow = true;
@@ -645,10 +729,10 @@ export class SliceScene {
         polys = [];
       }
       const counted = (i === 0) === positiveCounts;
-      const group = this.extrude(polys, counted ? COLORS.countedTop : COLORS.top);
+      const group = this.extrude(polys, counted ? "countedTop" : "top");
       const mine = points.filter((p) => p[0] * side.normal[0] + p[1] * side.normal[1] > side.offset);
       const piece: Piece = { group, dir: i === 0 ? n.clone() : n.clone().negate(), columns: null, heights: [], delays: [], centre: new THREE.Vector3(), positions: [] };
-      if (mine.length) piece.columns = this.columns(mine, heaviest, footprint, counted ? COLORS.coral : COLORS.otherPeople, piece);
+      if (mine.length) piece.columns = this.columns(mine, heaviest, footprint, counted ? "coral" : "otherPeople", piece);
       const rings = polys.flatMap((poly) => poly) as Ring[];
       const c = centroid(rings) ?? [this.c[0], this.c[1]];
       piece.centre = this.toWorld(c, TOP);
@@ -681,7 +765,7 @@ export class SliceScene {
     const group = new THREE.Group();
     group.rotation.y = -Math.atan2(span[1][1] - span[0][1], span[1][0] - span[0][0]);
     const dashGeo = new THREE.BoxGeometry(1, 0.025, 1);
-    const dashMat = new THREE.MeshBasicMaterial({ color: COLORS.ink });
+    const dashMat = this.tint(new THREE.MeshBasicMaterial(), "ink");
     const dashes = new THREE.InstancedMesh(dashGeo, dashMat, 400);
     const a = new THREE.Vector3(-len / 2, TOP + 0.015, 0);
     this.layDashes(dashes, a, new THREE.Vector3(len / 2, TOP + 0.015, 0), a, 0.07);
@@ -701,7 +785,7 @@ export class SliceScene {
 
     // The arrow: flat on the slab, pointing from the player's cut to the perfect one.
     if (Math.abs(this.perfectTo - this.arrowFrom) > 0.25) {
-      const inkMat = new THREE.MeshBasicMaterial({ color: COLORS.ink });
+      const inkMat = this.tint(new THREE.MeshBasicMaterial(), "ink");
       const shaftGeo = new THREE.BoxGeometry(1, 0.03, 0.07);
       shaftGeo.translate(0.5, 0, 0); // grows from its start
       const headGeo = new THREE.ConeGeometry(0.14, 0.3, 3);
@@ -788,10 +872,10 @@ export class SliceScene {
     this.perfectLabel.textContent = `Perfect cut · ${formatShare(this.target)}`;
   }
 
-  private columns(points: PeoplePoint[], heaviest: number, footprint: number, color: number, piece: Piece): THREE.InstancedMesh {
+  private columns(points: PeoplePoint[], heaviest: number, footprint: number, role: Role, piece: Piece): THREE.InstancedMesh {
     const geo = new THREE.BoxGeometry(footprint, 1, footprint);
     geo.translate(0, 0.5, 0);
-    const mat = new THREE.MeshStandardMaterial({ color, roughness: 0.55 });
+    const mat = this.tint(new THREE.MeshStandardMaterial({ roughness: 0.55 }), role);
     this.disposables.push(geo, mat);
     const mesh = new THREE.InstancedMesh(geo, mat, points.length);
     mesh.castShadow = true;

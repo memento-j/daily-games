@@ -14,17 +14,52 @@
   --color-coral: #f2545b; /* white text on it must be large and bold (3.4:1) */
   --color-coral-deep: #c0303a; /* coral text, hover / pressed: 5.6:1 on white, 4.8:1 on coral-soft (was #d93d46, under 4.5:1) */
   --color-coral-soft: #fde8e8; /* tint behind coral icons */
+  --color-coral-strong: #c0303a; /* a filled coral that carries small white text: hover / pressed / picked */
   --color-drop: #155eef;
   --color-ink: #121a2b;
   --color-ink-soft: #4a5468; /* secondary text, tinted from the ink */
   --color-ink-faint: #5f6a7d; /* attribution, metadata (5.5:1 on white, 4.7:1 on land) */
   --color-card: #ffffff;
   --color-line: #e3e7ee;
+  /* Slice's table: a sage cutting mat under paper-white slabs with terracotta edges. */
+  --color-mat: #bccdbd;
+  --color-slab: #fffaf3;
+  --color-slab-side: #e9a68c;
+  --color-slab-counted: #ffdcd2;
+  --color-people-other: #7b8597;
 
   --font-display: var(--font-bricolage), "Helvetica Neue", Arial, sans-serif;
   --font-sans: var(--font-hanken), "Helvetica Neue", Arial, sans-serif;
 
   --shadow-card: 0 18px 50px -18px rgb(18 26 43 / 0.28), 0 3px 10px -4px rgb(18 26 43 / 0.12);
+}
+
+/* Dark mode: the same world at night. The device's setting decides unless the player
+   flipped the toggle (lib/theme.ts); <html data-theme> is set before the first paint.
+   Same roles, same contrast rules: ink is the light text now, card the dark surface. */
+:root[data-theme="dark"] {
+  --color-land: #10151c;
+  --color-land-high: #1a212b;
+  --color-sea: #10233a;
+  --color-shore: #15304c;
+  --color-coast: #44627f;
+  --color-river: #33608f;
+  --color-coral: #f2545b; /* white text on it: large and bold only (3.4:1), as in light */
+  --color-coral-deep: #ff7d83; /* coral text on dark: 6.5:1 on card, 5.9:1 on coral-soft */
+  --color-coral-soft: #3a2328;
+  --color-coral-strong: #d93d46; /* white text on it: 4.5:1 */
+  --color-drop: #2f6ef5; /* fills and lines only; white text on it: 4.5:1 */
+  --color-ink: #e9edf3; /* 13.6:1 on card */
+  --color-ink-soft: #b3bccb; /* 8.4:1 on card */
+  --color-ink-faint: #8f9aad; /* 5.6:1 on card, 6.5:1 on land */
+  --color-card: #1b222d;
+  --color-line: #2c3542;
+  --color-mat: #1d2925; /* the cutting mat at night */
+  --color-slab: #ebe4d8; /* the slab stays paper, a lit object on the dark mat */
+  --color-slab-side: #c98a72;
+  --color-slab-counted: #f4c9bd;
+  --color-people-other: #9aa4b6;
+  --shadow-card: 0 18px 50px -18px rgb(0 0 0 / 0.7), 0 3px 10px -4px rgb(0 0 0 / 0.45);
 }
 
 html {
@@ -206,11 +241,11 @@ button:not(:disabled),
   40%,
   96%,
   100% {
-    fill: #fffaf3;
+    fill: var(--color-slab);
   }
   50%,
   88% {
-    fill: #ffdcd2;
+    fill: var(--color-slab-counted);
   }
 }
 @keyframes mini-slice-rise {
@@ -240,7 +275,7 @@ button:not(:disabled),
     opacity: 0;
   }
   .mini-slice-tint {
-    fill: #ffdcd2;
+    fill: var(--color-slab-counted);
   }
   .mini-slice-a {
     animation: none;
@@ -333,4 +368,17 @@ button:not(:disabled),
     animation: none;
     background-size: 100% 78%;
   }
+}
+
+/* MapLibre's attribution box brings its own white styling: dark mode dresses it in the
+   card colour, and flips its black (i) icon. */
+:root[data-theme="dark"] .maplibregl-ctrl-attrib {
+  background: rgb(27 34 45 / 0.88);
+  color: var(--color-ink-faint);
+}
+:root[data-theme="dark"] .maplibregl-ctrl-attrib a {
+  color: var(--color-ink-soft);
+}
+:root[data-theme="dark"] .maplibregl-ctrl-attrib-button {
+  filter: invert(1);
 }

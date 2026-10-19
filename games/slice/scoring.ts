@@ -19,7 +19,7 @@ export const POINTS_BY_TIER = [3, 2, 1];
 
 /** What each square means, for a legend. */
 export const EMOJI_LEGEND: [string, string][] = [
-  ...EMOJI_BY_TIER.map((e, i): [string, string] => [e, `within ${THRESHOLDS[i] * 100}% of the target`]),
+  ...EMOJI_BY_TIER.map((e, i): [string, string] => [e, `within ${THRESHOLDS[i] * 100}%`]),
   [EMOJI_MISS, "further off"],
 ];
 

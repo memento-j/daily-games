@@ -13,8 +13,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import ThemeToggle from "@/components/ThemeToggle";
 import { shareResult, shareText } from "@/lib/share";
 import { subscribe } from "@/lib/storage";
+import { useTheme } from "@/lib/useTheme";
 import { ENDLESS_TRIES, GAME_NAME } from "@/games/slice/config";
 import { crosses, perfectLine, share } from "@/games/slice/cut";
 import type { SavedCut } from "@/games/slice/game";
@@ -26,10 +28,10 @@ import { isMuted, setMuted, sound } from "@/games/slice/sound";
 import type { Puzzle, Round } from "@/games/slice/types";
 import { useSliceGame, type Load } from "@/games/slice/useSliceGame";
 import { useStats } from "@/games/slice/useTodayResult";
-import { capitalise, fractionWords, instruction, perfectLineText, possessive } from "@/games/slice/words";
+import { capitalise, fractionWords, goal, instruction, measure, perfectLineText, possessive } from "@/games/slice/words";
 
-const TIER_WORDS = ["Spot on", "Close", "Not bad", "Way off"];
-const LABEL = "pointer-events-none absolute top-0 left-0 rounded-full bg-white/90 px-3 py-1 text-[17px] font-bold tabular-nums shadow-card";
+const TIER_WORDS = ["Spot on", "So close", "Not bad", "Way off"];
+const LABEL = "pointer-events-none absolute top-0 left-0 rounded-full bg-card/90 px-3 py-1 text-[17px] font-bold tabular-nums shadow-card";
 
 export default function SliceGame() {
   const g = useSliceGame();
@@ -54,6 +56,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   const [revealDone, setRevealDone] = useState(false);
   const [perfectShown, setPerfectShown] = useState(false);
   const [viewing, setViewing] = useState(0); // the summary's selected round
+  const theme = useTheme();
 
   const finished = g.phase === "finished";
   const roundIndex = finished ? viewing : g.game.round;
@@ -73,7 +76,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
           setMessage(null);
         });
         scene.current = made;
-        measure();
+        measureInsets();
         setSceneReady(true);
       })
       .catch(() => setFailed(true));
@@ -84,22 +87,27 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     };
   }, []);
 
+  // Light or dark: the table recolours in place, even mid-round.
+  useEffect(() => {
+    if (sceneReady) scene.current?.setTheme(theme);
+  }, [sceneReady, theme]);
+
   // Tell the scene how much of the screen the interface covers, so the country is
   // framed in the space between.
-  function measure() {
+  function measureInsets() {
     const t = top.current?.getBoundingClientRect();
     const b = bottom.current?.getBoundingClientRect();
     if (!t || !b || !scene.current) return;
     scene.current.setInsets({ top: Math.round(t.bottom + 8), bottom: Math.round(window.innerHeight - b.top + 8) });
   }
   useEffect(() => {
-    const ro = new ResizeObserver(() => measure());
+    const ro = new ResizeObserver(() => measureInsets());
     if (top.current) ro.observe(top.current);
     if (bottom.current) ro.observe(bottom.current);
-    window.addEventListener("resize", measure);
+    window.addEventListener("resize", measureInsets);
     return () => {
       ro.disconnect();
-      window.removeEventListener("resize", measure);
+      window.removeEventListener("resize", measureInsets);
     };
   }, []);
 
@@ -127,7 +135,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     const line = draft && lineThrough(draft[0], draft[1]);
     if (!line) return;
     if (!crosses(round, line)) {
-      setMessage(`That line doesn't cross ${round.country}. Draw one that cuts through it.`);
+      setMessage(`That line misses ${round.country}. Draw it right across the country.`);
       return;
     }
     g.act({ type: "cut", line });
@@ -156,37 +164,45 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   }
 
   return (
-    <div className="font-sans relative h-svh overflow-hidden bg-[#bccdbd] text-ink">
+    <div className="font-sans relative h-svh overflow-hidden bg-mat text-ink">
       <div ref={holder} className="absolute inset-0" />
       {failed && (
-        <p className="absolute inset-0 grid place-items-center p-6 text-center">Slice needs WebGL, which this browser doesn&apos;t have turned on.</p>
+        <p className="absolute inset-0 grid place-items-center p-6 text-center">
+          Slice draws its countries in 3D with WebGL, which this browser has turned off. Try another browser, or turn on hardware acceleration.
+        </p>
       )}
 
       {/* Piece labels and the perfect cut's label, positioned by the scene every frame. */}
       <div ref={labelA} className={LABEL} style={{ opacity: 0 }} />
       <div ref={labelB} className={LABEL} style={{ opacity: 0 }} />
-      <div ref={perfectLabel} className={`${LABEL} bg-ink! text-[13px]! text-white`} style={{ opacity: 0 }} />
+      <div ref={perfectLabel} className={`${LABEL} bg-ink! text-[13px]! text-card`} style={{ opacity: 0 }} />
 
-      <div ref={top} className="pointer-events-none absolute inset-x-0 top-0 p-4">
+      <div ref={top} className="pointer-events-none absolute inset-x-0 top-0 mx-auto max-w-[600px] p-4 lg:pt-6">
         <div className="pointer-events-auto flex items-center justify-between gap-2">
           <Link
             href="/"
             aria-label={`${GAME_NAME}: back to all games`}
-            className="rounded-full bg-white px-3.5 py-1.5 text-xs font-semibold whitespace-nowrap shadow-card hover:text-coral-deep"
+            className="group flex items-center gap-1.5 rounded-full bg-card py-1.5 pr-3.5 pl-2.5 text-xs font-semibold whitespace-nowrap shadow-card transition-colors hover:text-coral-deep"
           >
-            ← {GAME_NAME}
-            <span className="text-coral">.</span>
+            <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden="true">
+              <path d="M16 10H5M9 5.5 4.5 10 9 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+            <span>
+              {GAME_NAME}
+              <span className="text-coral">.</span>
+            </span>
           </Link>
           <div className="flex items-center gap-2">
+            <ThemeToggle />
             <SoundButton />
-            <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-ink-soft shadow-card">
+            <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-ink-soft shadow-card">
               {preview ? "Preview" : "No."} {number}
             </span>
           </div>
         </div>
 
         {finished ? (
-          <p className="font-display mt-4 max-w-[26ch] text-[17px] leading-snug font-semibold">
+          <p className="font-display mt-4 max-w-[28ch] text-[17px] leading-snug font-semibold lg:text-[20px]">
             <span className="text-ink-faint">Round {roundIndex + 1}.</span> {instruction(round)}
           </p>
         ) : (
@@ -203,21 +219,21 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             <div key={roundIndex} className="mt-2">
               <span
                 className={`rise-in inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold tracking-wide uppercase shadow-card ${
-                  people ? "bg-coral text-white" : "bg-white text-ink"
+                  people ? "bg-coral text-white" : "bg-card text-ink"
                 }`}
               >
                 {people ? <PeopleIcon /> : <LandIcon />}
-                {people ? "People" : "Land"}
+                {people ? "Population" : "Land"}
               </span>
               <h1
                 className={`font-display mt-2 max-w-[22ch] leading-tight font-semibold tracking-[-0.02em] text-balance transition-[font-size] duration-300 ${
-                  g.phase === "cutting" ? "text-[26px]" : "text-[19px]"
+                  g.phase === "cutting" ? "text-[26px] lg:text-[34px]" : "text-[19px] lg:text-[22px]"
                 }`}
               >
                 <span className="sr-only">{instruction(round)}</span>
                 <span aria-hidden="true">
                   Cut off <span className="slice-mark">{fractionWords(round.target)}</span> of {possessive(round.country)}{" "}
-                  <span className="slice-mark slice-mark-late">{people ? "people" : "land"}</span>.
+                  <span className="slice-mark slice-mark-late">{measure(round)}</span>.
                 </span>
               </h1>
             </div>
@@ -226,7 +242,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div ref={bottom} className="pointer-events-auto mx-auto max-w-[520px] rounded-[22px] bg-white/95 p-3 shadow-card">
+        <div ref={bottom} className="pointer-events-auto mx-auto max-w-[568px] rounded-[22px] bg-card/95 p-3 shadow-card">
           {finished ? (
             <Summary number={number} preview={preview} puzzle={puzzle} cuts={g.game.cuts} viewing={viewing} onView={setViewing} />
           ) : g.phase === "cutting" ? (
@@ -234,16 +250,16 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
               <p className={`px-1 text-[14px] ${message ? "font-semibold text-coral-deep" : "text-ink-soft"}`} aria-live="polite">
                 {message ??
                   (hasDraft
-                    ? "Drag the ends to adjust, then cut."
+                    ? "Drag either end to fine-tune, then press Cut."
                     : people
-                      ? "Count people, not land. Drag across to draw your cut."
-                      : "Count land this time. Drag across to draw your cut.")}
+                      ? "Think about where people live, not how big it looks. Drag across the country to draw your cut."
+                      : "Just the land this time: cities don't count. Drag across the country to draw your cut.")}
               </p>
               <button
                 type="button"
                 onClick={confirm}
                 disabled={!hasDraft}
-                className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-deep disabled:bg-ink/10 disabled:text-ink-faint"
+                className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-strong disabled:bg-ink/10 disabled:text-ink-faint"
               >
                 Cut
               </button>
@@ -253,7 +269,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             <div className={`flex flex-col gap-2 transition-opacity duration-500 ${revealDone ? "opacity-100" : "opacity-0"}`}>
               <p className="px-1 text-[15px] leading-snug">
                 <span aria-hidden="true">{cutEmoji(cut)}</span> <span className="font-semibold">{TIER_WORDS[cut.tier]}.</span> You cut off{" "}
-                {formatShare(cut.share)}, target {formatShare(round.target)}.
+                {formatShare(cut.share)}. The aim was {formatShare(round.target)}.
               </p>
               <p className="px-1 text-[13px] leading-snug text-ink-soft" aria-live="polite">
                 {perfectShown ? perfectLineText(cut.line, perfectLine(round, cut.line)) : round.fact}
@@ -264,18 +280,26 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                     type="button"
                     onClick={showPerfect}
                     disabled={!revealDone}
-                    className="h-11 flex-1 rounded-full bg-white text-[15px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+                    className="h-11 flex-1 rounded-full bg-card text-[15px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
                   >
                     Show perfect cut
                   </button>
                 )}
-                <button type="button" onClick={next} disabled={!revealDone} className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-white">
+                <button type="button" onClick={next} disabled={!revealDone} className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card">
                   {g.game.round + 1 >= puzzle.rounds.length ? "See results" : "Next round"}
                 </button>
               </div>
               {ENDLESS_TRIES && (
-                <button type="button" onClick={retry} disabled={!revealDone} className="self-center py-1 text-[13px] font-semibold text-coral-deep">
-                  ↻ Try again
+                <button
+                  type="button"
+                  onClick={retry}
+                  disabled={!revealDone}
+                  className="flex items-center gap-1.5 self-center rounded-full px-3 py-1 text-[13px] font-semibold text-coral-deep transition-colors hover:bg-coral-soft"
+                >
+                  <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
+                    <path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9M15.5 3.5v3.2h-3.2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  Try again
                 </button>
               )}
             </div>
@@ -314,11 +338,17 @@ function Summary({
           </p>
         </div>
         <p className="pb-1 text-sm text-ink-soft">
-          {totalPoints(cuts)}/{maxPoints(cuts.length)} points
+          <span className="font-semibold text-ink tabular-nums">{totalPoints(cuts)}</span> of {maxPoints(cuts.length)} points
         </p>
       </div>
       <ShareButton number={number} preview={preview} marks={marks} />
-      <p className="text-center text-[11px] text-ink-faint">{EMOJI_LEGEND.map(([e, meaning]) => `${e} ${meaning}`).join("  ·  ")}</p>
+      <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-ink-faint" aria-label="What the squares mean">
+        {EMOJI_LEGEND.map(([e, meaning]) => (
+          <li key={e} className="whitespace-nowrap">
+            <span aria-hidden="true">{e}</span> {meaning}
+          </li>
+        ))}
+      </ul>
 
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (
@@ -333,11 +363,13 @@ function Summary({
               className={`flex w-full items-center gap-3 px-3 py-2.5 text-left ${viewing === i ? "bg-coral-soft" : "hover:bg-land"}`}
             >
               <span aria-hidden="true">{cutEmoji(cuts[i])}</span>
-              <span className="flex-1 text-sm">
-                <span className="font-semibold">{capitalise(r.country)}</span>{" "}
-                <span className="text-ink-soft">
-                  {formatShare(cuts[i].share)} of {formatShare(r.target)}
-                </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{capitalise(r.country)}</span>
+                <span className="block text-xs text-ink-soft">{goal(r)}</span>
+              </span>
+              <span className="text-right">
+                <span className="block text-sm font-semibold tabular-nums">{formatShare(cuts[i].share)}</span>
+                <span className="block text-xs text-ink-faint tabular-nums">aim {formatShare(r.target)}</span>
               </span>
             </button>
           </li>
@@ -358,7 +390,7 @@ function Summary({
           ))}
         </dl>
       )}
-      <Countdown prefix="Next slices in" className="text-center text-sm text-ink-soft" />
+      <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />
       {preview && <PreviewList />}
     </div>
   );
@@ -376,7 +408,7 @@ function ShareButton({ number, preview, marks }: { number: number; preview: bool
     }
   }
   return (
-    <button type="button" onClick={share} className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-deep">
+    <button type="button" onClick={share} className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-strong">
       {state === "copied" ? "Copied" : state === "failed" ? "Couldn't copy" : "Share"}
     </button>
   );
@@ -407,7 +439,7 @@ function PreviewList() {
       <div className="mt-2 flex flex-wrap gap-2">
         {found.map((n) => (
           // A plain link: a fresh page load gives each preview a fresh board.
-          <a key={n} href={`/slice/?puzzle=${n}`} className="grid size-10 place-items-center rounded-full bg-white text-sm font-bold ring-1 ring-line hover:ring-coral">
+          <a key={n} href={`/slice/?puzzle=${n}`} className="grid size-10 place-items-center rounded-full bg-card text-sm font-bold ring-1 ring-line hover:ring-coral">
             {n}
           </a>
         ))}
@@ -446,7 +478,7 @@ function SoundButton() {
       }}
       aria-label={muted ? "Turn sound on" : "Turn sound off"}
       aria-pressed={!muted}
-      className="grid size-9 shrink-0 place-items-center rounded-full bg-white shadow-card"
+      className="grid size-9 shrink-0 place-items-center rounded-full bg-card shadow-card"
     >
       <svg viewBox="0 0 20 20" className="size-[18px]" aria-hidden="true">
         <path d="M3 8h3l4-3.5v11L6 12H3z" fill="currentColor" />
@@ -462,13 +494,14 @@ function SoundButton() {
 
 function Notice({ load }: { load: Exclude<Load, { status: "ready" }> }) {
   return (
-    <div className="font-sans grid min-h-svh place-items-center bg-[#bccdbd] p-6 text-ink">
+    // Loading is the bare board colour, like the page's Suspense fallback, so nothing jumps.
+    <div className="font-sans grid h-svh place-items-center bg-mat p-6 text-ink">
       {load.status !== "loading" && (
-        <div className="max-w-[420px] rounded-[26px] bg-white p-7 shadow-card">
+        <div className="max-w-[420px] rounded-[26px] bg-card p-7 shadow-card">
           <p className="font-display text-2xl font-semibold">
-            {load.status === "missing" ? "A new Slice is on its way. Check back soon." : "There's no puzzle with that number."}
+            {load.status === "missing" ? "Today's countries are still being cut. Check back soon." : "There's no puzzle with that number."}
           </p>
-          <Countdown prefix="Next slices in" className="mt-3 block text-ink-soft" />
+          <Countdown prefix="New countries in" className="mt-3 block text-ink-soft" />
           <Link href="/" className="mt-5 inline-block text-sm font-semibold text-coral-deep">
             ← All games
           </Link>

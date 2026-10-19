@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import ThemeToggle from "@/components/ThemeToggle";
 import { padPuzzleNumber } from "@/lib/daily";
 import { shareResult, shareText } from "@/lib/share";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
@@ -30,7 +31,7 @@ export function GameTopBar({ number, preview }: { number: number | null; preview
       <Link
         href="/"
         aria-label="Downstream: back to all games"
-        className="group flex items-center gap-1.5 rounded-full bg-white py-1.5 pr-3.5 pl-2.5 text-xs font-semibold shadow-card transition-colors hover:text-coral-deep"
+        className="group flex items-center gap-1.5 rounded-full bg-card py-1.5 pr-3.5 pl-2.5 text-xs font-semibold shadow-card transition-colors hover:text-coral-deep"
       >
         <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden="true">
           <path d="M16 10H5M9 5.5 4.5 10 9 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
@@ -40,11 +41,14 @@ export function GameTopBar({ number, preview }: { number: number | null; preview
           Downstream<span className="text-coral">.</span>
         </span>
       </Link>
-      {number !== null && (
-        <span className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft shadow-card">
-          {preview ? "Preview" : "No."} {number}
-        </span>
-      )}
+      <span className="flex items-center gap-2">
+        <ThemeToggle />
+        {number !== null && (
+          <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink-soft shadow-card">
+            {preview ? "Preview" : "No."} {number}
+          </span>
+        )}
+      </span>
     </div>
   );
 }
@@ -62,7 +66,7 @@ export function SoundToggle({ className = "" }: { className?: string }) {
       aria-pressed={!muted}
       aria-label={muted ? "Turn sound on" : "Turn sound off"}
       title={muted ? "Sound off" : "Sound on"}
-      className={`grid size-12 place-items-center rounded-full bg-white shadow-card transition-[color,scale,translate] duration-200 hover:scale-105 active:scale-95 ${muted ? "text-ink-faint" : "text-coral-deep"} ${className}`}
+      className={`grid size-12 place-items-center rounded-full bg-card shadow-card transition-[color,scale,translate] duration-200 hover:scale-105 active:scale-95 ${muted ? "text-ink-faint" : "text-coral-deep"} ${className}`}
     >
       <svg viewBox="0 0 20 20" className="size-6" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M3.5 8v4h3l4 3.5v-11l-4 3.5h-3Z" fill="currentColor" stroke="none" />
@@ -90,8 +94,8 @@ export function DropTokens({ puzzle, game }: { puzzle: Puzzle; game: GameState }
               ? "bg-coral-soft text-coral-deep"
               : "bg-ink/8 text-ink-faint"
           : current
-            ? "bg-white text-coral-deep ring-2 ring-coral"
-            : "bg-white text-ink-faint ring-1 ring-line";
+            ? "bg-card text-coral-deep ring-2 ring-coral"
+            : "bg-card text-ink-faint ring-1 ring-line";
         const label = r
           ? r.correct
             ? `Drop ${i + 1}: ${dropPoints(r)} points`
@@ -177,7 +181,7 @@ export function LockInButton({ name, points, onLock }: { name: string; points: n
     <button
       type="button"
       onClick={onLock}
-      className="rise-in group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral px-5 text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+      className="rise-in group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral px-5 text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale] duration-200 hover:bg-coral-strong active:scale-[0.98]"
     >
       <span className="truncate">Lock in {name}</span>
       <span className="shrink-0 font-semibold text-white/80">· {points} pt{points === 1 ? "" : "s"}</span>
@@ -195,7 +199,7 @@ export function FlowButton({ stage, stops, onFlow }: { stage: number; stops: num
     <button
       type="button"
       onClick={onFlow}
-      className="group flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-[box-shadow,scale,translate] duration-200 hover:ring-ink/35 active:scale-[0.99]"
+      className="group flex h-12 w-full items-center justify-center gap-2 rounded-full bg-card text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-[box-shadow,scale,translate] duration-200 hover:ring-ink/35 active:scale-[0.99]"
     >
       {last ? "Show me where it goes" : "Let it flow"}
       <span className="text-ink-faint">{last ? "· no points" : `· stop ${stage + 1} of ${stops}`}</span>
@@ -215,7 +219,7 @@ export function NextButton({ last, onNext }: { last: boolean; onNext: () => void
       type="button"
       onClick={onNext}
       autoFocus
-      className="group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-deep active:scale-[0.98]"
+      className="group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-strong active:scale-[0.98]"
     >
       {last ? "See today's results" : "Next drop"}
       <svg viewBox="0 0 20 20" className="size-4 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
@@ -321,8 +325,8 @@ export function ShareButton({
       onClick={share}
       className={
         primary
-          ? "group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-deep active:scale-[0.98]"
-          : "flex h-12 w-full items-center justify-center gap-2 rounded-full bg-white text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+          ? "group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-strong active:scale-[0.98]"
+          : "flex h-12 w-full items-center justify-center gap-2 rounded-full bg-card text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
       }
     >
       <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -383,7 +387,7 @@ export function DaySummary({
 
       <div>
         <p className="text-sm font-semibold text-ink-soft">{onView ? "Your drops · pick one to see its route" : "Your drops"}</p>
-        <ol className="mt-2 divide-y divide-line overflow-hidden rounded-2xl bg-white ring-1 ring-line">
+        <ol className="mt-2 divide-y divide-line overflow-hidden rounded-2xl bg-card ring-1 ring-line">
           {puzzle.drops.map((drop, i) => {
             const r = game.results[i];
             const on = viewing === i;
@@ -437,7 +441,7 @@ export function DaySummary({
           ["Played", stats?.played],
           ["Avg points", stats?.averagePoints ?? "–"],
         ].map(([label, value]) => (
-          <div key={label as string} className="rounded-2xl bg-white px-1 py-3 ring-1 ring-line">
+          <div key={label as string} className="rounded-2xl bg-card px-1 py-3 ring-1 ring-line">
             {/* Label first in the markup (dt before dd); shown below the number. */}
             <div className="flex flex-col-reverse">
               <dt className="mt-1 text-xs font-semibold text-ink-faint">{label}</dt>
@@ -519,7 +523,7 @@ export function PreviewList() {
           <Link
             key={n}
             href={`${base}?puzzle=${n}`}
-            className="grid size-10 place-items-center rounded-full bg-white text-sm font-bold ring-1 ring-line transition-colors hover:text-coral-deep hover:ring-coral"
+            className="grid size-10 place-items-center rounded-full bg-card text-sm font-bold ring-1 ring-line transition-colors hover:text-coral-deep hover:ring-coral"
           >
             {n}
           </Link>

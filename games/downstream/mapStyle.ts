@@ -5,27 +5,75 @@
 // and the rivers, coasts and labels carry the clues (developer's call, 2026-10-16).
 //
 // It replaces the stock "Liberty" style, which carried roads, POIs and busy
-// colours the game doesn't need. Colours mirror the tokens in app/globals.css.
+// colours the game doesn't need. Colours mirror the tokens in app/globals.css, in a
+// light and a night palette (dark mode): at night the land is blue-black, the sea
+// deeper, labels light on dark halos, and the route a brighter blue so it still glows.
 
 import type { ExpressionSpecification, StyleSpecification } from "maplibre-gl";
 
-const C = {
-  land: "#eef0ec",
-  sea: "#d3e4f3",
-  river: "#a9c9ea",
-  coast: "#8fa7bf",
-  border: "#b9bfc8",
-  ice: "#f7f9fa",
-  ink: "#121a2b",
-  inkSoft: "#4a5468",
-  waterLabel: "#2e5f95",
-  halo: "rgba(255,255,255,0.85)",
+export type MapTheme = "light" | "dark";
+
+export type MapPalette = {
+  land: string;
+  sea: string;
+  river: string;
+  coast: string;
+  border: string;
+  ice: string;
+  ink: string;
+  inkSoft: string;
+  waterLabel: string;
+  halo: string;
+  cityRing: string;
+  // The game's own layers (RouteMap): the water's route, the raindrop, the option seas.
+  route: string;
+  coral: string;
+  optionText: string; // a picked or option sea's lettering
+  optionHalo: string;
+};
+
+export const MAP_PALETTES: Record<MapTheme, MapPalette> = {
+  light: {
+    land: "#eef0ec",
+    sea: "#d3e4f3",
+    river: "#a9c9ea",
+    coast: "#8fa7bf",
+    border: "#b9bfc8",
+    ice: "#f7f9fa",
+    ink: "#121a2b",
+    inkSoft: "#4a5468",
+    waterLabel: "#2e5f95",
+    halo: "rgba(255,255,255,0.85)",
+    cityRing: "#ffffff",
+    route: "#155eef",
+    coral: "#f2545b",
+    optionText: "#c0303a",
+    optionHalo: "rgba(255,255,255,0.97)",
+  },
+  dark: {
+    land: "#161d26",
+    sea: "#0e1c2c",
+    river: "#2c5482",
+    coast: "#3b5878",
+    border: "#3d4857",
+    ice: "#222a35",
+    ink: "#e6ebf2",
+    inkSoft: "#a3aec0",
+    waterLabel: "#86b4ea",
+    halo: "rgba(14,20,28,0.85)",
+    cityRing: "#161d26",
+    route: "#4d8dff",
+    coral: "#f2545b",
+    optionText: "#ff8a90",
+    optionHalo: "rgba(14,20,28,0.95)",
+  },
 };
 
 // English name where there is one, otherwise the local name.
 const NAME: ExpressionSpecification = ["coalesce", ["get", "name_en"], ["get", "name:latin"], ["get", "name"]];
 
-export function downstreamMapStyle(): StyleSpecification {
+export function downstreamMapStyle(theme: MapTheme = "light"): StyleSpecification {
+  const C = MAP_PALETTES[theme];
   return {
     version: 8,
     glyphs: "https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf",
@@ -147,7 +195,7 @@ export function downstreamMapStyle(): StyleSpecification {
         paint: {
           "circle-radius": ["case", ["==", ["get", "capital"], 2], 3.2, 2.4],
           "circle-color": C.ink,
-          "circle-stroke-color": "#ffffff",
+          "circle-stroke-color": C.cityRing,
           "circle-stroke-width": 1.2,
         },
       },
@@ -181,4 +229,38 @@ export function downstreamMapStyle(): StyleSpecification {
       },
     ],
   };
+}
+
+/** Every paint colour that differs between the palettes, as [layer, property, value],
+ *  so a live map can switch theme in place (no style reload, no tile refetch). Covers
+ *  the base map above and RouteMap's own layers. */
+export function themePaint(theme: MapTheme): [string, string, unknown][] {
+  const C = MAP_PALETTES[theme];
+  const labels: [string, string, unknown][] = ["water-name-line", "water-name-point"].flatMap((id): [string, string, unknown][] => [
+    [id, "text-color", C.waterLabel],
+    [id, "text-halo-color", C.halo],
+  ]);
+  return [
+    ["background", "background-color", C.land],
+    ["landcover-ice", "fill-color", C.ice],
+    ["waterway-river", "line-color", C.river],
+    ["water", "fill-color", C.sea],
+    ["coastline", "line-color", C.coast],
+    ["boundary-country", "line-color", C.border],
+    ...labels,
+    ["country-name", "text-color", C.inkSoft],
+    ["country-name", "text-halo-color", C.halo],
+    ["city-dot", "circle-color", C.ink],
+    ["city-dot", "circle-stroke-color", C.cityRing],
+    ["city-name", "text-color", C.ink],
+    ["city-name", "text-halo-color", C.halo],
+    ["town-name", "text-color", C.inkSoft],
+    ["town-name", "text-halo-color", C.halo],
+    ["route-glow", "line-color", C.route],
+    ["route", "line-color", C.route],
+    ["head-glow", "circle-color", C.coral],
+    ["head", "circle-color", C.coral],
+    ["option-labels", "text-color", ["case", ["get", "answer"], C.route, C.optionText]],
+    ["option-labels", "text-halo-color", C.optionHalo],
+  ];
 }

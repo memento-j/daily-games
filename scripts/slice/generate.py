@@ -207,15 +207,14 @@ def possessive(name: str) -> str:
 
 
 def fact(country: Country) -> str:
-    """'Half of Egypt's people live on 1.2% of its land.' From the 1 km cells: the most
-    crowded cells, added up until they hold half the people (each cell is 1 km2)."""
+    """'Half of Egypt's population lives on just 1.2% of its land.' From the 1 km cells:
+    the most crowded cells, added up until they hold half the people (each cell is 1 km2)."""
     w = np.sort(country.cells[:, 2])[::-1]
     cells_for_half = int(np.searchsorted(np.cumsum(w), w.sum() / 2)) + 1
     pct = 100 * cells_for_half / country.land_km2
     shown = f"{pct:.1f}" if pct < 10 else f"{pct:.0f}"
-    if shown == "0.0":
-        shown = "less than 0.1"
-    return f"Half of {possessive(display_name(country))} people live on {shown}% of its land."
+    amount = f"just {shown}%" if shown != "0.0" else "less than 0.1%"
+    return f"Half of {possessive(display_name(country))} population lives on {amount} of its land."
 
 
 def round_json(country: Country, mode: str, target: float) -> dict:

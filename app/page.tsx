@@ -2,6 +2,7 @@ import Link from "next/link";
 import { SITE_NAME } from "@/lib/site";
 import DownstreamStatus from "./DownstreamStatus";
 import SliceStatus from "./SliceStatus";
+import ThemeToggle from "@/components/ThemeToggle";
 import TodayDate from "./TodayDate";
 
 // The homepage: a short list of the site's daily games. A Server Component, so
@@ -17,7 +18,10 @@ export default function Home() {
             <DropMark />
             {SITE_NAME}
           </span>
-          <TodayDate />
+          <span className="flex items-center gap-3">
+            <TodayDate />
+            <ThemeToggle />
+          </span>
         </header>
 
         <section className="mt-[8svh] lg:mt-[5svh]">
@@ -25,7 +29,7 @@ export default function Home() {
             Small daily puzzles about the real world<span className="text-coral">.</span>
           </h1>
           <p className="mt-5 max-w-[46ch] text-lg leading-snug text-ink-soft">
-            One a day, the same for everyone. A few minutes with your coffee, then it&apos;s tomorrow&apos;s turn.
+            Each game has one puzzle a day, the same for everyone. A few minutes with your coffee, then it&apos;s tomorrow&apos;s turn.
           </p>
         </section>
 
@@ -44,7 +48,7 @@ export default function Home() {
                     Slice<span className="text-coral">.</span>
                   </span>
                   <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
-                    Cut a real country with one straight line. Half its people is rarely half its land.
+                    Cut a real country with one straight line. Half the land is rarely half the population.
                   </span>
                   <span className="mt-4 block">
                     <SliceStatus />
@@ -77,7 +81,7 @@ export default function Home() {
         </section>
 
         <p className="mt-8 max-w-[52ch] leading-relaxed text-ink-soft">
-          More games are on the way, one at a time, and only once they&apos;re fun. Bookmark this page and check back.
+          More games are on the way, one at a time and only once they&apos;re fun. Bookmark this page and check back.
         </p>
 
         <footer className="mt-auto pt-8 text-xs text-ink-faint">New puzzles every midnight, your time.</footer>
@@ -137,7 +141,7 @@ function MiniSlice() {
   const lower = "-10,1.4 160,95.3 160,124 -10,124";
   const slab = (clip: string, top: string) => (
     <g clipPath={`url(#${clip})`}>
-      <path d={country} transform="translate(0 4)" fill="#e9a68c" />
+      <path d={country} transform="translate(0 4)" fill="var(--color-slab-side)" />
       <path d={country} fill={top} stroke="rgb(18 26 43 / 0.25)" strokeWidth="0.8" className={clip === "mini-slice-a" ? "mini-slice-tint" : undefined} />
     </g>
   );
@@ -175,19 +179,19 @@ function MiniSlice() {
           <path d="M15 0H0V15" fill="none" stroke="#fff" strokeOpacity="0.3" strokeWidth="0.8" />
         </pattern>
       </defs>
-      <rect width="150" height="104" rx="18" fill="#bccdbd" />
+      <rect width="150" height="104" rx="18" fill="var(--color-mat)" />
       <rect width="150" height="104" rx="18" fill="url(#mini-slice-grid)" />
       <g className="mini-slice-b">
-        {slab("mini-slice-b", "#fffaf3")}
-        {columns(sparse, "#7b8597")}
+        {slab("mini-slice-b", "var(--color-slab)")}
+        {columns(sparse, "var(--color-people-other)")}
       </g>
       <g className="mini-slice-a">
-        {slab("mini-slice-a", "#fffaf3")}
+        {slab("mini-slice-a", "var(--color-slab)")}
         {columns(crowd, "var(--color-coral)")}
       </g>
       <g className="mini-slice-whole">
-        <path d={country} transform="translate(0 4)" fill="#e9a68c" />
-        <path d={country} fill="#fffaf3" stroke="rgb(18 26 43 / 0.25)" strokeWidth="0.8" />
+        <path d={country} transform="translate(0 4)" fill="var(--color-slab-side)" />
+        <path d={country} fill="var(--color-slab)" stroke="rgb(18 26 43 / 0.25)" strokeWidth="0.8" />
       </g>
       <path
         d="M16 15.8 L140 84.2"

@@ -1,4 +1,5 @@
-// How Slice says things: the round's instruction and its result. Pure, unit tested.
+// How Slice says things: the round's question, its goal, where the perfect cut lies.
+// Pure, unit tested. A people round says "population" (friendlier than "people").
 
 import { formatShare } from "./scoring";
 import type { Line, Round } from "./types";
@@ -22,10 +23,20 @@ export function fractionWords(target: number): string {
   return hit ? hit[1] : formatShare(target);
 }
 
-/** "Cut off a third of Egypt's people." */
+/** What a round measures: "land" or "population". */
+export function measure(round: Round): string {
+  return round.mode === "area" ? "land" : "population";
+}
+
+/** "Cut off a third of Egypt's population." */
 export function instruction(round: Round): string {
-  const what = round.mode === "area" ? "land" : "people";
-  return `Cut off ${fractionWords(round.target)} of ${possessive(round.country)} ${what}.`;
+  return `Cut off ${fractionWords(round.target)} of ${possessive(round.country)} ${measure(round)}.`;
+}
+
+/** The goal on its own, for the day's summary: "Half the land", "A third of the population". */
+export function goal(round: Round): string {
+  const amount = fractionWords(round.target);
+  return amount === "half" ? `Half the ${measure(round)}` : `${capitalise(amount)} of the ${measure(round)}`;
 }
 
 /** "the United States" -> "The United States", for the start of a sentence. */
@@ -46,8 +57,8 @@ export function perfectDirection(line: Line, perfect: Line): string | null {
   return COMPASS[(sector + 8) % 8];
 }
 
-/** "The perfect cut at your angle sits further north." */
+/** "At this angle, the perfect cut sits further north." */
 export function perfectLineText(line: Line, perfect: Line): string {
   const dir = perfectDirection(line, perfect);
-  return dir ? `The perfect cut at your angle sits further ${dir}.` : "Your cut sits right on the perfect line.";
+  return dir ? `At this angle, the perfect cut sits further ${dir}.` : "You found the perfect line.";
 }

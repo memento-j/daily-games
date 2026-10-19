@@ -521,6 +521,10 @@ Everything the player touches or reads is rounded. Pills (fully round) for the c
 ### Sound (game screen)
 - Synthesized in the browser with Web Audio, no audio files: a drip when rain lands on the pin, calm bubbles for exactly as long as the route draws (about 5 a second, easing to 9, growing slightly lower as the stream becomes a river), a two-note chime at each stop, a splash at the sea, a bubble "bloop" for ordinary buttons (picking a sea, Hide seas, Let it flow, Change, Got it, Share, turning sound on), an upward swish for Next, three rising bubbles and a ringing mallet note for a right call, and two hollow wooden notes stepping down for a wrong one. Every sound follows a player's tap or key. Mute is the big round button on the map and is remembered.
 
+## Dark mode
+
+The same world at night, not a different one. The device's setting decides unless the player flips the sun/moon toggle (round 36px card button with card lift, in the homepage header and both games' top bars). Roles keep their meaning: ink is now the light text (#e9edf3) and card the dark surface (#1b222d) over a blue-black land (#10151c); coral stays the brand and the player's actions (coral text lightens to #ff7d83, filled coral under small white text deepens to coral-strong #d93d46); drop-blue stays water. Slice's table becomes a deep green-black cutting mat with the paper slab still light on it, a lit object; Downstream's map becomes a night map (blue-black land, deeper sea, light labels on dark halos, a brighter route). Every pairing keeps the light theme's contrast floor (body 13.6:1, faint text 5.6:1). Tokens: `:root[data-theme="dark"]` in `app/globals.css`.
+
 ## Do's and Don'ts
 
 ### Do:

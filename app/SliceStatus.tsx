@@ -22,13 +22,9 @@ export default function SliceStatus() {
       {t && t.stats.currentStreak > 0 ? (
         <span className="font-semibold text-coral-deep">Keep your {t.stats.currentStreak}-day streak going</span>
       ) : (
-        <>
-          <span>4 cuts</span>
-          <span aria-hidden="true">·</span>
-          <span>2 to 5 minutes</span>
-        </>
+        // One unbreakable group, so a narrow card never leaves a stray dot at a line end.
+        <span className="whitespace-nowrap">4 countries · 2 to 5 minutes</span>
       )}
-      <span aria-hidden="true">·</span>
       <span className="flex items-center gap-1 font-semibold text-coral-deep">
         Play
         <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { lineAt } from "../../../games/slice/geometry";
-import { capitalise, fractionWords, instruction, perfectDirection, perfectLineText, possessive } from "../../../games/slice/words";
+import { capitalise, fractionWords, goal, instruction, perfectDirection, perfectLineText, possessive } from "../../../games/slice/words";
 import type { Round } from "../../../games/slice/types";
 
 const round = (country: string, mode: Round["mode"], target: number): Round => ({
@@ -31,8 +31,16 @@ describe("fractionWords", () => {
 
 describe("instruction", () => {
   it("says what to cut off, of land or of people", () => {
-    expect(instruction(round("Egypt", "population", 1 / 3))).toBe("Cut off a third of Egypt's people.");
+    expect(instruction(round("Egypt", "population", 1 / 3))).toBe("Cut off a third of Egypt's population.");
     expect(instruction(round("the United Kingdom", "area", 0.5))).toBe("Cut off half of the United Kingdom's land.");
+  });
+});
+
+describe("goal", () => {
+  it("names the target on its own", () => {
+    expect(goal(round("Germany", "area", 0.5))).toBe("Half the land");
+    expect(goal(round("Kenya", "population", 1 / 3))).toBe("A third of the population");
+    expect(goal(round("Australia", "population", 0.1))).toBe("10% of the population");
   });
 });
 
@@ -58,7 +66,7 @@ describe("perfectDirection", () => {
 
 describe("perfectLineText", () => {
   it("says where the perfect cut sits", () => {
-    expect(perfectLineText(lineAt(Math.PI / 2, 300), lineAt(Math.PI / 2, 200))).toBe("The perfect cut at your angle sits further north.");
-    expect(perfectLineText(lineAt(0, 300), lineAt(0, 300))).toBe("Your cut sits right on the perfect line.");
+    expect(perfectLineText(lineAt(Math.PI / 2, 300), lineAt(Math.PI / 2, 200))).toBe("At this angle, the perfect cut sits further north.");
+    expect(perfectLineText(lineAt(0, 300), lineAt(0, 300))).toBe("You found the perfect line.");
   });
 });

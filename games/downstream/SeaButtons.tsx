@@ -138,7 +138,7 @@ export function SeaButtons({
             className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full text-center leading-[1.15] font-bold ${
               size === "md" ? "max-w-[176px] px-4 py-2 text-[15px]" : "max-w-[124px] px-2.5 py-1.5 text-[12.5px]"
             } shadow-[0_3px_10px_-3px_rgb(18_26_43/0.35)] transition-[scale,background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] active:scale-95 active:duration-100 motion-reduce:transition-none ${
-              on ? "z-10 scale-110 bg-coral-deep text-white ring-2 ring-white" : "bg-white/95 text-coral-deep ring-[1.5px] ring-coral/60 hover:bg-coral-soft"
+              on ? "z-10 scale-110 bg-coral-strong text-white ring-2 ring-card" : "bg-card/95 text-coral-deep ring-[1.5px] ring-coral/60 hover:bg-coral-soft"
             }`}
           >
             {keys && keys.includes(s.name) && (
@@ -177,7 +177,7 @@ export function HideSeasToggle({
         onToggle();
       }}
       style={style}
-      className={`z-10 flex items-center gap-1.5 rounded-full bg-white/95 py-1.5 pr-3 pl-2.5 text-xs font-semibold text-ink-soft shadow-card transition-colors hover:text-coral-deep ${className}`}
+      className={`z-10 flex items-center gap-1.5 rounded-full bg-card/95 py-1.5 pr-3 pl-2.5 text-xs font-semibold text-ink-soft shadow-card transition-colors hover:text-coral-deep ${className}`}
     >
       <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
         <path d="M2 10s3-5.5 8-5.5S18 10 18 10s-3 5.5-8 5.5S2 10 2 10Z" />
