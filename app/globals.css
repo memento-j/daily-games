@@ -54,7 +54,7 @@
   --color-ink-faint: #8f9aad; /* 5.6:1 on card, 6.5:1 on land */
   --color-card: #1b222d;
   --color-line: #2c3542;
-  --color-mat: #1d2925; /* the cutting mat at night */
+  --color-mat: #121a24; /* the cutting mat at night: the site's ink, not green (games/slice/scene.ts PALETTES.dark) */
   --color-slab: #ebe4d8; /* the slab stays paper, a lit object on the dark mat */
   --color-slab-side: #c98a72;
   --color-slab-counted: #f4c9bd;

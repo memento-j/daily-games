@@ -84,9 +84,12 @@ const PALETTES: Record<Theme, Palette> = {
     skyLight: 1.5,
     sunLight: 2.4,
   },
+  // At night the mat takes the site's own ink (blue-black, a step below the cards so
+  // they still lift off it), not a green: green-black fought the cool UI (2026-10-19).
+  // A warm sky light keeps the paper cream instead of grey against it.
   dark: {
-    mat: 0x1d2925,
-    grid: ["rgba(255,255,255,0.06)", "rgba(255,255,255,0.13)"],
+    mat: 0x121a24,
+    grid: ["rgba(255,255,255,0.055)", "rgba(255,255,255,0.12)"],
     top: 0xebe4d8,
     side: 0xc98a72,
     countedTop: 0xf4c9bd,
@@ -95,10 +98,10 @@ const PALETTES: Record<Theme, Palette> = {
     ink: 0x1d2a44,
     slit: 0x5b463c,
     steel: 0xd0d5dc,
-    sky: 0xc9d3e6,
-    ground: 0x22302b,
-    skyLight: 0.95,
-    sunLight: 2.1,
+    sky: 0xf1e6d6,
+    ground: 0x18212c,
+    skyLight: 1.0,
+    sunLight: 2.3,
   },
 };
 // The palette colours a material can take; it keeps its role so setTheme can recolour it.

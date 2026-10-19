@@ -4,6 +4,10 @@
   // Serve the site at pondo.games. On deploy Cloudflare creates the DNS record and the
   // HTTPS certificate; the domain must be in the same Cloudflare account.
   "routes": [{ "pattern": "pondo.games", "custom_domain": true }],
+  // Keep the old daily-games.*.workers.dev address working too, so links already sent
+  // to playtesters still open (its pages name pondo.games as the real address). Wrangler
+  // turns it off by default once a custom domain is set.
+  "workers_dev": true,
   "assets": {
     "directory": "./out",
     "not_found_handling": "404-page"
