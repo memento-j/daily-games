@@ -680,7 +680,7 @@ export class SliceScene {
 
   /** Play the cut. `instant` jumps to the finished state in silence (a round seen again
    *  from the day's summary, or a resumed game). */
-  reveal(line: Line, perfect: Line, positiveShare: number, positiveCounts: boolean, tier: number, onDone: () => void, instant = false) {
+  reveal(line: Line, perfect: Line, positiveShare: number, positiveCounts: boolean, band: number, onDone: () => void, instant = false) {
     if (!this.round) return;
     this.phase = "reveal";
     this.dragging = null;
@@ -748,9 +748,9 @@ export class SliceScene {
     // is silent, reduced motion plays only the closing sound.
     this.revealStart = performance.now() - (instant || this.reduced ? 10_000 : 0);
     if (this.reduced && !instant) {
-      sound.reveal({ snips: 0, snipEvery: 0, split: 0, rise: 0, riseFor: 0, people: false, done: 0.1, tier });
+      sound.reveal({ snips: 0, snipEvery: 0, split: 0, rise: 0, riseFor: 0, people: false, done: 0.1, tier: band });
     } else if (!instant) {
-      sound.reveal({ snips: SNIPS, snipEvery: SNIP_EVERY, split: T.split, rise: T.rise, riseFor: 1.6, people: points.length > 0, done: T.done - 0.3, tier });
+      sound.reveal({ snips: SNIPS, snipEvery: SNIP_EVERY, split: T.split, rise: T.rise, riseFor: 1.6, people: points.length > 0, done: T.done - 0.3, tier: band });
     }
   }
 

@@ -299,13 +299,11 @@ export function useFirstTime(): [boolean, () => void] {
 /** Share the day's result: the system share sheet on phones, the clipboard elsewhere. */
 export function ShareButton({
   number,
-  preview,
   results,
   maxPointsTotal,
   primary = true,
 }: {
   number: number;
-  preview: boolean;
   results: DropResult[];
   maxPointsTotal: number;
   primary?: boolean;
@@ -316,7 +314,6 @@ export function ShareButton({
     const text = shareText({
       game: "Downstream",
       number,
-      preview,
       marks: results.map(dropEmoji),
       points: totalPoints(results),
       maxPoints: maxPointsTotal,
@@ -385,7 +382,7 @@ export function DaySummary({
       </div>
 
       <div className="flex flex-col gap-2">
-        <ShareButton number={number} preview={preview} results={game.results} maxPointsTotal={max} />
+        <ShareButton number={number} results={game.results} maxPointsTotal={max} />
         <p className="text-center text-sm text-ink-soft">
           Shares as <span className="font-semibold text-ink" aria-hidden="true">{marks}</span>
           <span className="sr-only">your five squares and</span> {points}/{max}, never the answers.

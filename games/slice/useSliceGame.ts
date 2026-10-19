@@ -12,7 +12,7 @@ import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
 import { clearInProgress, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase, type SavedCut } from "./game";
-import { maxPoints, totalPoints } from "./scoring";
+import { maxScore, totalScore } from "./scoring";
 import { puzzleToPlay, storageKeyFor } from "./schedule";
 import type { Puzzle } from "./types";
 
@@ -93,11 +93,11 @@ export function useSliceGame(): SliceGameState {
         track("puzzle_started", play);
       }
       const cut = next.cuts[game.round];
-      if (cut) track("round_cut", { ...play, round: game.round + 1, mode: puzzle.rounds[game.round].mode, tier: cut.tier });
+      if (cut) track("round_cut", { ...play, round: game.round + 1, mode: puzzle.rounds[game.round].mode, score: cut.score });
     }
     if (phase(next, puzzle) === "finished") {
-      track("puzzle_finished", { ...play, points: totalPoints(next.cuts), maxPoints: maxPoints(puzzle.rounds.length) });
-      saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalPoints(next.cuts) });
+      track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length) });
+      saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalScore(next.cuts) });
       clearInProgress(storageKey);
     } else {
       saveInProgress(storageKey, number, next);

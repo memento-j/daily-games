@@ -50,9 +50,9 @@ export default function SlicePage() {
               ],
               [
                 "See how close you got.",
-                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Within 2% of the goal earns a green square, within 6% blue, within 16% yellow, anything further red. Show perfect cut reveals the ideal line at your angle.",
+                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100: you lose 10 for every percentage point you're off. Aiming for 33.3% and cutting off 31%, for example, is 2.3 points off, so 77. Show perfect cut reveals the ideal line at your angle.",
               ],
-              ["Share your squares.", "After four rounds, share your row of squares to compare with friends. It never gives away the answers."],
+              ["Share your score.", "After four rounds you have a score out of 400. Share it, with each round's score, to compare with friends. It never gives away the answers."],
             ].map(([title, text], i) => (
               <li key={title} className="flex gap-3">
                 <span className="font-display grid size-7 shrink-0 place-items-center rounded-full bg-coral-soft text-sm font-semibold text-coral-deep">

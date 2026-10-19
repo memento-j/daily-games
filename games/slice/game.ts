@@ -6,7 +6,7 @@ import { scoreCut } from "./scoring";
 import type { Line, Puzzle } from "./types";
 
 /** One confirmed cut: the line and how it scored (kept so a reload shows it again). */
-export type SavedCut = { line: Line; share: number; miss: number; tier: number };
+export type SavedCut = { line: Line; share: number; miss: number; score: number };
 
 export type GameState = {
   round: number; // the round on screen; rounds.length = the day is done
@@ -33,8 +33,8 @@ export function step(state: GameState, action: Action, puzzle: Puzzle): GameStat
   if (action.type === "cut") {
     const round = puzzle.rounds[state.round];
     if (now !== "cutting" || !crosses(round, action.line)) return state;
-    const { share, miss, tier } = scoreCut(round, action.line);
-    return { ...state, cuts: [...state.cuts, { line: action.line, share, miss, tier }] };
+    const { share, miss, score } = scoreCut(round, action.line);
+    return { ...state, cuts: [...state.cuts, { line: action.line, share, miss, score }] };
   }
   if (now !== "result") return state;
   if (action.type === "retry") return { ...state, cuts: state.cuts.slice(0, state.round) };
@@ -52,6 +52,6 @@ export function isValidState(saved: unknown, puzzle: Puzzle): saved is GameState
     Array.isArray(s.cuts) &&
     s.cuts.length <= puzzle.rounds.length &&
     (s.cuts.length === s.round || s.cuts.length === s.round + 1) &&
-    s.cuts.every((c) => c && Array.isArray(c.line?.normal) && Number.isFinite(c.line.offset) && Number.isInteger(c.tier))
+    s.cuts.every((c) => c && Array.isArray(c.line?.normal) && Number.isFinite(c.line.offset) && Number.isInteger(c.score))
   );
 }

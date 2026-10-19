@@ -26,14 +26,15 @@ import type { SavedCut } from "@/games/slice/game";
 import { lineThrough } from "@/games/slice/geometry";
 import type { SliceScene } from "@/games/slice/scene";
 import { storageKeyFor } from "@/games/slice/schedule";
-import { cutEmoji, EMOJI_LEGEND, formatShare, maxPoints, scoreCut, totalPoints } from "@/games/slice/scoring";
+import { bandOf, formatShare, LOSS_PER_POINT, MAX_SCORE, maxScore, scoreCut, totalScore } from "@/games/slice/scoring";
 import { isMuted, setMuted, sound } from "@/games/slice/sound";
 import type { Puzzle, Round } from "@/games/slice/types";
 import { useSliceGame, type Load } from "@/games/slice/useSliceGame";
 import { useStats } from "@/games/slice/useTodayResult";
 import { capitalise, fractionWords, goal, instruction, measure, perfectLineText, possessive } from "@/games/slice/words";
 
-const TIER_WORDS = ["Spot on", "So close", "Not bad", "Way off"];
+// One word for each score band (bandOf in scoring.ts: 90+, 70+, 20+, below).
+const BAND_WORDS = ["Spot on", "So close", "Not bad", "Way off"];
 const LABEL = "pointer-events-none absolute top-0 left-0 rounded-full bg-card/90 px-3 py-1 text-[17px] font-bold tabular-nums shadow-card";
 
 export default function SliceGame() {
@@ -130,7 +131,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     } else if (cut && !wasCut) {
       // Not cut just now on this board: show the cut already made, finished, in silence.
       s.setRound(round);
-      s.reveal(cut.line, perfectLine(round, cut.line), share(round, cut.line), scoreCut(round, cut.line).positive, cut.tier, () => setRevealDone(true), true);
+      s.reveal(cut.line, perfectLine(round, cut.line), share(round, cut.line), scoreCut(round, cut.line).positive, bandOf(cut.score), () => setRevealDone(true), true);
       if (finished) s.showPerfect(true);
     }
   }, [sceneReady, key, g.phase, round, roundIndex, cut, finished]);
@@ -145,7 +146,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     }
     g.act({ type: "cut", line });
     const scored = scoreCut(round, line);
-    scene.current?.reveal(line, perfectLine(round, line), share(round, line), scored.positive, scored.tier, () => setRevealDone(true));
+    scene.current?.reveal(line, perfectLine(round, line), share(round, line), scored.positive, bandOf(scored.score), () => setRevealDone(true));
   }
 
   function next() {
@@ -222,9 +223,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
               <p className="text-sm font-semibold">
                 Round {g.game.round + 1} <span className="text-ink-faint">of {puzzle.rounds.length}</span>
               </p>
-              <p className="text-sm tracking-[0.15em]" aria-label={`${g.game.cuts.length} of ${puzzle.rounds.length} rounds done`}>
-                {puzzle.rounds.map((_, i) => (g.game.cuts[i] ? cutEmoji(g.game.cuts[i]) : "⬜")).join("")}
-              </p>
+              <RoundScores scores={puzzle.rounds.map((_, i) => g.game.cuts[i]?.score ?? null)} />
             </div>
             {/* Keyed by round, so the badge and highlight replay for every new question. */}
             <div key={roundIndex} className="mt-2">
@@ -279,7 +278,10 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             // Compact once cut, so the 3D board keeps most of a phone screen.
             <div className={`flex flex-col gap-2 transition-opacity duration-500 ${revealDone ? "opacity-100" : "opacity-0"}`}>
               <p className="px-1 text-[15px] leading-snug">
-                <span aria-hidden="true">{cutEmoji(cut)}</span> <span className="font-semibold">{TIER_WORDS[cut.tier]}.</span> You cut off{" "}
+                <span className="font-semibold">
+                  {BAND_WORDS[bandOf(cut.score)]}. {cut.score} points.
+                </span>{" "}
+                You cut off{" "}
                 {formatShare(cut.share)}. The aim was {formatShare(round.target)}.
               </p>
               <p className="px-1 text-[13px] leading-snug text-ink-soft" aria-live="polite">
@@ -321,6 +323,26 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   );
 }
 
+/** The day so far in the top bar: each finished round's score, a dash for the rest. */
+function RoundScores({ scores }: { scores: (number | null)[] }) {
+  const done = scores.filter((s) => s !== null).length;
+  return (
+    <p className="flex gap-1" aria-label={`${done} of ${scores.length} rounds done`}>
+      {scores.map((s, i) => (
+        <span
+          key={i}
+          aria-hidden="true"
+          className={`grid h-6 min-w-8 place-items-center rounded-full px-1.5 text-xs font-bold tabular-nums ${
+            s === null ? "bg-card/60 text-ink-faint" : "bg-card text-ink shadow-card"
+          }`}
+        >
+          {s ?? "–"}
+        </span>
+      ))}
+    </p>
+  );
+}
+
 function Summary({
   number,
   preview,
@@ -337,29 +359,22 @@ function Summary({
   onView: (i: number) => void;
 }) {
   const stats = useStats(storageKeyFor(preview), number);
-  const marks = cuts.map(cutEmoji);
   return (
     // The sheet scrolls; its blocks keep their size (in a flex column they'd shrink to fit).
     <div className="flex max-h-[50svh] flex-col gap-3 overflow-y-auto px-1 *:shrink-0">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">Today&apos;s slices</h1>
-          <p className="text-[26px] tracking-[0.12em]" aria-label="Your squares">
-            {marks.join("")}
+          <p className="text-xs text-ink-faint">
+            Each cut starts at {MAX_SCORE} and loses {LOSS_PER_POINT} for every percentage point off.
           </p>
         </div>
-        <p className="pb-1 text-sm text-ink-soft">
-          <span className="font-semibold text-ink tabular-nums">{totalPoints(cuts)}</span> of {maxPoints(cuts.length)} points
+        <p className="shrink-0 text-right">
+          <span className="font-display text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{totalScore(cuts)}</span>
+          <span className="text-sm text-ink-faint tabular-nums">/{maxScore(cuts.length)}</span>
         </p>
       </div>
-      <ShareButton number={number} preview={preview} marks={marks} />
-      <ul className="flex flex-wrap justify-center gap-x-3 gap-y-1 text-xs text-ink-faint" aria-label="What the squares mean">
-        {EMOJI_LEGEND.map(([e, meaning]) => (
-          <li key={e} className="whitespace-nowrap">
-            <span aria-hidden="true">{e}</span> {meaning}
-          </li>
-        ))}
-      </ul>
+      <ShareButton number={number} cuts={cuts} />
 
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (
@@ -373,7 +388,9 @@ function Summary({
               aria-pressed={viewing === i}
               className={`flex w-full items-center gap-3 px-3 py-2.5 text-left ${viewing === i ? "bg-coral-soft" : "hover:bg-land"}`}
             >
-              <span aria-hidden="true">{cutEmoji(cuts[i])}</span>
+              <span className="font-display w-9 shrink-0 text-lg font-semibold tabular-nums" aria-label={`${cuts[i].score} points`}>
+                {cuts[i].score}
+              </span>
               <span className="min-w-0 flex-1">
                 <span className="block text-sm font-semibold">{capitalise(r.country)}</span>
                 <span className="block text-xs text-ink-soft">{goal(r)}</span>
@@ -407,11 +424,19 @@ function Summary({
   );
 }
 
-function ShareButton({ number, preview, marks }: { number: number; preview: boolean; marks: string[] }) {
+function ShareButton({ number, cuts }: { number: number; cuts: SavedCut[] }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   async function share() {
     sound.tap();
-    const text = shareText({ game: GAME_NAME, number, preview, marks, url: `${location.origin}/slice/` });
+    // "Slice #4 312/400", then each round's score: no countries, no answers.
+    const text = shareText({
+      game: GAME_NAME,
+      number,
+      points: totalScore(cuts),
+      maxPoints: maxScore(cuts.length),
+      detail: cuts.map((c) => c.score).join(" · "),
+      url: `${location.origin}/slice/`,
+    });
     const outcome = await shareResult(text);
     track("result_shared", { game: "slice", outcome });
     if (outcome !== "shared") {

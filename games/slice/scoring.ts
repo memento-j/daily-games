@@ -1,42 +1,51 @@
 // All Slice scoring knobs, in one place. Placeholders until the playtest.
 //
 // A cut is scored on the piece whose share is closer to the target ("You cut off
-// 31.4%. Target 33.3%."). The miss is RELATIVE to the target: 3 points off a 10% target
-// is a far worse cut than 3 points off 50%. A target of 90% is the same cut as 10%
-// from the other side, so the miss is measured against the smaller of the two.
+// 31.4%. The aim was 33.3%."). Every cut starts at 100 and loses 10 for each
+// percentage point it's off, down to 0: 1 point off scores 90, 3 off 70, 10 off 0. The
+// day is the sum, out of 400 for four rounds (developer's call, 2026-10-19: a real
+// score suits a precision game better than Wordle-style squares, which Downstream keeps).
+//
+// The miss is the plain gap in percentage points, the number the player sees, so the
+// same miss scores the same on every round. (Until 2026-10-19 it was relative to the
+// target, so 3 points off was fine at 50% but poor at 10%; a tester found that
+// inconsistent.)
 
 import { positiveCounts, share } from "./cut";
 import type { Line, Round } from "./types";
 
-/** Upper bounds on the miss, as a fraction of the target (0.02 = within 2% of it),
- *  for each square. At a 50% target these are 1, 3 and 8 percentage points. */
-export const THRESHOLDS = [0.02, 0.06, 0.16];
-// One square per tier, best first, then the miss. Distinct hues: 🟨 and 🟧 look alike
-// on Windows (the lesson from Downstream), so they're never neighbours.
-export const EMOJI_BY_TIER = ["🟩", "🟦", "🟨"];
-export const EMOJI_MISS = "🟥";
-export const POINTS_BY_TIER = [3, 2, 1];
+export const MAX_SCORE = 100; // a perfect cut
+export const LOSS_PER_POINT = 10; // lost for each percentage point off
 
-/** What each square means, for a legend. */
-export const EMOJI_LEGEND: [string, string][] = [
-  ...EMOJI_BY_TIER.map((e, i): [string, string] => [e, `within ${THRESHOLDS[i] * 100}%`]),
-  [EMOJI_MISS, "further off"],
-];
+/** Bands for the words and the closing sound ("Spot on", "So close", "Not bad",
+ *  "Way off"): the lowest score in each, best first. 90 / 70 / 20 are 1, 3 and 8
+ *  points off. */
+export const BANDS = [90, 70, 20];
 
 export type CutResult = {
   share: number; // the counted piece's share, 0..1 ("You cut off 31.4%")
-  miss: number; // |share - target| / min(target, 1 - target)
-  tier: number; // index into THRESHOLDS; THRESHOLDS.length = missed them all
+  miss: number; // |share - target|, 0..1 (0.03 = 3 percentage points)
+  score: number; // 0..100, whole numbers
   positive: boolean; // the counted piece is on the line's positive side
 };
 
-export function relativeMiss(share: number, target: number): number {
-  return Math.abs(share - target) / Math.min(target, 1 - target);
+/** How far the cut is from the target, in percentage points (as a fraction). */
+export function missOf(share: number, target: number): number {
+  return Math.abs(share - target);
 }
 
-export function tierOf(miss: number): number {
-  const i = THRESHOLDS.findIndex((t) => miss < t);
-  return i === -1 ? THRESHOLDS.length : i;
+/** A cut's score from its miss: 100, minus 10 per percentage point off, never below 0. */
+export function scoreOf(miss: number): number {
+  // Round the miss to a hundredth of a point first: 0.47 - 0.5 is
+  // 0.030000000000000027 in floating point, and 3 points off should score exactly 70.
+  const points = Math.round(miss * 100 * 100) / 100;
+  return Math.max(0, Math.round(MAX_SCORE - points * LOSS_PER_POINT));
+}
+
+/** 0 = best band ... BANDS.length = below them all. */
+export function bandOf(score: number): number {
+  const i = BANDS.findIndex((b) => score >= b);
+  return i === -1 ? BANDS.length : i;
 }
 
 /** Score one cut. Pure: the same round and line always give the same result. */
@@ -44,24 +53,16 @@ export function scoreCut(round: Round, line: Line): CutResult {
   const s = share(round, line);
   const positive = positiveCounts(s, round.target);
   const counted = positive ? s : 1 - s;
-  const miss = relativeMiss(counted, round.target);
-  return { share: counted, miss, tier: tierOf(miss), positive };
+  const miss = missOf(counted, round.target);
+  return { share: counted, miss, score: scoreOf(miss), positive };
 }
 
-export function cutEmoji(result: Pick<CutResult, "tier">): string {
-  return EMOJI_BY_TIER[result.tier] ?? EMOJI_MISS;
+export function totalScore(results: Pick<CutResult, "score">[]): number {
+  return results.reduce((sum, r) => sum + r.score, 0);
 }
 
-export function cutPoints(result: Pick<CutResult, "tier">): number {
-  return POINTS_BY_TIER[result.tier] ?? 0;
-}
-
-export function totalPoints(results: Pick<CutResult, "tier">[]): number {
-  return results.reduce((sum, r) => sum + cutPoints(r), 0);
-}
-
-export function maxPoints(roundCount: number): number {
-  return roundCount * POINTS_BY_TIER[0];
+export function maxScore(roundCount: number): number {
+  return roundCount * MAX_SCORE;
 }
 
 /** "33.3%", "10%", "50%": a share as the game shows it. */

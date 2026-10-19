@@ -1,20 +1,22 @@
 // Share-text generation, shared by all games. Never includes answers: only the
-// puzzle number, one mark per round, the score (if the game shows one) and the link.
+// puzzle number, the day's marks or score, an optional detail line and the link.
+// Previews share exactly like real puzzles ("Slice #1", never "Slice preview #1";
+// developer's call, 2026-10-19), so playtesters' shares look like the real thing.
 
 export type ShareInput = {
   game: string; // "Downstream"
   number: number;
-  preview?: boolean;
-  marks: string[]; // one emoji per round
-  points?: number; // left out: the marks alone ("Slice #4 🟩🟦🟩🟥")
+  marks?: string[]; // one emoji per round (Downstream: "🟩🟨🟥🟩🟧")
+  points?: number; // the day's score; left out = the marks alone
   maxPoints?: number;
+  detail?: string; // a second line (Slice: each round's score, "94 · 81 · 62 · 75")
   url: string;
 };
 
-export function shareText({ game, number, preview, marks, points, maxPoints, url }: ShareInput): string {
-  const title = preview ? `${game} preview #${number}` : `${game} #${number}`;
-  const score = points !== undefined && maxPoints !== undefined ? ` ${points}/${maxPoints}` : "";
-  return `${title} ${marks.join("")}${score}\n${url}`;
+export function shareText({ game, number, marks, points, maxPoints, detail, url }: ShareInput): string {
+  const score = points !== undefined && maxPoints !== undefined ? `${points}/${maxPoints}` : "";
+  const first = [`${game} #${number}`, marks?.join("") ?? "", score].filter(Boolean).join(" ");
+  return [first, detail, url].filter(Boolean).join("\n");
 }
 
 export type ShareOutcome = "shared" | "copied" | "failed";

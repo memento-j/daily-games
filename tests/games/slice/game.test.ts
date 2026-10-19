@@ -21,12 +21,12 @@ describe("step", () => {
     s = step(s, { type: "cut", line: through }, puzzle);
     expect(phase(s, puzzle)).toBe("result");
     expect(s.cuts[0].share).toBeCloseTo(0.5);
-    expect(s.cuts[0].tier).toBe(0);
+    expect(s.cuts[0].score).toBe(100);
     s = step(s, { type: "next" }, puzzle);
     expect(phase(s, puzzle)).toBe("cutting");
     s = step(step(s, { type: "cut", line: lineAt(0, 70) }, puzzle), { type: "next" }, puzzle);
     expect(phase(s, puzzle)).toBe("finished");
-    expect(s.cuts.map((c) => c.tier)).toEqual([0, 3]);
+    expect(s.cuts.map((c) => c.score)).toEqual([100, 0]); // 30% of a square: 20 points off
   });
 
   it("retry takes back the current round's cut, and only in the result phase", () => {

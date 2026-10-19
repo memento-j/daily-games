@@ -1,10 +1,10 @@
 "use client";
 
-// The homepage's Slice card status: today's squares and the countdown once played,
+// The homepage's Slice card status: today's score and the countdown once played,
 // a streak nudge when there is one, else the game's basics.
 
 import Countdown from "@/components/Countdown";
-import { cutEmoji } from "@/games/slice/scoring";
+import { maxScore } from "@/games/slice/scoring";
 import { useTodayResult } from "@/games/slice/useTodayResult";
 
 export default function SliceStatus() {
@@ -12,7 +12,9 @@ export default function SliceStatus() {
   if (t?.result) {
     return (
       <span className="flex flex-col gap-0.5 text-sm">
-        <span className="font-semibold text-coral-deep">Done today · {t.result.cuts.map(cutEmoji).join("")}</span>
+        <span className="font-semibold text-coral-deep tabular-nums">
+          Done today · {t.result.points}/{maxScore(t.result.cuts.length)}
+        </span>
         <Countdown prefix="Next slices in" className="text-ink-faint" />
       </span>
     );

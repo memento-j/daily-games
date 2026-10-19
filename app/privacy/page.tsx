@@ -77,7 +77,7 @@ export default function PrivacyPage() {
         <li>No accounts, sign-ups or passwords.</li>
         <li>No cookies.</li>
         <li>No advertising or ad tracking, and no selling or sharing of data.</li>
-        <li>Sharing a result only puts a line of text (your puzzle number and squares) on your clipboard or share sheet. We never see what you share.</li>
+        <li>Sharing a result only puts a line of text (the puzzle number and your score) on your clipboard or share sheet. We never see what you share.</li>
       </ul>
 
       <h2>Children</h2>

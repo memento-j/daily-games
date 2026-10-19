@@ -101,7 +101,7 @@ export const sound = {
   /** The whole reveal, scheduled now on the audio clock (offsets in seconds, matching
    *  scene.ts): snips along the line, the pieces parting, the people rising, and
    *  a closing phrase for how good the cut was. */
-  reveal({ snips, snipEvery, split, rise, riseFor, people, done, tier }: {
+  reveal({ snips, snipEvery, split, rise, riseFor, people, done, tier: band }: {
     snips: number;
     snipEvery: number;
     split: number;
@@ -109,7 +109,7 @@ export const sound = {
     riseFor: number;
     people: boolean;
     done: number;
-    tier: number;
+    tier: number; // the score band (scoring.ts bandOf): 0 best .. 3 way off
   }) {
     const c = audio();
     if (!c) return;
@@ -132,8 +132,8 @@ export const sound = {
     }
 
     // How it went: a bright rising pair for a good cut, a soft falling pair otherwise.
-    const good = tier <= 1;
-    const pair = good ? [784, 1175] : tier === 2 ? [698, 784] : [440, 349];
+    const good = band <= 1;
+    const pair = good ? [784, 1175] : band === 2 ? [698, 784] : [440, 349];
     note(t0 + done, pair[0], 0.35, 0.09, "triangle");
     note(t0 + done + 0.13, pair[1], good ? 0.6 : 0.45, 0.09, "triangle");
   },

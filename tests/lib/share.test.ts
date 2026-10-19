@@ -9,12 +9,14 @@ describe("shareText", () => {
   });
 
   it("can leave the score out", () => {
-    expect(shareText({ game: "Slice", number: 4, marks: ["🟩", "🟥"], url: "https://example.com/slice/" })).toBe(
-      "Slice #4 🟩🟥\nhttps://example.com/slice/",
+    expect(shareText({ game: "Downstream", number: 4, marks: ["🟩", "🟥"], url: "https://example.com/downstream/" })).toBe(
+      "Downstream #4 🟩🟥\nhttps://example.com/downstream/",
     );
   });
 
-  it("labels previews", () => {
-    expect(shareText({ ...base, preview: true }).startsWith("Downstream preview #12 ")).toBe(true);
+  it("can be a score with a detail line and no marks (Slice)", () => {
+    expect(
+      shareText({ game: "Slice", number: 4, points: 312, maxPoints: 400, detail: "94 · 81 · 62 · 75", url: "https://example.com/slice/" }),
+    ).toBe("Slice #4 312/400\n94 · 81 · 62 · 75\nhttps://example.com/slice/");
   });
 });
