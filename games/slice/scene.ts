@@ -59,7 +59,9 @@ type Palette = {
   countedTop: number;
   coral: number;
   otherPeople: number;
-  ink: number;
+  ink: number; // the perfect cut and its arrow
+  inkEdge: number; // a dark edge under them, so a light line reads on the paper too
+  inkEdged: boolean; // draw that edge (dark mode, where the line itself is light)
   slit: number;
   steel: number;
   sky: number;
@@ -77,6 +79,8 @@ const PALETTES: Record<Theme, Palette> = {
     coral: 0xf2545b,
     otherPeople: 0x7b8597,
     ink: 0x1d2a44,
+    inkEdge: 0x1d2a44,
+    inkEdged: false,
     slit: 0x5b463c,
     steel: 0xe3e7ec,
     sky: 0xfff6ea,
@@ -95,7 +99,11 @@ const PALETTES: Record<Theme, Palette> = {
     countedTop: 0xf4c9bd,
     coral: 0xf2545b,
     otherPeople: 0x9aa4b6,
-    ink: 0x1d2a44,
+    // The perfect cut turns light at night (dark ink vanished on the dark mat, 2026-10-19),
+    // with a dark edge so it still reads on the paper.
+    ink: 0xf6f2ea,
+    inkEdge: 0x0d131b,
+    inkEdged: true,
     slit: 0x5b463c,
     steel: 0xd0d5dc,
     sky: 0xf1e6d6,
@@ -105,7 +113,7 @@ const PALETTES: Record<Theme, Palette> = {
   },
 };
 // The palette colours a material can take; it keeps its role so setTheme can recolour it.
-type Role = "top" | "side" | "countedTop" | "coral" | "otherPeople" | "ink" | "slit" | "steel";
+type Role = "top" | "side" | "countedTop" | "coral" | "otherPeople" | "ink" | "inkEdge" | "slit" | "steel";
 
 type Piece = { group: THREE.Group; dir: THREE.Vector3; columns: THREE.InstancedMesh | null; heights: number[]; delays: number[]; centre: THREE.Vector3; positions: THREE.Vector3[] };
 
@@ -356,6 +364,19 @@ export class SliceScene {
     return material;
   }
 
+  /** Marks a part of the perfect cut's dark edge: shown only when the palette asks for
+   *  it (setTheme flips it). */
+  private edged<T extends THREE.Object3D>(object: T): T {
+    object.userData.inkEdge = true;
+    object.visible = this.palette.inkEdged;
+    // Drawn first and without writing depth, so the light line on top always shows in
+    // full (the edge's thicker arrowhead would otherwise cover the light one).
+    const material = (object as unknown as THREE.Mesh).material as THREE.Material;
+    material.depthWrite = false;
+    object.renderOrder = 1;
+    return object;
+  }
+
   /** Light or dark: recolour the mat, the lights and every tinted material in place, so
    *  a round in progress (or a reveal on screen) just changes its lighting. */
   setTheme(theme: Theme) {
@@ -377,6 +398,7 @@ export class SliceScene {
         const role = m.userData.role as Role | undefined;
         if (role) (m as THREE.MeshBasicMaterial).color.set(p[role]);
       }
+      if (object.userData.inkEdge) object.visible = p.inkEdged;
     });
   }
 
@@ -772,8 +794,15 @@ export class SliceScene {
     const dashes = new THREE.InstancedMesh(dashGeo, dashMat, 400);
     const a = new THREE.Vector3(-len / 2, TOP + 0.015, 0);
     this.layDashes(dashes, a, new THREE.Vector3(len / 2, TOP + 0.015, 0), a, 0.07);
-    group.add(dashes);
-    this.disposables.push(dashGeo, dashMat);
+    // The dark edge: the same dashes, wider and just beneath (dark mode only).
+    const edgeMat = this.tint(new THREE.MeshBasicMaterial(), "inkEdge");
+    const edges = new THREE.InstancedMesh(dashGeo, edgeMat, 400);
+    const e = new THREE.Vector3(-len / 2, TOP + 0.012, 0);
+    this.layDashes(edges, e, new THREE.Vector3(len / 2, TOP + 0.012, 0), a, 0.12);
+    this.edged(edges);
+    dashes.renderOrder = 2;
+    group.add(edges, dashes);
+    this.disposables.push(dashGeo, dashMat, edgeMat);
 
     // Its path: from the player's line to the perfect one, along the cut's normal. Its
     // position is a point along the line (the middle of its span) plus an offset along n.
@@ -789,18 +818,31 @@ export class SliceScene {
     // The arrow: flat on the slab, pointing from the player's cut to the perfect one.
     if (Math.abs(this.perfectTo - this.arrowFrom) > 0.25) {
       const inkMat = this.tint(new THREE.MeshBasicMaterial(), "ink");
+      const edgeMat = this.tint(new THREE.MeshBasicMaterial(), "inkEdge");
       const shaftGeo = new THREE.BoxGeometry(1, 0.03, 0.07);
       shaftGeo.translate(0.5, 0, 0); // grows from its start
       const headGeo = new THREE.ConeGeometry(0.14, 0.3, 3);
       headGeo.rotateZ(-Math.PI / 2); // point along +x
       headGeo.rotateX(Math.PI / 2); // lie flat
-      this.disposables.push(inkMat, shaftGeo, headGeo);
+      // The dark edge (dark mode only): a wider shaft and a bigger head just beneath.
+      const shaftEdgeGeo = new THREE.BoxGeometry(1, 0.03, 0.12);
+      shaftEdgeGeo.translate(0.5, -0.004, 0);
+      const headEdgeGeo = new THREE.ConeGeometry(0.2, 0.42, 3);
+      headEdgeGeo.rotateZ(-Math.PI / 2);
+      headEdgeGeo.rotateX(Math.PI / 2);
+      headEdgeGeo.translate(0, -0.004, 0);
+      this.disposables.push(inkMat, edgeMat, shaftGeo, headGeo, shaftEdgeGeo, headEdgeGeo);
       const arrow = new THREE.Group();
       const shaft = new THREE.Mesh(shaftGeo, inkMat);
       const head = new THREE.Mesh(headGeo, inkMat);
+      const shaftEdge = this.edged(new THREE.Mesh(shaftEdgeGeo, edgeMat));
+      const headEdge = this.edged(new THREE.Mesh(headEdgeGeo, edgeMat));
       shaft.name = "shaft";
       head.name = "head";
-      arrow.add(shaft, head);
+      shaftEdge.name = "shaftEdge";
+      headEdge.name = "headEdge";
+      shaft.renderOrder = head.renderOrder = 2;
+      arrow.add(shaftEdge, headEdge, shaft, head);
       arrow.rotation.y = -Math.atan2(n.z * side, n.x * side);
       arrow.visible = false;
       this.arrow = arrow;
@@ -834,10 +876,10 @@ export class SliceScene {
       const length = Math.abs(to - from);
       this.arrow.visible = length > 0.2;
       this.arrow.position.copy(this.perfectAlong).addScaledVector(this.perfectDir, from).setY(TOP + 0.03);
-      const shaft = this.arrow.getObjectByName("shaft")!;
-      const head = this.arrow.getObjectByName("head")!;
-      shaft.scale.x = Math.max(0.001, length - 0.25);
-      head.position.x = Math.max(0.001, length - 0.15);
+      for (const suffix of ["", "Edge"]) {
+        this.arrow.getObjectByName(`shaft${suffix}`)!.scale.x = Math.max(0.001, length - 0.25);
+        this.arrow.getObjectByName(`head${suffix}`)!.position.x = Math.max(0.001, length - 0.15);
+      }
     }
     // The label floats above the perfect cut, at whichever spot along it (middle or
     // towards either end) sits furthest from the two pieces' labels on screen.

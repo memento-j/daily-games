@@ -17,7 +17,7 @@ import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { track } from "@/lib/analytics";
 import { shareResult, shareText } from "@/lib/share";
-import { SITE_NAME } from "@/lib/site";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
 import { useTheme } from "@/lib/useTheme";
 import { ENDLESS_TRIES, GAME_NAME } from "@/games/slice/config";
@@ -435,7 +435,7 @@ function ShareButton({ number, cuts }: { number: number; cuts: SavedCut[] }) {
       points: totalScore(cuts),
       maxPoints: maxScore(cuts.length),
       detail: cuts.map((c) => c.score).join(" · "),
-      url: `${location.origin}/slice/`,
+      url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
     });
     const outcome = await shareResult(text);
     track("result_shared", { game: "slice", outcome });

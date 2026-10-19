@@ -13,7 +13,7 @@ import ThemeToggle from "@/components/ThemeToggle";
 import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
 import { shareResult, shareText } from "@/lib/share";
-import { SITE_NAME } from "@/lib/site";
+import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import type { GameState } from "./game";
 import { storageKeyFor } from "./schedule";
@@ -317,7 +317,7 @@ export function ShareButton({
       marks: results.map(dropEmoji),
       points: totalPoints(results),
       maxPoints: maxPointsTotal,
-      url: `${location.origin}/downstream/`,
+      url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
     });
     const outcome = await shareResult(text);
     track("result_shared", { game: "downstream", outcome });

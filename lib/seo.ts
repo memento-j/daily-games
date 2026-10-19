@@ -22,7 +22,7 @@ export function pageMetadata({ title, description, path, absoluteTitle }: Page):
     title: absoluteTitle ? { absolute: title } : title,
     description,
     // The one true address of this page: ?puzzle=N links count as this page, not as
-    // copies of it (and once pondo.games is live, so does the workers.dev address).
+    // copies of it, and so does the old workers.dev address while it's still on.
     alternates: { canonical: path },
     openGraph: { title: full, description, url: path, siteName: SITE_NAME, type: "website", locale: "en_US" },
     // X shows the big image card only when asked to; it reads the Open Graph image.
