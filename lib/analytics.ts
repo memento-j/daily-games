@@ -16,7 +16,7 @@ import { getSetting, setSetting } from "./storage";
 export const UMAMI_WEBSITE_ID = "";
 /** Only visits to these addresses are counted, so local development and other copies
  *  of the site don't pollute the numbers. */
-export const ANALYTICS_HOSTS = ["daily-games.jsales0204.workers.dev", "pondo.games"];
+export const ANALYTICS_HOSTS = ["pondo.games"];
 
 type Game = "slice" | "downstream";
 type Play = { game: Game; puzzle: number; preview: boolean };

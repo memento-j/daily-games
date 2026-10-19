@@ -1,6 +1,9 @@
 {
   "name": "daily-games",
   "compatibility_date": "2026-10-01",
+  // Serve the site at pondo.games. On deploy Cloudflare creates the DNS record and the
+  // HTTPS certificate; the domain must be in the same Cloudflare account.
+  "routes": [{ "pattern": "pondo.games", "custom_domain": true }],
   "assets": {
     "directory": "./out",
     "not_found_handling": "404-page"

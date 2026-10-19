@@ -16,7 +16,7 @@ import TodayDate from "./TodayDate";
 
 // "Daily geography puzzles" is what people search for; the brand alone isn't yet.
 export const metadata: Metadata = pageMetadata({
-  title: `${SITE_NAME}: daily geography puzzles, free`,
+  title: `${SITE_NAME}: daily puzzles, free`,
   absoluteTitle: true,
   description: SITE_DESCRIPTION,
   path: "/",
