@@ -7,7 +7,7 @@
   // Keep the old daily-games.*.workers.dev address working too, so links already sent
   // to playtesters still open (its pages name pondo.games as the real address). Wrangler
   // turns it off by default once a custom domain is set.
-  "workers_dev": true,
+  "workers_dev": false,
   "assets": {
     "directory": "./out",
     "not_found_handling": "404-page"

@@ -7,7 +7,7 @@
 // localStorage must never run during the build, which happens on another day.
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
 import { clearInProgress, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
@@ -38,7 +38,6 @@ export function useSliceGame(): SliceGameState {
   const override = useSearchParams().get("puzzle");
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [game, setGame] = useState<GameState>(initialState);
-  const started = useRef(false); // puzzle_started sent (analytics)
 
   // Puzzles are fetched at runtime, never imported, so future answers aren't
   // bundled into the JavaScript.
@@ -66,7 +65,7 @@ export function useSliceGame(): SliceGameState {
       // Already finished today? Show the summary. Half-way through? Resume.
       const finished = getResult<SavedResult>(storageKey, number);
       const saved = getInProgress<unknown>(storageKey, number);
-      if (finished) setGame({ round: puzzle.rounds.length, cuts: finished.cuts });
+      if (finished) setGame({ ...initialState, round: puzzle.rounds.length, cuts: finished.cuts });
       else if (isValidState(saved, puzzle)) setGame(saved);
       else setGame(initialState);
       setLoad({ status: "ready", number, puzzle, preview });
@@ -84,16 +83,15 @@ export function useSliceGame(): SliceGameState {
     const next = step(game, action, puzzle);
     if (next === game) return;
     setGame(next);
-    // Analytics (lib/analytics.ts): the first cut of a fresh puzzle, each cut (a retry
-    // and a new cut of the same round count again), and the finished day.
+    // Analytics (lib/analytics.ts): the first cut of a fresh puzzle, every cut (with
+    // which try it was), and the finished day.
     const play = { game: "slice", puzzle: number, preview: load.preview } as const;
     if (action.type === "cut") {
-      if (game.round === 0 && game.cuts.length === 0 && !started.current) {
-        started.current = true; // a retry of round 1 isn't a new start
-        track("puzzle_started", play);
+      if (game.round === 0 && game.tries === 0) track("puzzle_started", play);
+      if (next.last) {
+        const mode = puzzle.rounds[game.round].mode;
+        track("round_cut", { ...play, round: game.round + 1, mode, attempt: next.tries, score: next.last.score });
       }
-      const cut = next.cuts[game.round];
-      if (cut) track("round_cut", { ...play, round: game.round + 1, mode: puzzle.rounds[game.round].mode, score: cut.score });
     }
     if (phase(next, puzzle) === "finished") {
       track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length) });

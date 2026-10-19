@@ -20,9 +20,9 @@ import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
 import { useTheme } from "@/lib/useTheme";
-import { ENDLESS_TRIES, GAME_NAME } from "@/games/slice/config";
+import { GAME_NAME } from "@/games/slice/config";
 import { crosses, perfectLine, share } from "@/games/slice/cut";
-import type { SavedCut } from "@/games/slice/game";
+import { triesLeft, type SavedCut } from "@/games/slice/game";
 import { lineThrough } from "@/games/slice/geometry";
 import type { SliceScene } from "@/games/slice/scene";
 import { storageKeyFor } from "@/games/slice/schedule";
@@ -66,7 +66,10 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   const finished = g.phase === "finished";
   const roundIndex = finished ? viewing : g.game.round;
   const round = puzzle.rounds[roundIndex];
-  const cut: SavedCut | undefined = g.game.cuts[roundIndex];
+  // The cut on the board: in play, the round's latest try; in the summary, each round's
+  // best (the one that counted).
+  const cut: SavedCut | undefined = finished ? g.game.cuts[roundIndex] : (g.game.last ?? undefined);
+  const best: SavedCut | undefined = g.game.cuts[roundIndex];
   const isPopulation = round.mode === "population";
 
   // Create the 3D scene once. three.js is imported here, in the browser, never at build time.
@@ -104,7 +107,10 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     const t = top.current?.getBoundingClientRect();
     const b = bottom.current?.getBoundingClientRect();
     if (!t || !b || !scene.current) return;
-    scene.current.setInsets({ top: Math.round(t.bottom + 8), bottom: Math.round(window.innerHeight - b.top + 8) });
+    scene.current.setInsets({
+      top: Math.round(t.bottom + 8),
+      bottom: Math.round(window.innerHeight - b.top + 8),
+    });
   }
   useEffect(() => {
     const ro = new ResizeObserver(() => measureInsets());
@@ -123,7 +129,8 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   useEffect(() => {
     const s = scene.current;
     if (!sceneReady || !s || shown.current === key) return;
-    const wasCut = shown.current === `cutting:${roundIndex}`;
+    // Cut just now on this board (its reveal already played), or kept after that.
+    const wasCut = shown.current === `cutting:${roundIndex}` || shown.current === `result:${roundIndex}`;
     shown.current = key;
     if (g.phase === "cutting") {
       s.setRound(round); // clears the draft, which resets the hint via onDraft
@@ -131,7 +138,15 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     } else if (cut && !wasCut) {
       // Not cut just now on this board: show the cut already made, finished, in silence.
       s.setRound(round);
-      s.reveal(cut.line, perfectLine(round, cut.line), share(round, cut.line), scoreCut(round, cut.line).positive, bandOf(cut.score), () => setRevealDone(true), true);
+      s.reveal(
+        cut.line,
+        perfectLine(round, cut.line),
+        share(round, cut.line),
+        scoreCut(round, cut.line).positive,
+        bandOf(cut.score),
+        () => setRevealDone(true),
+        true,
+      );
       if (finished) s.showPerfect(true);
     }
   }, [sceneReady, key, g.phase, round, roundIndex, cut, finished]);
@@ -156,12 +171,18 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     g.act({ type: "next" });
   }
 
-  // While ENDLESS_TRIES is on (playtesting): cut the same country again.
-  function retry() {
+  // A second try: the same country, a clear board.
+  function again() {
     sound.tap();
     setRevealDone(false);
     setPerfectShown(false);
-    g.act({ type: "retry" });
+    g.act({ type: "again" });
+  }
+
+  // Happy with this cut: settle the round, which brings out the perfect cut.
+  function keep() {
+    sound.tap();
+    g.act({ type: "keep" });
   }
 
   function showPerfect() {
@@ -259,11 +280,13 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             <div className="flex flex-col gap-2.5">
               <p className={`px-1 text-[14px] ${message ? "font-semibold text-coral-deep" : "text-ink-soft"}`} aria-live="polite">
                 {message ??
-                  (hasDraft
-                    ? "Drag either end to fine-tune, then press Cut."
-                    : isPopulation
-                      ? "Think about where most of the population lives, not how big the country looks. Drag across it to draw your cut."
-                      : "Just the land this time: cities don't count. Drag across the country to draw your cut.")}
+                  (g.game.again && g.game.last
+                    ? `Second try. Your first cut took ${formatShare(g.game.last.share)} and scored ${g.game.last.score}. ${hasDraft ? "Press Cut when you're ready." : "Can you beat it?"}`
+                    : hasDraft
+                      ? "Drag either end to fine-tune, then press Cut."
+                      : isPopulation
+                        ? "Think about where most of the population lives, not how big the country looks. Drag across it to draw your cut."
+                        : "Just the land this time: cities don't count. Drag across the country to draw your cut.")}
               </p>
               <button
                 type="button"
@@ -281,39 +304,57 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                 <span className="font-semibold">
                   {BAND_WORDS[bandOf(cut.score)]}. {cut.score} points.
                 </span>{" "}
-                You cut off{" "}
-                {formatShare(cut.share)}. The aim was {formatShare(round.target)}.
+                You cut off {formatShare(cut.share)}. The aim was {formatShare(round.target)}.
               </p>
               <p className="px-1 text-[13px] leading-snug text-ink-soft" aria-live="polite">
-                {perfectShown ? perfectLineText(cut.line, perfectLine(round, cut.line)) : round.fact}
+                {g.phase === "result"
+                  ? "Cut again to try to beat it, or keep it. The perfect cut shows once you're done."
+                  : perfectShown
+                    ? perfectLineText(cut.line, perfectLine(round, cut.line))
+                    : best && best !== cut
+                      ? `Your first cut was better: it scored ${best.score}, so that's the one that counts.`
+                      : round.fact}
               </p>
-              <div className="flex gap-2">
-                {!perfectShown && (
+              {g.phase === "result" ? (
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={showPerfect}
+                    onClick={keep}
                     disabled={!revealDone}
                     className="h-11 flex-1 rounded-full bg-card text-[15px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
                   >
-                    Show perfect cut
+                    Keep this cut
                   </button>
-                )}
-                <button type="button" onClick={next} disabled={!revealDone} className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card">
-                  {g.game.round + 1 >= puzzle.rounds.length ? "See results" : "Next round"}
-                </button>
-              </div>
-              {ENDLESS_TRIES && (
-                <button
-                  type="button"
-                  onClick={retry}
-                  disabled={!revealDone}
-                  className="flex items-center gap-1.5 self-center rounded-full px-3 py-1 text-[13px] font-semibold text-coral-deep transition-colors hover:bg-coral-soft"
-                >
-                  <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
-                    <path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9M15.5 3.5v3.2h-3.2" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                  Try again
-                </button>
+                  <button
+                    type="button"
+                    onClick={again}
+                    disabled={!revealDone}
+                    className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card"
+                  >
+                    Cut again · {triesLeft(g.game)} left
+                  </button>
+                </div>
+              ) : (
+                <div className="flex gap-2">
+                  {!perfectShown && (
+                    <button
+                      type="button"
+                      onClick={showPerfect}
+                      disabled={!revealDone}
+                      className="h-11 flex-1 rounded-full bg-card text-[15px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+                    >
+                      Show perfect cut
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={next}
+                    disabled={!revealDone}
+                    className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card"
+                  >
+                    {g.game.round + 1 >= puzzle.rounds.length ? "See results" : "Next round"}
+                  </button>
+                </div>
               )}
             </div>
           ) : null}
@@ -445,7 +486,11 @@ function ShareButton({ number, cuts }: { number: number; cuts: SavedCut[] }) {
     }
   }
   return (
-    <button type="button" onClick={share} className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-strong">
+    <button
+      type="button"
+      onClick={share}
+      className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-strong"
+    >
       {state === "copied" ? "Copied" : state === "failed" ? "Couldn't copy" : "Share"}
     </button>
   );
@@ -476,7 +521,11 @@ function PreviewList() {
       <div className="mt-2 flex flex-wrap gap-2">
         {found.map((n) => (
           // A plain link: a fresh page load gives each preview a fresh board.
-          <a key={n} href={`/slice/?puzzle=${n}`} className="grid size-10 place-items-center rounded-full bg-card text-sm font-bold ring-1 ring-line hover:ring-coral">
+          <a
+            key={n}
+            href={`/slice/?puzzle=${n}`}
+            className="grid size-10 place-items-center rounded-full bg-card text-sm font-bold ring-1 ring-line hover:ring-coral"
+          >
             {n}
           </a>
         ))}

@@ -26,7 +26,7 @@ export type Events = {
   daily_visit: { day: number };
   puzzle_started: Play;
   drop_decided: Play & { drop: number; stage: number; result: "correct" | "wrong" | "no guess" };
-  round_cut: Play & { round: number; mode: string; score: number };
+  round_cut: Play & { round: number; mode: string; attempt: number; score: number };
   puzzle_finished: Play & { points: number; maxPoints: number };
   result_shared: { game: Game; outcome: "shared" | "copied" | "failed" };
   sound_toggled: { game: Game; muted: boolean };

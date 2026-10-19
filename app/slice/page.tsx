@@ -36,7 +36,7 @@ export default function SlicePage() {
           </p>
           <p className="mt-2 leading-relaxed text-ink-soft">
             Every day you get four real countries, each with a goal like &ldquo;Cut off half of Germany&apos;s land&rdquo; or &ldquo;Cut off a
-            third of Japan&apos;s population&rdquo;. You have one straight line to do it.
+            third of Japan&apos;s population&rdquo;. You get one straight line to do it, and a second try if you want it.
           </p>
           <ol className="mt-4 flex flex-col gap-3">
             {[
@@ -50,7 +50,7 @@ export default function SlicePage() {
               ],
               [
                 "See how close you got.",
-                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100: you lose 10 for every percentage point you're off. Aiming for 33.3% and cutting off 31%, for example, is 2.3 points off, so 77. Show perfect cut reveals the ideal line at your angle.",
+                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100: you lose 10 for every percentage point you're off. Aiming for 33.3% and cutting off 31%, for example, is 2.3 points off, so 77. Not happy? Cut again once: your better cut counts. When you're done, Show perfect cut reveals the ideal line at your angle.",
               ],
               ["Share your score.", "After four rounds you have a score out of 400. Share it, with each round's score, to compare with friends. It never gives away the answers."],
             ].map(([title, text], i) => (
