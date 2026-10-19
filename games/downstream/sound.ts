@@ -9,6 +9,7 @@
 // Browsers only allow audio after a user gesture; every sound here follows a
 // click (or an animation a click started), so that's always satisfied.
 
+import { track } from "@/lib/analytics";
 import { getSetting, setSetting } from "@/lib/storage";
 
 const SETTINGS = "site";
@@ -22,6 +23,7 @@ export function isMuted(): boolean {
 
 export function setMuted(muted: boolean): void {
   setSetting(SETTINGS, "muted", muted);
+  track("sound_toggled", { game: "downstream", muted });
   if (muted) ctx?.suspend().catch(() => {});
 }
 

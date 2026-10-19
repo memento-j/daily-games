@@ -7,11 +7,12 @@
 // localStorage must never run during the build, which happens on another day.
 
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
 import { clearInProgress, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase, type SavedCut } from "./game";
-import { totalPoints } from "./scoring";
+import { maxPoints, totalPoints } from "./scoring";
 import { puzzleToPlay, storageKeyFor } from "./schedule";
 import type { Puzzle } from "./types";
 
@@ -37,6 +38,7 @@ export function useSliceGame(): SliceGameState {
   const override = useSearchParams().get("puzzle");
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [game, setGame] = useState<GameState>(initialState);
+  const started = useRef(false); // puzzle_started sent (analytics)
 
   // Puzzles are fetched at runtime, never imported, so future answers aren't
   // bundled into the JavaScript.
@@ -82,7 +84,19 @@ export function useSliceGame(): SliceGameState {
     const next = step(game, action, puzzle);
     if (next === game) return;
     setGame(next);
+    // Analytics (lib/analytics.ts): the first cut of a fresh puzzle, each cut (a retry
+    // and a new cut of the same round count again), and the finished day.
+    const play = { game: "slice", puzzle: number, preview: load.preview } as const;
+    if (action.type === "cut") {
+      if (game.round === 0 && game.cuts.length === 0 && !started.current) {
+        started.current = true; // a retry of round 1 isn't a new start
+        track("puzzle_started", play);
+      }
+      const cut = next.cuts[game.round];
+      if (cut) track("round_cut", { ...play, round: game.round + 1, mode: puzzle.rounds[game.round].mode, tier: cut.tier });
+    }
     if (phase(next, puzzle) === "finished") {
+      track("puzzle_finished", { ...play, points: totalPoints(next.cuts), maxPoints: maxPoints(puzzle.rounds.length) });
       saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalPoints(next.cuts) });
       clearInProgress(storageKey);
     } else {

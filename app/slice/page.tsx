@@ -4,17 +4,21 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import JsonLd from "@/components/JsonLd";
 import Loading from "@/components/Loading";
+import SiteFooter from "@/components/SiteFooter";
+import { gameJsonLd, pageMetadata } from "@/lib/seo";
 import SliceGame from "./SliceGame";
 
-export const metadata: Metadata = {
-  title: "Slice",
-  description: "Draw one straight line across a real country to cut off half its land or a third of its population. Four countries a day, free.",
-};
+const DESCRIPTION =
+  "A daily geography puzzle: draw one straight line across a real country to cut off half its land, or a third of its population. Four countries a day, free.";
+
+export const metadata: Metadata = pageMetadata({ title: "Slice: cut a country's population in half", description: DESCRIPTION, path: "/slice/" });
 
 export default function SlicePage() {
   return (
     <>
+      <JsonLd data={gameJsonLd({ name: "Slice", description: DESCRIPTION, path: "/slice/" })} />
       {/* SliceGame reads ?puzzle=N with useSearchParams, which in a static export must
           sit inside a Suspense boundary. The build can't know the address, so the HTML
           holds this fallback until the browser renders the game: the shared loading
@@ -25,7 +29,11 @@ export default function SlicePage() {
       </Suspense>
       <section className="font-sans bg-land px-4 pb-12 text-ink">
         <div className="mx-auto max-w-[560px] pt-8">
-          <h2 className="font-display text-xl font-semibold">How to play</h2>
+          <h2 className="font-display text-xl font-semibold">How to play Slice</h2>
+          <p className="mt-2 leading-relaxed text-ink-soft">
+            Slice is a free daily geography puzzle about where people really live. It looks like a test of shapes, but most
+            countries&apos; populations crowd into a small part of their land, so the obvious cut is often far off.
+          </p>
           <p className="mt-2 leading-relaxed text-ink-soft">
             Every day you get four real countries, each with a goal like &ldquo;Cut off half of Germany&apos;s land&rdquo; or &ldquo;Cut off a
             third of Japan&apos;s population&rdquo;. You have one straight line to do it.
@@ -57,8 +65,9 @@ export default function SlicePage() {
             ))}
           </ol>
           <p className="mt-4 text-xs text-ink-faint">
-            Population: GHSL GHS-POP 2025 (European Commission, JRC), CC BY 4.0. Borders: Natural Earth.
+            Population: GHSL GHS-POP 2025 (European Commission, JRC), CC BY 4.0. Borders: Natural Earth. <a href="/about/#credits" className="underline underline-offset-2 hover:text-ink">Full credits</a>
           </p>
+          <SiteFooter className="mt-10" />
         </div>
       </section>
     </>

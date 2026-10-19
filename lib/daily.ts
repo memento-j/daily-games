@@ -5,9 +5,9 @@
 // browser (after mount), never during render on the server/build: the build runs
 // on a different day than the player's visit.
 
-const LAUNCH = Date.UTC(2026, 10, 15); // placeholder launch date; months are 0-based (10 = November)
-/** Launch day as a Date (UTC midnight), for display, e.g. "launches 15 November". */
-export const LAUNCH_DATE = new Date(LAUNCH);
+// Placeholder launch date; months are 0-based (10 = November). Never shown to players
+// (it may still move); it only sets which day is puzzle #1.
+const LAUNCH = Date.UTC(2026, 10, 15);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Launch day is #1. Below 1 means the game hasn't launched yet. */

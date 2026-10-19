@@ -98,6 +98,72 @@ button:not(:disabled),
   cursor: pointer;
 }
 
+/* The reading pages' text (components/TextPage.tsx: About, Privacy, Contact): set for
+   reading rather than for figures, with more room above a heading than below it. */
+.text-page {
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--color-ink-soft);
+  font-variant-numeric: normal;
+}
+.text-page > * + * {
+  margin-top: 1em;
+}
+.text-page h2 {
+  font-family: var(--font-display);
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--color-ink);
+  margin-top: 2.6em;
+}
+.text-page h2:first-child {
+  margin-top: 0;
+}
+.text-page h2 + * {
+  margin-top: 0.6em;
+}
+.text-page h3 {
+  font-weight: 600;
+  color: var(--color-ink);
+  margin-top: 1.6em;
+}
+.text-page h3 + * {
+  margin-top: 0.25em;
+}
+.text-page strong {
+  font-weight: 600;
+  color: var(--color-ink);
+}
+.text-page ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+  padding-left: 1.25em;
+  list-style: disc;
+}
+.text-page li::marker {
+  color: var(--color-coral);
+}
+.text-page a:not([class]) {
+  color: var(--color-coral-deep);
+  font-weight: 600;
+  text-decoration: underline;
+  text-decoration-thickness: 2px;
+  text-decoration-color: color-mix(in oklab, var(--color-coral) 45%, transparent);
+  text-underline-offset: 0.22em;
+  overflow-wrap: anywhere;
+  transition: text-decoration-color 150ms ease-out;
+}
+.text-page a:not([class]):hover {
+  text-decoration-color: var(--color-coral);
+}
+.text-page .credit {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
 
 /* Homepage mini map: the route draws itself in and the coral raindrop runs it to
    the sea, repeating gently. With reduced motion both rest at the finished state. */
@@ -284,6 +350,110 @@ button:not(:disabled),
   .mini-slice-b {
     animation: none;
     transform: translate(-1.9px, 3.5px);
+  }
+}
+
+/* The 404 page (app/NotFoundScene.tsx): the two 4s rise over the horizon, then the
+   Peeker pops up between them with a little settle, glances at each 4, looks at you,
+   and blinks now and then. Pixel values are in the drawing's own units (an SVG
+   element's CSS transform uses its user space), so the pupils' 3px is 3 of the
+   Peeker's 48 grid units. */
+.nf-rise {
+  animation: nf-rise 1100ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.nf-rise-late {
+  animation-delay: 140ms;
+}
+@keyframes nf-rise {
+  from {
+    transform: translateY(240px);
+  }
+}
+.nf-peeker {
+  animation: nf-pop 1000ms 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes nf-pop {
+  0% {
+    transform: translateY(150px);
+  }
+  62% {
+    transform: translateY(-9px);
+  }
+  100% {
+    transform: none;
+  }
+}
+/* Tapped: duck behind the horizon, then peek back up. */
+.nf-duck {
+  animation: nf-duck 900ms cubic-bezier(0.45, 0, 0.2, 1);
+}
+@keyframes nf-duck {
+  0%,
+  100% {
+    transform: none;
+  }
+  35%,
+  55% {
+    transform: translateY(150px);
+  }
+  85% {
+    transform: translateY(-7px);
+  }
+}
+/* Looking around: at the left 4, at the right 4, then at you (the pupils are drawn
+   looking up and right, so "at you" moves them back to the middle and down). */
+.nf-look {
+  animation: nf-look 7s 1500ms ease-in-out infinite both;
+  transition: transform 160ms ease-out;
+}
+@keyframes nf-look {
+  0%,
+  10% {
+    transform: translate(-1.7px, 1.3px);
+  }
+  16%,
+  34% {
+    transform: translate(-3.6px, 0.6px);
+  }
+  42%,
+  60% {
+    transform: translate(0.5px, 0.6px);
+  }
+  68%,
+  100% {
+    transform: translate(-1.7px, 1.3px);
+  }
+}
+/* With a mouse, the eyes follow the pointer (NotFoundScene sets --nf-x / --nf-y). */
+.nf-following .nf-look {
+  animation: none;
+  transform: translate(var(--nf-x, 0px), var(--nf-y, 0px));
+}
+.nf-blink {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: nf-blink 5.2s 2600ms infinite;
+}
+@keyframes nf-blink {
+  0%,
+  94%,
+  100% {
+    transform: none;
+  }
+  97% {
+    transform: scaleY(0.1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .nf-rise,
+  .nf-peeker,
+  .nf-duck,
+  .nf-blink {
+    animation: none;
+  }
+  .nf-look {
+    animation: none;
+    transform: translate(-1.7px, 1.3px);
   }
 }
 

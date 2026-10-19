@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
+import { track } from "@/lib/analytics";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
@@ -412,6 +413,7 @@ function ShareButton({ number, preview, marks }: { number: number; preview: bool
     sound.tap();
     const text = shareText({ game: GAME_NAME, number, preview, marks, url: `${location.origin}/slice/` });
     const outcome = await shareResult(text);
+    track("result_shared", { game: "slice", outcome });
     if (outcome !== "shared") {
       setState(outcome);
       window.setTimeout(() => setState("idle"), 2200);

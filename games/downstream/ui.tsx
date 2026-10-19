@@ -10,11 +10,11 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
+import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
-import { useToday } from "@/lib/useToday";
 import type { GameState } from "./game";
 import { storageKeyFor } from "./schedule";
 import { dropEmoji, dropPoints, EMOJI_LEGEND, maxPoints, totalPoints, type DropResult } from "./scoring";
@@ -286,7 +286,14 @@ const INTRO_SETTING = "introSeen";
 /** Whether the first-time hint should show (hidden during the build and hydration). */
 export function useFirstTime(): [boolean, () => void] {
   const seen = useSyncExternalStore(subscribe, () => getSetting("downstream", INTRO_SETTING, false), () => true);
-  return [!seen, () => setSetting("downstream", INTRO_SETTING, true)];
+  return [
+    !seen,
+    () => {
+      if (getSetting("downstream", INTRO_SETTING, false)) return;
+      setSetting("downstream", INTRO_SETTING, true);
+      track("intro_dismissed", { game: "downstream" });
+    },
+  ];
 }
 
 /** Share the day's result: the system share sheet on phones, the clipboard elsewhere. */
@@ -316,6 +323,7 @@ export function ShareButton({
       url: `${location.origin}/downstream/`,
     });
     const outcome = await shareResult(text);
+    track("result_shared", { game: "downstream", outcome });
     if (outcome !== "shared") {
       setState(outcome);
       window.setTimeout(() => setState("idle"), 2200);
@@ -464,7 +472,6 @@ export function DaySummary({
 
 /** Loading, not launched yet, and no puzzle file: a calm card on the land ground. */
 export function GameNotice({ load, preview }: { load: Exclude<Load, { status: "ready" }>; preview: boolean }) {
-  const today = useToday();
   // Loading is the shared loading state, like the page before it and the map after it.
   if (load.status === "loading") return <Loading label="Finding today's drops…" className="min-h-svh bg-land" />;
   return (
@@ -475,7 +482,7 @@ export function GameNotice({ load, preview }: { load: Exclude<Load, { status: "r
           {load.status === "comingSoon" && (
             <>
               <p className="font-display text-3xl font-semibold tracking-[-0.03em]">Downstream launches soon<span className="text-coral">.</span></p>
-              <p className="mt-2 text-ink-soft">{today ? `The first drops land on ${today.launch}.` : " "}</p>
+              <p className="mt-2 text-ink-soft">Until then, try a preview puzzle.</p>
               <div className="mt-6">
                 <PreviewList />
               </div>

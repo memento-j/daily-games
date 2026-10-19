@@ -1,8 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
+import JsonLd from "@/components/JsonLd";
 import { PeekerMark } from "@/components/Peeker";
-import { SITE_NAME } from "@/lib/site";
+import { pageMetadata, siteJsonLd } from "@/lib/seo";
+import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import DownstreamStatus from "./DownstreamStatus";
 import SliceStatus from "./SliceStatus";
+import SiteFooter from "@/components/SiteFooter";
 import ThemeToggle from "@/components/ThemeToggle";
 import TodayDate from "./TodayDate";
 
@@ -10,9 +14,18 @@ import TodayDate from "./TodayDate";
 // all of this text is in the static HTML (good for search and, later, AdSense);
 // only today's date is filled in by the browser.
 
+// "Daily geography puzzles" is what people search for; the brand alone isn't yet.
+export const metadata: Metadata = pageMetadata({
+  title: `${SITE_NAME}: daily geography puzzles, free`,
+  absoluteTitle: true,
+  description: SITE_DESCRIPTION,
+  path: "/",
+});
+
 export default function Home() {
   return (
     <div className="font-sans flex min-h-svh flex-col bg-land text-ink">
+      <JsonLd data={siteJsonLd(SITE_DESCRIPTION)} />
       <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-5 pt-6 pb-10 sm:px-8 sm:pt-8 lg:pb-7">
         <header className="flex items-center justify-between">
           <span className="font-display flex items-center gap-2 text-lg font-semibold tracking-[-0.02em]">
@@ -91,7 +104,7 @@ export default function Home() {
           More games are on the way, one at a time and only once they&apos;re fun. Bookmark this page and check back.
         </p>
 
-        <footer className="mt-auto pt-8 text-xs text-ink-faint">New puzzles every midnight, your time.</footer>
+        <SiteFooter className="mt-auto pt-8" note="New puzzles every midnight, your time." />
       </div>
     </div>
   );

@@ -5,9 +5,9 @@
 // hydration, then the real value straight after, so there's no hydration mismatch.
 
 import { useSyncExternalStore } from "react";
-import { getPuzzleNumber, LAUNCH_DATE } from "@/lib/daily";
+import { getPuzzleNumber } from "@/lib/daily";
 
-export type Today = { number: number | null; date: string; launch: string };
+export type Today = { number: number | null; date: string };
 
 const noSubscription = () => () => {};
 let cached: { key: string; value: Today } | null = null;
@@ -20,7 +20,6 @@ function read(): Today {
   const value: Today = {
     number: n >= 1 ? n : null,
     date: now.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }),
-    launch: LAUNCH_DATE.toLocaleDateString(undefined, { day: "numeric", month: "long", timeZone: "UTC" }),
   };
   cached = { key, value };
   return value;

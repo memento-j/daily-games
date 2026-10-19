@@ -8,16 +8,19 @@
 const CORAL = "var(--color-coral)";
 const PUPIL = "#1d2533";
 
-/** The Peeker's body and eyes, for reuse (Loading animates these parts). */
-export function PeekerParts({ pupilClass = "" }: { pupilClass?: string }) {
+/** The Peeker's body and eyes, for reuse (Loading and the 404 page animate these
+ *  parts: `eyesClass` moves both eyes, e.g. to blink; `pupilClass` just the pupils). */
+export function PeekerParts({ pupilClass = "", eyesClass = "" }: { pupilClass?: string; eyesClass?: string }) {
   return (
     <>
       <path d="M5 34a19 19 0 0 1 38 0Z" fill={CORAL} />
-      <circle cx="17.5" cy="24.5" r="4.6" fill="#fff" />
-      <circle cx="30.5" cy="24.5" r="4.6" fill="#fff" />
-      <g className={pupilClass}>
-        <circle cx="19.2" cy="23.2" r="2.2" fill={PUPIL} />
-        <circle cx="32.2" cy="23.2" r="2.2" fill={PUPIL} />
+      <g className={eyesClass}>
+        <circle cx="17.5" cy="24.5" r="4.6" fill="#fff" />
+        <circle cx="30.5" cy="24.5" r="4.6" fill="#fff" />
+        <g className={pupilClass}>
+          <circle cx="19.2" cy="23.2" r="2.2" fill={PUPIL} />
+          <circle cx="32.2" cy="23.2" r="2.2" fill={PUPIL} />
+        </g>
       </g>
     </>
   );

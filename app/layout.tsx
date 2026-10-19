@@ -1,7 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
-import { SITE_NAME, SITE_TAGLINE } from "@/lib/site";
+import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 import { THEME_SCRIPT } from "@/lib/theme";
+import Analytics from "@/components/Analytics";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from our own domain,
@@ -18,11 +19,16 @@ const hanken = Hanken_Grotesk({
 });
 
 export const metadata: Metadata = {
-  // The site's own name and pitch; each game's page sets its own ("Slice · Pondo").
+  // The site's address. Next.js turns relative links in metadata (preview images,
+  // canonical links) into full URLs with it, which crawlers and link previews need.
+  metadataBase: new URL(SITE_URL),
+  // The defaults; each page sets its own title, description and preview (lib/seo.ts).
+  // The template turns a page's "Slice: ..." into "Slice: ... · Pondo".
   // The icons are files in app/ (icon.svg, favicon.ico, apple-icon.png) and the web app
-  // manifest is app/manifest.ts, all made by scripts/brand/make_icons.py.
+  // manifest is app/manifest.ts, made by scripts/brand/make_icons.py; the link-preview
+  // images are app/**/opengraph-image.png, made by scripts/brand/make_og.py.
   title: { default: `${SITE_NAME} · ${SITE_TAGLINE}`, template: `%s · ${SITE_NAME}` },
-  description: "Quick daily puzzles that are easy to start and hard to put down. A new one in every game each day, the same for everyone.",
+  description: SITE_DESCRIPTION,
   applicationName: SITE_NAME,
   appleWebApp: { title: SITE_NAME },
 };
@@ -46,7 +52,10 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
-      <body className="flex min-h-full flex-col">{children}</body>
+      <body className="flex min-h-full flex-col">
+        {children}
+        <Analytics />
+      </body>
     </html>
   );
 }
