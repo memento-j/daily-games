@@ -992,6 +992,10 @@ export class SliceScene {
     if (this.slab) this.slab.visible = true;
   }
 
+  /** Called once, after the first frame that shows a country (the page then drops its
+   *  loading state: the scene being created isn't the same as something on screen). */
+  onShown: (() => void) | null = null;
+
   private loop = () => {
     this.raf = requestAnimationFrame(this.loop);
     if (document.hidden) return;
@@ -1001,6 +1005,11 @@ export class SliceScene {
     this.animatePerfect(now);
     if (this.controls.enabled) this.controls.update();
     this.renderer.render(this.scene, this.camera);
+    if (this.round && this.onShown) {
+      const shown = this.onShown;
+      this.onShown = null;
+      shown();
+    }
   };
 
   dispose() {

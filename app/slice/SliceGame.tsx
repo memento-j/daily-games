@@ -3,7 +3,7 @@
 // The Slice game screen (/slice): the 3D board (games/slice/scene.ts) fills the screen
 // under a thin layer of interface. Each round: the question announces itself (a
 // People/Land badge, its key words highlighted, a two-note sound), the player draws a
-// dashed cut and presses Cut, the scissors snip, the pieces part and the people rise;
+// dashed cut and presses Cut, the scissors snip, the pieces part and the population rises;
 // then "Show perfect cut" and Next. After the last round, the day's summary sits in a
 // sheet at the bottom and tapping a round shows its cut again on the board.
 //
@@ -13,6 +13,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { shareResult, shareText } from "@/lib/share";
 import { subscribe } from "@/lib/storage";
@@ -50,6 +51,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   const scene = useRef<SliceScene | null>(null);
   const shown = useRef(""); // what the scene is showing, so re-renders don't replay it
   const [sceneReady, setSceneReady] = useState(false);
+  const [boardShown, setBoardShown] = useState(false); // the first frame with the country is drawn
   const [failed, setFailed] = useState(false);
   const [hasDraft, setHasDraft] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -62,7 +64,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   const roundIndex = finished ? viewing : g.game.round;
   const round = puzzle.rounds[roundIndex];
   const cut: SavedCut | undefined = g.game.cuts[roundIndex];
-  const people = round.mode === "population";
+  const isPopulation = round.mode === "population";
 
   // Create the 3D scene once. three.js is imported here, in the browser, never at build time.
   useEffect(() => {
@@ -76,6 +78,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
           setMessage(null);
         });
         scene.current = made;
+        made.onShown = () => setBoardShown(true);
         measureInsets();
         setSceneReady(true);
       })
@@ -166,6 +169,12 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   return (
     <div className="font-sans relative h-svh overflow-hidden bg-mat text-ink">
       <div ref={holder} className="absolute inset-0" />
+      {/* Until the 3D board is up (its code downloads after the puzzle), the same loading
+          state as the page before it, in the same place, then it fades away. */}
+      <Loading
+        label="Laying out today's countries…"
+        className={`absolute inset-0 bg-mat transition-opacity duration-500 ${boardShown || failed ? "pointer-events-none opacity-0" : ""}`}
+      />
       {failed && (
         <p className="absolute inset-0 grid place-items-center p-6 text-center">
           Slice draws its countries in 3D with WebGL, which this browser has turned off. Try another browser, or turn on hardware acceleration.
@@ -219,11 +228,11 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             <div key={roundIndex} className="mt-2">
               <span
                 className={`rise-in inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold tracking-wide uppercase shadow-card ${
-                  people ? "bg-coral text-white" : "bg-card text-ink"
+                  isPopulation ? "bg-coral text-white" : "bg-card text-ink"
                 }`}
               >
-                {people ? <PeopleIcon /> : <LandIcon />}
-                {people ? "Population" : "Land"}
+                {isPopulation ? <PopulationIcon /> : <LandIcon />}
+                {isPopulation ? "Population" : "Land"}
               </span>
               <h1
                 className={`font-display mt-2 max-w-[22ch] leading-tight font-semibold tracking-[-0.02em] text-balance transition-[font-size] duration-300 ${
@@ -251,8 +260,8 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                 {message ??
                   (hasDraft
                     ? "Drag either end to fine-tune, then press Cut."
-                    : people
-                      ? "Think about where people live, not how big it looks. Drag across the country to draw your cut."
+                    : isPopulation
+                      ? "Think about where most of the population lives, not how big the country looks. Drag across it to draw your cut."
                       : "Just the land this time: cities don't count. Drag across the country to draw your cut.")}
               </p>
               <button
@@ -448,7 +457,7 @@ function PreviewList() {
   );
 }
 
-function PeopleIcon() {
+function PopulationIcon() {
   return (
     <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
       <circle cx="7" cy="6.5" r="2.6" fill="currentColor" />
@@ -493,20 +502,22 @@ function SoundButton() {
 }
 
 function Notice({ load }: { load: Exclude<Load, { status: "ready" }> }) {
+  // Loading is the shared loading state, the same as the page shell before it.
+  if (load.status === "loading") return <Loading label="Laying out today's countries…" className="h-svh bg-mat" />;
   return (
-    // Loading is the bare board colour, like the page's Suspense fallback, so nothing jumps.
     <div className="font-sans grid h-svh place-items-center bg-mat p-6 text-ink">
-      {load.status !== "loading" && (
-        <div className="max-w-[420px] rounded-[26px] bg-card p-7 shadow-card">
-          <p className="font-display text-2xl font-semibold">
-            {load.status === "missing" ? "Today's countries are still being cut. Check back soon." : "There's no puzzle with that number."}
-          </p>
-          <Countdown prefix="New countries in" className="mt-3 block text-ink-soft" />
-          <Link href="/" className="mt-5 inline-block text-sm font-semibold text-coral-deep">
-            ← All games
-          </Link>
-        </div>
-      )}
+      <div className="max-w-[420px] rounded-[26px] bg-card p-7 shadow-card">
+        <p className="font-display text-2xl font-semibold">
+          {load.status === "missing" ? "Today's countries are still being cut. Check back soon." : "There's no puzzle with that number."}
+        </p>
+        <Countdown prefix="New countries in" className="mt-3 block text-ink-soft" />
+        <Link href="/" className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-coral-deep">
+          <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
+            <path d="M16 10H5M9 5.5 4.5 10 9 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          All games
+        </Link>
+      </div>
     </div>
   );
 }

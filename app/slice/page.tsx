@@ -4,11 +4,12 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Loading from "@/components/Loading";
 import SliceGame from "./SliceGame";
 
 export const metadata: Metadata = {
   title: "Slice",
-  description: "Cut a real country with one straight line: half its land, half its population, a third of it. Four countries a day.",
+  description: "Draw one straight line across a real country to cut off half its land or a third of its population. Four countries a day, free.",
 };
 
 export default function SlicePage() {
@@ -16,27 +17,45 @@ export default function SlicePage() {
     <>
       {/* SliceGame reads ?puzzle=N with useSearchParams, which in a static export must
           sit inside a Suspense boundary. The build can't know the address, so the HTML
-          holds this fallback until the browser renders the game: it fills the screen in
-          the board's colour, or the how-to-play text below flashed up first. */}
-      <Suspense fallback={<div className="h-svh bg-mat" />}>
+          holds this fallback until the browser renders the game: the shared loading
+          state, full screen in the board's colour (an empty fallback let the how-to-play
+          text below flash up first). */}
+      <Suspense fallback={<Loading label="Laying out today's countries…" className="h-svh bg-mat" />}>
         <SliceGame />
       </Suspense>
       <section className="font-sans bg-land px-4 pb-12 text-ink">
         <div className="mx-auto max-w-[560px] pt-8">
           <h2 className="font-display text-xl font-semibold">How to play</h2>
           <p className="mt-2 leading-relaxed text-ink-soft">
-            Every day there are four countries to cut. For each one, draw a single straight line that cuts off what the question asks for: half
-            the land, half the population, a third of it, or a tenth.
+            Every day you get four real countries, each with a goal like &ldquo;Cut off half of Germany&apos;s land&rdquo; or &ldquo;Cut off a
+            third of Japan&apos;s population&rdquo;. You have one straight line to do it.
           </p>
-          <p className="mt-2 leading-relaxed text-ink-soft">
-            Check the label above the question. Land rounds are about size. Population rounds are about where people live, which is rarely
-            where the land is, so a cut that looks right can be way off.
-          </p>
-          <p className="mt-2 leading-relaxed text-ink-soft">
-            Drag across the country to draw your line, drag its ends to fine-tune it, then press Cut. Whichever piece is closer to the aim
-            counts. The pieces part and the population rises in columns, so you can see where everyone lives. Show perfect cut reveals the
-            right line at your angle.
-          </p>
+          <ol className="mt-4 flex flex-col gap-3">
+            {[
+              [
+                "Read the goal.",
+                "The label above it says what you're cutting. A Land round is about size: half the land is half the shape. A Population round is about where the population lives: it crowds into cities, coasts and river valleys, so the line that splits the shape in half rarely splits the population in half.",
+              ],
+              [
+                "Draw your line.",
+                "Drag across the country, from one side to the other. Drag either end to adjust the angle and position, then press Cut. Only one of the two pieces needs to match the goal: whichever is closer counts.",
+              ],
+              [
+                "See how close you got.",
+                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Within 2% of the goal earns a green square, within 6% blue, within 16% yellow, anything further red. Show perfect cut reveals the ideal line at your angle.",
+              ],
+              ["Share your squares.", "After four rounds, share your row of squares to compare with friends. It never gives away the answers."],
+            ].map(([title, text], i) => (
+              <li key={title} className="flex gap-3">
+                <span className="font-display grid size-7 shrink-0 place-items-center rounded-full bg-coral-soft text-sm font-semibold text-coral-deep">
+                  {i + 1}
+                </span>
+                <p className="leading-relaxed text-ink-soft">
+                  <span className="font-semibold text-ink">{title}</span> {text}
+                </p>
+              </li>
+            ))}
+          </ol>
           <p className="mt-4 text-xs text-ink-faint">
             Population: GHSL GHS-POP 2025 (European Commission, JRC), CC BY 4.0. Borders: Natural Earth.
           </p>

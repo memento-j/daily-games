@@ -8,6 +8,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { padPuzzleNumber } from "@/lib/daily";
 import { shareResult, shareText } from "@/lib/share";
@@ -463,12 +464,13 @@ export function DaySummary({
 /** Loading, not launched yet, and no puzzle file: a calm card on the land ground. */
 export function GameNotice({ load, preview }: { load: Exclude<Load, { status: "ready" }>; preview: boolean }) {
   const today = useToday();
+  // Loading is the shared loading state, like the page before it and the map after it.
+  if (load.status === "loading") return <Loading label="Finding today's drops…" className="min-h-svh bg-land" />;
   return (
     <div className="font-sans grid min-h-svh place-items-center bg-land px-5 text-ink">
       <div className="w-full max-w-[460px] rounded-[30px] bg-card p-8 shadow-card">
         <GameTopBar number={null} preview={preview} />
         <div className="mt-8" role="status">
-          {load.status === "loading" && <p className="font-display text-3xl font-semibold tracking-[-0.03em]">Finding today&apos;s drops…</p>}
           {load.status === "comingSoon" && (
             <>
               <p className="font-display text-3xl font-semibold tracking-[-0.03em]">Downstream launches soon<span className="text-coral">.</span></p>

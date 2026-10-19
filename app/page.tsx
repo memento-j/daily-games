@@ -26,16 +26,18 @@ export default function Home() {
 
         <section className="mt-[8svh] lg:mt-[5svh]">
           <h1 className="font-display max-w-[13ch] lg:max-w-[19ch] text-[clamp(44px,7.4vw,72px)] leading-[0.95] font-semibold tracking-[-0.045em] text-balance">
-            Small daily puzzles about the real world<span className="text-coral">.</span>
+            {/* The coral punctuation that ends every headline: here the question mark. */}
+            Your daily dose of &ldquo;wait, really<span className="text-coral">?</span>&rdquo;
           </h1>
-          <p className="mt-5 max-w-[46ch] text-lg leading-snug text-ink-soft">
-            Each game has one puzzle a day, the same for everyone. A few minutes with your coffee, then it&apos;s tomorrow&apos;s turn.
+          <p className="mt-5 max-w-[48ch] text-lg leading-snug text-ink-soft">
+            Quick puzzles that are easy to start and hard to put down. A new one in every game each day, the same for everyone, so you can
+            compare with friends. Free, and no sign-up.
           </p>
         </section>
 
         <section className="mt-10" aria-labelledby="games">
           <h2 id="games" className="font-display text-[22px] font-semibold tracking-[-0.02em]">
-            The games
+            Today&apos;s puzzles
           </h2>
           <ul className="mt-4 grid grid-cols-1 gap-3">
             <li>
@@ -48,7 +50,8 @@ export default function Home() {
                     Slice<span className="text-coral">.</span>
                   </span>
                   <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
-                    Cut a real country with one straight line. Half the land is rarely half the population.
+                    Draw one straight line across a real country to cut off half its land, or a third of its population. Easy, until you see where
+                    everyone lives.
                   </span>
                   <span className="mt-4 block">
                     <SliceStatus />
@@ -67,7 +70,7 @@ export default function Home() {
                     Downstream<span className="text-coral">.</span>
                   </span>
                   <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
-                    A raindrop lands somewhere on Earth. Pick the sea it reaches.
+                    A raindrop lands somewhere on Earth. Guess which sea it ends up in. It&apos;s not always the nearest one.
                   </span>
                   <span className="mt-4 block">
                     <DownstreamStatus />

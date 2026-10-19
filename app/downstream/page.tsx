@@ -5,6 +5,7 @@
 
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import Loading from "@/components/Loading";
 import { preconnectMapHosts } from "@/games/downstream/preconnect";
 import DownstreamGame from "./DownstreamGame";
 
@@ -18,7 +19,7 @@ export default function DownstreamPage() {
   return (
     // DownstreamGame reads ?puzzle=N with useSearchParams, which in a static
     // export must sit inside a Suspense boundary.
-    <Suspense fallback={null}>
+    <Suspense fallback={<Loading label="Finding today's drops…" className="min-h-svh bg-land" />}>
       <DownstreamGame />
     </Suspense>
   );

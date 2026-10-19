@@ -21,6 +21,7 @@ import { length } from "@turf/length";
 import { lineSliceAlong } from "@turf/line-slice-along";
 import type { FilterSpecification, GeoJSONSource, Map as MapLibreMap, Marker, PaddingOptions } from "maplibre-gl";
 import { useEffect, useRef, useState } from "react";
+import Loading from "@/components/Loading";
 import { useTheme } from "@/lib/useTheme";
 import { downstreamMapStyle, MAP_PALETTES, themePaint } from "./mapStyle";
 import type { LngLat } from "./types";
@@ -124,6 +125,7 @@ export default function RouteMap({
   const drawn = useRef<{ route: LngLat[] | null; km: number }>({ route: null, km: 0 });
   const headOn = useRef(false); // whether the raindrop is on the map (for its glow)
   const [ready, setReady] = useState(false);
+  const [drawnOnce, setDrawnOnce] = useState(false); // the first tiles are on screen (hides the loading state)
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0); // bumped by "Try again" to rebuild the map
   // Light or dark (mapStyle.ts has both palettes). Read through a ref by the map setup
@@ -169,7 +171,10 @@ export default function RouteMap({
         // initial tile, so one slow tile held back the route and labels.)
         // Timing marks for performance checks (DevTools > Performance, or performance.getEntriesByType("mark")).
         performance.mark("map:created");
-        map.once("load", () => performance.mark("map:loaded")); // style + first tiles drawn
+        map.once("load", () => {
+          performance.mark("map:loaded"); // style + first tiles drawn
+          setDrawnOnce(true);
+        });
         map.once("style.load", () => {
           performance.mark("map:style-loaded");
           const m = map!;
@@ -507,15 +512,28 @@ export default function RouteMap({
       headSource.setData({ type: "Feature", geometry: { type: "Point", coordinates: head }, properties: {} });
       headOn.current = true;
       drawn.current.km = km;
-      // Camera: settle into the overview, while leaning in and travelling with the drop
-      // mid-flow (sin curve: zero at both ends, so it lands exactly on the overview).
+      // Camera: settle into the overview, while leaning in to follow the water mid-flow
+      // (sin curve: zero at both ends, so it lands exactly on the overview). The follow
+      // framing is the stretch drawn in this flow, fitted with the same padding as every
+      // other framing, so the drop and its trail are always in the visible part of the
+      // map. (Nudging the centre a fixed 45% towards the drop while zooming in 0.8-1.4
+      // levels could leave it off screen when the overview was wide, so the camera
+      // dived into empty map beside the path.)
       const settle = easeOut(Math.min(raw / 0.3, 1));
       const lean = Math.sin(Math.PI * raw);
       const baseLng = lerp(startCenter.lng, endCenter.lng, settle);
       const baseLat = lerp(startCenter.lat, endCenter.lat, settle);
+      const baseZoom = lerp(startZoom, endZoom, settle);
+      // (Clamped: a negative start makes lineSliceAlong throw, which stopped the flow dead.)
+      const stretchStart = Math.max(0, Math.min(from, km - 0.01));
+      const stretch = lineSliceAlong(line, stretchStart, Math.min(totalKm, Math.max(km, stretchStart + 0.01)), { units: "kilometers" });
+      const follow = map!.cameraForBounds(boundsOf(stretch.geometry.coordinates), { padding, maxZoom: baseZoom + leanZoom });
+      const followCenter = follow?.center as { lng: number; lat: number } | undefined;
       map!.jumpTo({
-        center: [lerp(baseLng, head[0], lean * 0.45), lerp(baseLat, head[1], lean * 0.45)],
-        zoom: lerp(startZoom, endZoom, settle) + lean * leanZoom,
+        center: followCenter ? [lerp(baseLng, followCenter.lng, lean), lerp(baseLat, followCenter.lat, lean)] : [baseLng, baseLat],
+        // A long stretch may need to pull back a little rather than lean in: showing the
+        // water wins over the lean.
+        zoom: lerp(baseZoom, follow?.zoom ?? baseZoom, lean),
         // No `padding` here: cameraForBounds already allowed for it, and jumpTo would
         // keep it on the map, doubling it in every later framing.
       });
@@ -548,6 +566,12 @@ export default function RouteMap({
   return (
     <div className={`relative ${className}`}>
       <div ref={containerRef} className="h-full w-full" aria-label="Map of the raindrop's route" role="img" />
+      {/* Until the map has drawn its first tiles (not just its style, which left a blank
+          map): the shared loading state, then it fades away. */}
+      <Loading
+        label="Drawing the map…"
+        className={`absolute inset-0 bg-land transition-opacity duration-500 ${(ready && drawnOnce) || failed ? "pointer-events-none opacity-0" : ""}`}
+      />
       {failed && (
         <div role="alert" className="absolute inset-0 grid place-items-center bg-land/85 p-4">
           <div className="rounded-2xl bg-card p-5 text-center shadow-card">
