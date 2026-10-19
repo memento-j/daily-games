@@ -32,12 +32,12 @@ Downstream's puzzles are real hydrology: every route is traced from a global riv
 - Puzzles are precomputed offline by a Python pipeline and fetched at runtime; never bundled.
 - Maps use MapLibre GL with free vector tiles (OpenFreeMap); no API keys. No terrain shading on the game map (removed for speed).
 - AdSense readiness later requires real HTML content: homepage with game descriptions, how-to-play per game, About, Privacy, Contact. Ads must never interrupt play.
-- Undecided: the site/brand name (use a clearly marked placeholder), launch date, final scoring after playtest.
+- Undecided: launch date, final scoring after playtest. (The site name is decided: Pondo.)
 
 ## Brand Commitments
 
 - Game name: "Downstream".
-- Site name: not decided yet.
+- Site name: **Pondo** (decided 2026-10-19; planned domain pondo.gg). Mark: the Peeker, a round coral character peeking over the horizon.
 - Sits in the daily-games genre (short, friendly, one obvious Play), but must look like its own thing, not a copy of NYT Games (user, 2026-10-16: "lets not copy the nyt style i feel that's too obvious, we should still be somewhat unique"). Not corporate/SaaS.
 - The homepage leads with Downstream while it is the only game.
 

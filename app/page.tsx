@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { PeekerMark } from "@/components/Peeker";
 import { SITE_NAME } from "@/lib/site";
 import DownstreamStatus from "./DownstreamStatus";
 import SliceStatus from "./SliceStatus";
@@ -15,8 +16,11 @@ export default function Home() {
       <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-5 pt-6 pb-10 sm:px-8 sm:pt-8 lg:pb-7">
         <header className="flex items-center justify-between">
           <span className="font-display flex items-center gap-2 text-lg font-semibold tracking-[-0.02em]">
-            <DropMark />
-            {SITE_NAME}
+            <PeekerMark className="size-8" />
+            <span>
+              {SITE_NAME}
+              <span className="text-coral">.</span>
+            </span>
           </span>
           <span className="flex items-center gap-3">
             <TodayDate />
@@ -99,15 +103,6 @@ function ComingSoon({ number, line }: { number: number; line: string }) {
       <span className="font-display text-[28px] leading-none font-semibold tracking-[-0.03em] whitespace-nowrap text-ink/25">No. {number}</span>
       <span className="text-[15px] text-ink-faint">{line}</span>
     </li>
-  );
-}
-
-/** Small raindrop mark beside the site name. */
-function DropMark() {
-  return (
-    <svg viewBox="0 0 16 20" className="h-[18px] w-[14px]" aria-hidden="true">
-      <path d="M8 1.5C8 1.5 2 8.6 2 12.6A6 6 0 0 0 14 12.6C14 8.6 8 1.5 8 1.5Z" fill="var(--color-coral)" />
-    </svg>
   );
 }
 

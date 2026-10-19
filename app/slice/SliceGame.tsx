@@ -16,6 +16,7 @@ import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { shareResult, shareText } from "@/lib/share";
+import { SITE_NAME } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
 import { useTheme } from "@/lib/useTheme";
 import { ENDLESS_TRIES, GAME_NAME } from "@/games/slice/config";
@@ -190,7 +191,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
         <div className="pointer-events-auto flex items-center justify-between gap-2">
           <Link
             href="/"
-            aria-label={`${GAME_NAME}: back to all games`}
+            aria-label={`${GAME_NAME}: back to ${SITE_NAME}`}
             className="group flex items-center gap-1.5 rounded-full bg-card py-1.5 pr-3.5 pl-2.5 text-xs font-semibold whitespace-nowrap shadow-card transition-colors hover:text-coral-deep"
           >
             <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden="true">

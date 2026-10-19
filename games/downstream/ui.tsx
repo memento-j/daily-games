@@ -12,6 +12,7 @@ import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { padPuzzleNumber } from "@/lib/daily";
 import { shareResult, shareText } from "@/lib/share";
+import { SITE_NAME } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import { useToday } from "@/lib/useToday";
 import type { GameState } from "./game";
@@ -31,7 +32,7 @@ export function GameTopBar({ number, preview }: { number: number | null; preview
     <div className="flex items-center justify-between gap-3">
       <Link
         href="/"
-        aria-label="Downstream: back to all games"
+        aria-label={`Downstream: back to ${SITE_NAME}`}
         className="group flex items-center gap-1.5 rounded-full bg-card py-1.5 pr-3.5 pl-2.5 text-xs font-semibold shadow-card transition-colors hover:text-coral-deep"
       >
         <svg viewBox="0 0 20 20" className="size-3.5 transition-transform duration-200 group-hover:-translate-x-0.5" aria-hidden="true">

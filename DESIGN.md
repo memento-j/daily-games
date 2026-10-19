@@ -404,7 +404,7 @@ Cool, quiet map neutrals with exactly two saturated voices: warm coral for the b
 
 ## Layout
 
-**Site homepage (`/`):** a single centred column, max 760px, 20px side padding (32px from 640px), on pale land. Header row (drop mark and site name left, date right), headline block about 8svh below, then "The games" as a one-column list with 12px gaps, a closing note, and a footer line pushed to the bottom of the viewport. It scrolls naturally; no map.
+**Site homepage (`/`):** a single centred column, max 760px, 20px side padding (32px from 640px), on pale land. Header row (the Peeker mark and the site name "Pondo." left, date right), headline block about 8svh below, then "The games" as a one-column list with 12px gaps, a closing note, and a footer line pushed to the bottom of the viewport. It scrolls naturally; no map.
 
 
 
@@ -499,7 +499,7 @@ Everything the player touches or reads is rounded. Pills (fully round) for the c
 - **Preview chips:** 40px round white chips with a hairline ring and a 14px bold puzzle number; hover turns the ring coral and the number coral-deep. Under a 14px ink-faint line, in the notice card and the preview day summary.
 
 ### Navigation
-- **Site header (homepage):** coral drop mark plus the site name in Bricolage 18px semibold left, today's date and puzzle number in 14px ink-faint right. Plain, no bar or background.
+- **Site header (homepage):** the Peeker mark (32px; `components/Peeker.tsx`) plus "Pondo" with a coral full stop in Bricolage 18px semibold left, today's date and puzzle number in 14px ink-faint right. Plain, no bar or background.
 - **Back link:** white pill with card-lift, 12px semibold name after a back arrow; on the game screen it reads "Downstream." (coral full stop) and links to the homepage, `/`. Hover turns the text coral-deep and nudges the arrow 2px left.
 - **Game top bar:** the back link left, a white puzzle-number pill right ("No. 4" or "Preview 4", 12px semibold ink-soft, card lift). In the column on desktop; floating over the map on phones, with the sound toggle at its right end.
 
