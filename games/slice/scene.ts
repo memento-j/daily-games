@@ -1,7 +1,7 @@
 // Slice's 3D board (plain three.js, no React; app/slice/SliceGame.tsx drives it). The country is a
 // thick paper-white slab on a sage cutting mat. While drawing, the camera looks down
-// at a gentle tilt and drifts a little to feel alive (the camera moves, never the
-// slab, so the line stays exact); a drag on the slab draws a dashed "cut here" line
+// at a gentle tilt and holds still (it used to drift and lean towards the mouse;
+// players found it distracting, 2026-10-21); a drag on the slab draws a dashed "cut here" line
 // (raycast onto the slab's top, so it's exact at any tilt). On the reveal: a pair of
 // scissors snips along the line, the slab splits into its two pieces, which slide
 // apart; the people rise as columns; then the player can orbit and zoom. "Show perfect
@@ -234,14 +234,11 @@ export class SliceScene {
   private topPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -TOP);
   private raycaster = new THREE.Raycaster();
 
-  // Camera: the drawing view drifts gently (and leans towards a hovering mouse).
+  // Camera: a still drawing view, then the reveal's three-quarter view.
   private drawView = { radius: 20, polar: 0.42, azimuth: 0 };
   private revealView = { radius: 22, polar: 0.95, azimuth: 0.55 };
   private cameraFrom = { radius: 20, polar: 0.42, azimuth: 0 };
-  private drift = 1; // 0 while a finger is down
   private insets = { top: 0, bottom: 0 };
-  private hover = new THREE.Vector2();
-  private hoverAim = new THREE.Vector2();
 
   // Reveal
   // When the reveal / perfect cut started (performance.now() ms), or null before. Not -1:
@@ -350,7 +347,6 @@ export class SliceScene {
     el.addEventListener("pointermove", this.move);
     el.addEventListener("pointerup", this.up);
     el.addEventListener("pointercancel", this.up);
-    el.addEventListener("pointerleave", () => this.hoverAim.set(0, 0));
 
     this.resize();
     new ResizeObserver(() => this.resize()).observe(container);
@@ -550,17 +546,9 @@ export class SliceScene {
     this.controls.target.set(0, TOP * 0.5, 0);
   }
 
-  /** The drawing view, drifting slowly so the slab feels like an object on a table,
-   *  and leaning a touch towards a hovering mouse. Calm while a finger is down. */
-  private driftCamera(now: number) {
-    const t = now / 1000;
-    this.drift += ((this.dragging === null && !this.reduced ? 1 : 0) - this.drift) * 0.08;
-    this.hover.lerp(this.hoverAim, 0.05);
-    this.setCamera({
-      radius: this.drawView.radius,
-      polar: this.drawView.polar + (0.03 * Math.sin(t * 0.31 + 1) + 0.04 * this.hover.y) * this.drift,
-      azimuth: this.drawView.azimuth + (0.06 * Math.sin(t * 0.43) + 0.07 * this.hover.x) * this.drift,
-    });
+  /** The drawing view, held still. */
+  private holdCamera() {
+    this.setCamera(this.drawView);
   }
 
   /** Screen space covered by the interface (px): the country is framed between them. */
@@ -622,10 +610,6 @@ export class SliceScene {
   };
 
   private move = (e: PointerEvent) => {
-    if (e.pointerType === "mouse" && this.dragging === null) {
-      const r = this.renderer.domElement.getBoundingClientRect();
-      this.hoverAim.set(((e.clientX - r.left) / r.width) * 2 - 1, ((e.clientY - r.top) / r.height) * 2 - 1);
-    }
     if (this.phase !== "draw" || this.dragging === null || !this.draft) return;
     const p = this.boardPoint(e);
     if (!p) return;
@@ -712,7 +696,7 @@ export class SliceScene {
     this.onRevealDone = onDone;
     this.revealDone = false;
     this.shares = [positiveShare, 1 - positiveShare];
-    // Swing from where the drift left the camera; a board shown straight into a reveal
+    // Swing from where the camera is; a board shown straight into a reveal
     // (a resumed game) has never placed it, so start from the drawing view.
     const placed = this.camera.position.lengthSq() > 1e-6;
     this.cameraFrom = placed
@@ -1045,7 +1029,7 @@ export class SliceScene {
     this.raf = requestAnimationFrame(this.loop);
     if (document.hidden) return;
     const now = performance.now();
-    if (this.phase === "draw" && this.round) this.driftCamera(now);
+    if (this.phase === "draw" && this.round) this.holdCamera();
     this.animateReveal(now);
     this.animatePerfect(now);
     if (this.controls.enabled) this.controls.update();
