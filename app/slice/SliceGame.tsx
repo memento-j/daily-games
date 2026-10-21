@@ -72,6 +72,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   const cut: SavedCut | undefined = finished ? g.game.cuts[roundIndex] : (g.game.last ?? undefined);
   const best: SavedCut | undefined = g.game.cuts[roundIndex];
   const isPopulation = round.mode === "population";
+  const revealing = !finished && g.phase !== "cutting" && !revealDone; // a cut is playing out on the board
 
   // Create the 3D scene once. three.js is imported here, in the browser, never at build time.
   useEffect(() => {
@@ -245,7 +246,8 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
               <p className="text-sm font-semibold">
                 Round {g.game.round + 1} <span className="text-ink-faint">of {puzzle.rounds.length}</span>
               </p>
-              <RoundScores scores={puzzle.rounds.map((_, i) => g.game.cuts[i]?.score ?? null)} />
+              {/* This round's score waits for the reveal, so it never gives the cut away. */}
+              <RoundScores scores={puzzle.rounds.map((_, i) => (i === g.game.round && !revealDone ? null : (g.game.cuts[i]?.score ?? null)))} />
             </div>
             {/* Keyed by round, so the badge and highlight replay for every new question. */}
             <div key={roundIndex} className="mt-2">
@@ -274,11 +276,22 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        <div ref={bottom} className="pointer-events-auto mx-auto max-w-[568px] rounded-[22px] bg-card/95 p-3 shadow-card">
+        {/* During a reveal the whole card is hidden, so the board has the stage; it rises
+            in with the result. Hidden, not removed: it keeps its size, so the board's
+            framing (setInsets) doesn't jump. */}
+        <div
+          ref={bottom}
+          className={`mx-auto max-w-[568px] rounded-[22px] bg-card/95 p-3 shadow-card ${
+            // Gone at once on Cut (a fade-out would show the result in it), back with a fade.
+            revealing ? "pointer-events-none translate-y-3 opacity-0" : "pointer-events-auto transition-[opacity,translate] duration-500"
+          }`}
+        >
           {finished ? (
             <Summary number={number} preview={preview} puzzle={puzzle} cuts={g.game.cuts} viewing={viewing} onView={setViewing} />
           ) : g.phase === "cutting" ? (
-            <div className="flex flex-col gap-2.5">
+            // Keyed apart from the result below: sharing one element, the result text
+            // arrived at full opacity and faded out before the reveal (a flash of the score).
+            <div key="cutting" className="flex flex-col gap-2.5">
               <p className={`px-1 text-[14px] ${message ? "font-semibold text-coral-deep" : "text-ink-soft"}`} aria-live="polite">
                 {message ??
                   (g.game.again && g.game.last
@@ -300,7 +313,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             </div>
           ) : cut ? (
             // Compact once cut, so the 3D board keeps most of a phone screen.
-            <div className={`flex flex-col gap-2 transition-opacity duration-500 ${revealDone ? "opacity-100" : "opacity-0"}`}>
+            <div key="result" className="flex flex-col gap-2">
               <p className="px-1 text-[15px] leading-snug">
                 <span className="font-semibold">
                   {BAND_WORDS[bandOf(cut.score)]}. {cut.score} points.
