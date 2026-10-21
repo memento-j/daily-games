@@ -11,7 +11,7 @@ import { gameJsonLd, pageMetadata } from "@/lib/seo";
 import SliceGame from "./SliceGame";
 
 const DESCRIPTION =
-  "A daily geography puzzle: draw one straight line across a real country to cut off half its land, or a third of its population. Four countries a day, free.";
+  "A daily geography puzzle: draw one straight line across a real country to cut off half, a third or a tenth of its population. Four countries a day, free.";
 
 export const metadata: Metadata = pageMetadata({ title: "Slice: cut a country's population in half", description: DESCRIPTION, path: "/slice/" });
 
@@ -35,14 +35,14 @@ export default function SlicePage() {
             countries&apos; populations crowd into a small part of their land, so the obvious cut is often far off.
           </p>
           <p className="mt-2 leading-relaxed text-ink-soft">
-            Every day you get four real countries, each with a goal like &ldquo;Cut off half of Germany&apos;s land&rdquo; or &ldquo;Cut off a
-            third of Japan&apos;s population&rdquo;. You get one straight line to do it, and a second try if you want it.
+            Every day you get four real countries, each with a goal like &ldquo;Cut off half of Germany&apos;s population&rdquo; or &ldquo;Cut off
+            a third of Japan&apos;s population&rdquo;. You get one straight line to do it, and a second try if you want it.
           </p>
           <ol className="mt-4 flex flex-col gap-3">
             {[
               [
                 "Read the goal.",
-                "The label above it says what you're cutting. A Land round is about size: half the land is half the shape. A Population round is about where the population lives: it crowds into cities, coasts and river valleys, so the line that splits the shape in half rarely splits the population in half.",
+                "It says how much of the population to cut off: half, a third or a tenth. Think about where the population lives, not how big the country looks: it crowds into cities, coasts and river valleys, so the line that splits the shape in half rarely splits the population in half.",
               ],
               [
                 "Draw your line.",

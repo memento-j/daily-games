@@ -79,7 +79,10 @@ DEFAULT_DAYS = 10
 # One round per entry, in play order: (mode, share to cut off). The last round cuts off
 # 10% or its mirror, 90% (seeded per puzzle). Countries go easiest first: the round
 # order follows how far people and land disagree in each (`cuts.surprise`).
-DAY_ROUNDS = [("area", 1 / 2), ("population", 1 / 2), ("population", 1 / 3), ("population", 0.1)]
+# Every round is a population round (developer's call, 2026-10-21: population is the
+# game's hook); the half-the-land round became a second half-the-population round.
+# The game still plays "area" rounds if a file has one.
+DAY_ROUNDS = [("population", 1 / 2), ("population", 1 / 2), ("population", 1 / 3), ("population", 0.1)]
 # Natural Earth's short names, as a sentence says them ("Cut off a third of
 # the Philippines' people").
 DISPLAY_NAMES = {

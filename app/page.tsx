@@ -67,8 +67,7 @@ export default function Home() {
                     Slice<span className="text-coral">.</span>
                   </span>
                   <span className="mt-2 block text-[17px] leading-snug text-ink-soft">
-                    Draw one straight line across a real country to cut off half its land, or a third of its population. Easy, until you see where
-                    everyone lives.
+                    Draw one straight line across a real country to cut off half its population. Easy, until you see where everyone lives.
                   </span>
                   <span className="mt-4 block">
                     <SliceStatus />

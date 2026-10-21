@@ -7,6 +7,7 @@ Usage (from the repo root):
     python scripts/slice/generate.py validate              # the 10 test countries, with previews
     python scripts/slice/generate.py country NAME [NAME..]  # any country, with a preview
     python scripts/slice/generate.py generate [--days N]    # add the next 10 daily puzzles
+    python scripts/slice/generate.py repopulate             # turn land rounds in existing files into population rounds
 """
 
 # How it works, start to finish
@@ -308,6 +309,25 @@ def generate(days: int, seed: int | None) -> None:
             print(f"#{day:04d} {path.stat().st_size // 1024:4d} KB  {summary}", flush=True)
 
 
+def repopulate() -> None:
+    """Rewrites every land (area) round in the existing puzzle files as a half-the-
+    population round of the same country. Everything else in the files is untouched."""
+    countries = load_countries()
+    with rasterio.open(POPULATION_TIF) as src:
+        for path in sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json")):
+            puzzle = json.loads(path.read_text(encoding="utf-8"))
+            changed = []
+            for i, r in enumerate(puzzle["rounds"]):
+                if r["mode"] != "area":
+                    continue
+                puzzle["rounds"][i] = round_json(build(countries, src, r["id"]), "population", 1 / 2)
+                changed.append(r["country"])
+            if changed:
+                path.write_text(json.dumps(puzzle, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+                print(f"#{puzzle['puzzle']:04d} {path.stat().st_size // 1024:4d} KB  {', '.join(changed)} -> half the population",
+                      flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -317,11 +337,14 @@ def main() -> None:
     g = sub.add_parser("generate", help="write the next batch of daily puzzles to public/data/slice/")
     g.add_argument("--days", type=int, default=DEFAULT_DAYS)
     g.add_argument("--seed", type=int, default=None, help="default: the last puzzle number (repeatable runs)")
+    sub.add_parser("repopulate", help="turn the land rounds of existing puzzles into half-the-population rounds")
     args = parser.parse_args()
     if args.cmd == "validate":
         run(list(VALIDATION_COUNTRIES), VALIDATION_COUNTRIES)
     elif args.cmd == "generate":
         generate(args.days, args.seed)
+    elif args.cmd == "repopulate":
+        repopulate()
     else:
         run(args.names, {})
 
