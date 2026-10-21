@@ -1,19 +1,25 @@
-// Privacy-friendly analytics with Umami Cloud (umami.is): no cookies, no personal
-// data, nothing stored on the player's device for it, so no consent banner is needed.
-// Umami counts page views by itself; the game events below are sent with `track`.
+// Privacy-friendly analytics with PostHog (EU cloud), in cookieless mode: no cookies and
+// nothing of PostHog's stored on the player's device, so no consent banner is needed.
+// PostHog counts page views by itself; the game events below are sent with `track`.
 //
-// The launch metric is day-2 and day-7 returns. Umami can't follow a person across
-// days, so each browser sends one `daily_visit` a day carrying how many days it has
-// been since its first visit (0 = the first day): day-2 returns are the browsers that
-// send day 1, day-7 returns those that send day 6, as a share of those that sent day 0.
+// The launch questions are just two: do players finish, and do they come back. So the
+// events are few on purpose: puzzle_started / puzzle_finished, and daily_visit.
+//
+// Cookieless PostHog can't follow a person across days, so each browser sends one
+// `daily_visit` a day carrying how many days it has been since its first visit (0 = the
+// first day): day-2 returns are the browsers that send day 1, day-7 returns those that
+// send day 6, as a share of those that sent day 0.
 //
 // Plays of a preview puzzle carry `preview: true`; leave them out of launch numbers.
 
 import { getSetting, setSetting } from "./storage";
 
-/** This website's id in Umami (dashboard → Websites → the site → Edit). Not a secret:
- *  it's in every page's HTML. Empty = analytics off. */
-export const UMAMI_WEBSITE_ID = "";
+/** The PostHog project's API key (Settings → Project → General). Not a secret: it's in
+ *  every page's JavaScript. Empty = analytics off. */
+export const POSTHOG_KEY: string ="phc_oMKn3T9PjE2u8ncHPsvgabnRkeLf7poJ3JYBEFhqyMqS";
+/** The project lives in PostHog's EU region (eu.posthog.com); a key only works there. */
+const POSTHOG_HOST = "https://eu.i.posthog.com";
+const POSTHOG_SCRIPT = "https://eu-assets.i.posthog.com/static/array.js";
 /** Only visits to these addresses are counted, so local development and other copies
  *  of the site don't pollute the numbers. */
 export const ANALYTICS_HOSTS = ["pondo.games"];
@@ -25,50 +31,70 @@ type Play = { game: Game; puzzle: number; preview: boolean };
 export type Events = {
   daily_visit: { day: number };
   puzzle_started: Play;
-  drop_decided: Play & { drop: number; stage: number; result: "correct" | "wrong" | "no guess" };
-  round_cut: Play & { round: number; mode: string; attempt: number; score: number };
   puzzle_finished: Play & { points: number; maxPoints: number };
-  result_shared: { game: Game; outcome: "shared" | "copied" | "failed" };
-  sound_toggled: { game: Game; muted: boolean };
-  intro_dismissed: { game: Game };
 };
 
-type Umami = { track: (name: string, data?: object) => void };
+type PostHog = { __loaded?: boolean; capture: (name: string, data?: object) => void };
 
-// Events sent before Umami's script has loaded wait here (components/Analytics.tsx
-// flushes them once it has).
+// Events sent before PostHog's script has loaded wait here (flushed by loadAnalytics).
 const pending: [string, object][] = [];
 
-function umami(): Umami | null {
-  return (window as unknown as { umami?: Umami }).umami ?? null;
+function posthog(): PostHog | null {
+  const p = (window as unknown as { posthog?: PostHog }).posthog;
+  return p?.__loaded ? p : null;
 }
 
 export function analyticsEnabled(): boolean {
-  return typeof window !== "undefined" && UMAMI_WEBSITE_ID !== "" && ANALYTICS_HOSTS.includes(location.hostname);
+  return typeof window !== "undefined" && POSTHOG_KEY !== "" && ANALYTICS_HOSTS.includes(location.hostname);
 }
 
 export function track<K extends keyof Events>(name: K, data: Events[K]): void {
   if (!analyticsEnabled()) return;
   try {
-    const u = umami();
-    if (u) u.track(name, data);
+    const p = posthog();
+    if (p) p.capture(name, data);
     else pending.push([name, data]);
   } catch {
     // Analytics must never break the game.
   }
 }
 
-/** Sends the events that were waiting for Umami's script. */
-export function flushPending(): void {
-  const u = umami();
-  if (!u) return;
-  for (const [name, data] of pending.splice(0)) {
-    try {
-      u.track(name, data);
-    } catch {
-      // ignore
+/** Loads PostHog's script once (components/Analytics.tsx calls it after the page is
+ *  interactive), then sends the events that were waiting for it. */
+export function loadAnalytics(): void {
+  if (!analyticsEnabled() || document.getElementById("posthog-js")) return;
+  // PostHog's script looks for this placeholder (what its official snippet sets up),
+  // runs the queued `init` with our settings and replaces it with the real library.
+  const config = {
+    api_host: POSTHOG_HOST,
+    defaults: "2026-05-30",
+    cookieless_mode: "always", // no cookies, no ids on the device
+    persistence: "memory",
+    autocapture: false, // only the events below and page views
+    capture_pageleave: false,
+    disable_session_recording: true,
+    disable_surveys: true,
+    enable_heatmaps: false,
+    advanced_disable_flags: true,
+  };
+  (window as unknown as { posthog: unknown }).posthog = Object.assign([], { __SV: 1, _i: [[POSTHOG_KEY, config]], people: [] });
+  const script = document.createElement("script");
+  script.id = "posthog-js";
+  script.src = POSTHOG_SCRIPT;
+  script.async = true;
+  script.crossOrigin = "anonymous";
+  script.onload = () => {
+    const p = posthog();
+    if (!p) return;
+    for (const [name, data] of pending.splice(0)) {
+      try {
+        p.capture(name, data);
+      } catch {
+        // ignore
+      }
     }
-  }
+  };
+  document.head.appendChild(script);
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -80,7 +106,7 @@ export function localDay(now: Date): number {
 }
 
 /** Days since the first visit, 0 on the first day. Capped: past two months the exact
- *  number doesn't matter, and fewer distinct values keep Umami's breakdowns readable. */
+ *  number doesn't matter, and fewer distinct values keep the breakdowns readable. */
 export function visitDay(firstDay: number, today: number): number {
   return Math.min(Math.max(0, today - firstDay), 60);
 }

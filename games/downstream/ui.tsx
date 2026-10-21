@@ -10,7 +10,6 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
-import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
@@ -291,7 +290,6 @@ export function useFirstTime(): [boolean, () => void] {
     () => {
       if (getSetting("downstream", INTRO_SETTING, false)) return;
       setSetting("downstream", INTRO_SETTING, true);
-      track("intro_dismissed", { game: "downstream" });
     },
   ];
 }
@@ -320,7 +318,6 @@ export function ShareButton({
       url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
     });
     const outcome = await shareResult(text);
-    track("result_shared", { game: "downstream", outcome });
     if (outcome !== "shared") {
       setState(outcome);
       window.setTimeout(() => setState("idle"), 2200);

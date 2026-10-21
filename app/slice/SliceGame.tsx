@@ -15,7 +15,6 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
-import { track } from "@/lib/analytics";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
@@ -479,7 +478,6 @@ function ShareButton({ number, cuts }: { number: number; cuts: SavedCut[] }) {
       url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
     });
     const outcome = await shareResult(text);
-    track("result_shared", { game: "slice", outcome });
     if (outcome !== "shared") {
       setState(outcome);
       window.setTimeout(() => setState("idle"), 2200);

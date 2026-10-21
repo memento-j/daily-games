@@ -83,16 +83,9 @@ export function useSliceGame(): SliceGameState {
     const next = step(game, action, puzzle);
     if (next === game) return;
     setGame(next);
-    // Analytics (lib/analytics.ts): the first cut of a fresh puzzle, every cut (with
-    // which try it was), and the finished day.
+    // Analytics (lib/analytics.ts): the first cut of a fresh puzzle and the finished day.
     const play = { game: "slice", puzzle: number, preview: load.preview } as const;
-    if (action.type === "cut") {
-      if (game.round === 0 && game.tries === 0) track("puzzle_started", play);
-      if (next.last) {
-        const mode = puzzle.rounds[game.round].mode;
-        track("round_cut", { ...play, round: game.round + 1, mode, attempt: next.tries, score: next.last.score });
-      }
-    }
+    if (action.type === "cut" && game.round === 0 && game.tries === 0) track("puzzle_started", play);
     if (phase(next, puzzle) === "finished") {
       track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length) });
       saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalScore(next.cuts) });

@@ -14,7 +14,7 @@ export const metadata: Metadata = pageMetadata({
   path: "/privacy/",
 });
 
-const UPDATED = "19 October 2026";
+const UPDATED = "20 October 2026";
 
 export default function PrivacyPage() {
   return (
@@ -39,15 +39,16 @@ export default function PrivacyPage() {
 
       <h2>Analytics</h2>
       <p>
-        We use <a href="https://umami.is/">Umami</a> to understand how {SITE_NAME} is used, for example how many people visit, which games they play,
-        how many finish, and how many come back the next day. Umami uses no cookies and collects no personal information. It records:
+        We use <a href="https://posthog.com/">PostHog</a>, hosted in the European Union, to understand how {SITE_NAME} is used: how many people visit,
+        which games they play, how many finish, and how many come back. It runs in a cookieless mode: no cookies, nothing stored on your device for it,
+        and no ID that follows you from one day to the next. It records:
       </p>
       <ul>
         <li>the page you visit, the site that linked you here, and your browser, operating system, device type, screen size and language;</li>
         <li>your approximate location (country, region and city), worked out from your IP address, which is not stored;</li>
         <li>
-          game events: starting and finishing a puzzle, each answer&apos;s score, sharing a result, switching sound on or off, and a once-a-day visit that
-          says how many days it has been since your first visit.
+          game events: starting a puzzle, finishing it with your total score, and a once-a-day visit that says how many days it has been since your
+          first visit.
         </li>
       </ul>
       <p>
@@ -67,7 +68,7 @@ export default function PrivacyPage() {
           <a href="https://openfreemap.org/privacy">OpenFreeMap&apos;s privacy policy</a>.
         </li>
         <li>
-          <strong>Umami</strong>, for the analytics above. See <a href="https://umami.is/privacy">Umami&apos;s privacy policy</a>.
+          <strong>PostHog</strong> (EU hosting), for the analytics above. See <a href="https://posthog.com/privacy">PostHog&apos;s privacy policy</a>.
         </li>
       </ul>
       <p>Fonts and everything else are served from {SITE_NAME} itself.</p>

@@ -3,7 +3,6 @@
 // drag, and the whole reveal is scheduled on the audio clock the moment you cut, so
 // it stays in step with the animation.
 
-import { track } from "@/lib/analytics";
 import { getSetting, setSetting } from "@/lib/storage";
 
 let ctx: AudioContext | null = null;
@@ -16,7 +15,6 @@ export function isMuted(): boolean {
 
 export function setMuted(muted: boolean) {
   setSetting("slice", "muted", muted);
-  track("sound_toggled", { game: "slice", muted });
 }
 
 /** The audio context, created and resumed on the first gesture (browsers require one). */

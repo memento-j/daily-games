@@ -82,15 +82,9 @@ export function useDownstreamGame(): DownstreamGameState {
     const next = step(game, action, puzzle);
     if (next === game) return;
     setGame(next);
-    // Analytics (lib/analytics.ts): the first move of a fresh puzzle, each decided drop,
-    // and the finished day.
+    // Analytics (lib/analytics.ts): the first move of a fresh puzzle and the finished day.
     const play = { game: "downstream", puzzle: number, preview: load.preview } as const;
     if (game.drop === 0 && game.stage === 0 && game.results.length === 0) track("puzzle_started", play);
-    if (next.results.length > game.results.length) {
-      const r = next.results[next.results.length - 1];
-      const result = r.guess === null ? "no guess" : r.correct ? "correct" : "wrong";
-      track("drop_decided", { ...play, drop: next.results.length, stage: r.stage, result });
-    }
     if (phase(next, puzzle) === "finished") {
       track("puzzle_finished", { ...play, points: totalPoints(next.results), maxPoints: maxPoints(puzzle.drops.length) });
       saveResult<SavedResult>(storageKey, number, { results: next.results, points: totalPoints(next.results) });

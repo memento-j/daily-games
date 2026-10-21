@@ -14,17 +14,18 @@ const local = (y: number, m: number, d: number, h = 12) => new Date(y, m, d, h);
 
 describe("getPuzzleNumber", () => {
   it("is 1 on launch day, at any time of day", () => {
-    expect(getPuzzleNumber(local(2026, 10, 15, 0))).toBe(1);
-    expect(getPuzzleNumber(local(2026, 10, 15, 23))).toBe(1);
+    expect(getPuzzleNumber(local(2026, 9, 21, 0))).toBe(1);
+    expect(getPuzzleNumber(local(2026, 9, 21, 23))).toBe(1);
   });
 
   it("counts whole days after launch", () => {
-    expect(getPuzzleNumber(local(2026, 10, 16))).toBe(2);
-    expect(getPuzzleNumber(local(2026, 11, 25))).toBe(41);
+    expect(getPuzzleNumber(local(2026, 9, 22))).toBe(2);
+    expect(getPuzzleNumber(local(2026, 10, 10))).toBe(21); // the last generated day at launch
+    expect(getPuzzleNumber(local(2026, 11, 25))).toBe(66);
   });
 
   it("is below 1 before launch", () => {
-    expect(getPuzzleNumber(local(2026, 10, 14))).toBe(0);
+    expect(getPuzzleNumber(local(2026, 9, 20))).toBe(0);
     expect(getPuzzleNumber(local(2026, 9, 1))).toBeLessThan(1);
   });
 
