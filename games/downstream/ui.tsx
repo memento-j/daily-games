@@ -10,7 +10,8 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
-import { padPuzzleNumber } from "@/lib/daily";
+import { getPuzzleNumber, padPuzzleNumber } from "@/lib/daily";
+import { lastOpenPuzzle } from "@/lib/schedule";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
@@ -494,7 +495,8 @@ export function GameNotice({ load, preview }: { load: Exclude<Load, { status: "r
   );
 }
 
-/** Before launch: links to every generated puzzle, for playtesting. Links keep the current layout. */
+/** Before launch: links to every generated puzzle, for playtesting; after it, to past puzzles
+ *  only, never future ones. Links keep the current layout. */
 export function PreviewList() {
   const [available, setAvailable] = useState<number[] | null>(null);
   const base = usePathname(); // previews open in whichever layout you are on
@@ -505,7 +507,7 @@ export function PreviewList() {
     const controller = new AbortController();
     async function probe() {
       const found: number[] = [];
-      for (let n = 1; n <= MAX_PREVIEWS; n++) {
+      for (let n = 1; n <= Math.min(MAX_PREVIEWS, lastOpenPuzzle()); n++) {
         const res = await fetch(`/data/downstream/${padPuzzleNumber(n)}.json`, { method: "HEAD", signal: controller.signal }).catch(() => null);
         if (controller.signal.aborted) return;
         if (!res?.ok) break;
@@ -521,7 +523,7 @@ export function PreviewList() {
   if (available.length === 0) return <p className="text-ink-soft">No preview puzzles yet.</p>;
   return (
     <div>
-      <p className="text-sm font-semibold text-ink-faint">Play a preview</p>
+      <p className="text-sm font-semibold text-ink-faint">{getPuzzleNumber() >= 1 ? "Play a past puzzle" : "Play a preview"}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {available.map((n) => (
           <Link

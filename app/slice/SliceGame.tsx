@@ -15,6 +15,8 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
+import { getPuzzleNumber } from "@/lib/daily";
+import { lastOpenPuzzle } from "@/lib/schedule";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
@@ -494,14 +496,15 @@ function ShareButton({ number, cuts }: { number: number; cuts: SavedCut[] }) {
   );
 }
 
-/** Playtesting before launch: every generated puzzle, found by probing 0001.json, 0002.json, ... */
+/** Playtesting before launch: every generated puzzle, found by probing 0001.json, 0002.json, ...
+ *  After launch: past puzzles only, never future ones. */
 function PreviewList() {
   const [found, setFound] = useState<number[] | null>(null);
   useEffect(() => {
     let cancelled = false;
     (async () => {
       const list: number[] = [];
-      for (let n = 1; n <= 60; n++) {
+      for (let n = 1; n <= Math.min(60, lastOpenPuzzle()); n++) {
         const res = await fetch(`/data/slice/${String(n).padStart(4, "0")}.json`, { method: "HEAD" }).catch(() => null);
         if (!res?.ok) break;
         list.push(n);
@@ -515,7 +518,7 @@ function PreviewList() {
   if (!found?.length) return null;
   return (
     <div>
-      <p className="text-sm font-semibold text-ink-faint">Play a preview</p>
+      <p className="text-sm font-semibold text-ink-faint">{getPuzzleNumber() >= 1 ? "Play a past puzzle" : "Play a preview"}</p>
       <div className="mt-2 flex flex-wrap gap-2">
         {found.map((n) => (
           // A plain link: a fresh page load gives each preview a fresh board.
