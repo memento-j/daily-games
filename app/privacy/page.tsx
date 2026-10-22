@@ -30,7 +30,7 @@ export default function PrivacyPage() {
       <p>
         To remember your game, {SITE_NAME} saves a few things in your browser&apos;s own storage (local storage): your results for each day&apos;s puzzle,
         your streaks, a puzzle you&apos;re halfway through, and settings like sound on or off, light or dark mode, and whether you&apos;ve seen the first-time
-        tips. It also notes the day you first visited, to count return visits (see below).
+        tips. It also notes the day you first visited and how many days you&apos;ve visited, to count return visits (see below).
       </p>
       <p>
         This never leaves your device and we can&apos;t see it. It isn&apos;t a cookie. You can delete it at any time by clearing this site&apos;s data in your
@@ -47,8 +47,9 @@ export default function PrivacyPage() {
         <li>the page you visit, the site that linked you here, and your browser, operating system, device type, screen size and language;</li>
         <li>your approximate location (country, region and city), worked out from your IP address, which is not stored;</li>
         <li>
-          game events: starting a puzzle, finishing it with your total score, pressing Share (whether it was shared or copied, never what you
-          shared or who to), and a once-a-day visit that says how many days it has been since your first visit.
+          game events: starting a puzzle, finishing it with your total score and current streak, pressing Share (whether it was shared or copied,
+          never what you shared or who to), and a once-a-day visit that says how many days it has been since your first visit and on how many
+          different days you&apos;ve visited.
         </li>
       </ul>
       <p>

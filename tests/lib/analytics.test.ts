@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { localDay, visitDay } from "../../lib/analytics";
+import { localDay, visitCount, visitDay } from "../../lib/analytics";
 
 describe("localDay", () => {
   it("counts the local calendar day, whatever the time", () => {
@@ -24,5 +24,17 @@ describe("visitDay", () => {
   it("never goes negative (a clock set backwards) and caps at 60", () => {
     expect(visitDay(100, 95)).toBe(0);
     expect(visitDay(100, 400)).toBe(60);
+  });
+});
+
+describe("visitCount", () => {
+  it("counts each day visited, today included", () => {
+    expect(visitCount(null, 100, 100)).toBe(1); // a brand-new player
+    expect(visitCount(1, 100, 101)).toBe(2);
+    expect(visitCount(2, 100, 106)).toBe(3); // skipped days don't count
+  });
+
+  it("counts the first day for players from before the count existed", () => {
+    expect(visitCount(null, 100, 101)).toBe(2);
   });
 });

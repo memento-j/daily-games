@@ -29,9 +29,13 @@ type Play = { game: Game; puzzle: number; preview: boolean };
 
 /** Every event the site sends, and what each carries. */
 export type Events = {
-  daily_visit: { day: number };
+  /** `day`: days since this browser's first visit (how long they stay); `visits`: how
+   *  many different days it has visited, today included (how often they come). */
+  daily_visit: { day: number; visits: number };
   puzzle_started: Play;
-  puzzle_finished: Play & { points: number; maxPoints: number };
+  /** `streak`: the player's streak in this game after this puzzle, as the summary shows
+   *  it (lib/stats.ts, with its forgiven days). */
+  puzzle_finished: Play & { points: number; maxPoints: number; streak: number };
   /** The Share button: the share sheet was used, the text was copied, or neither worked. */
   result_shared: Play & { outcome: "shared" | "copied" | "failed" };
 };
@@ -113,7 +117,15 @@ export function visitDay(firstDay: number, today: number): number {
   return Math.min(Math.max(0, today - firstDay), 60);
 }
 
-/** Once a day per browser: remember the first visit, then send `daily_visit`. */
+/** Days visited, today included, given the stored count. Browsers from before the count
+ *  existed (launch day, 21-22 Oct 2026) have none stored: if their first visit was an
+ *  earlier day, that day counts too. */
+export function visitCount(stored: number | null, firstDay: number, today: number): number {
+  if (stored !== null) return stored + 1;
+  return today === firstDay ? 1 : 2;
+}
+
+/** Once a day per browser: remember the first visit, count the day, then send `daily_visit`. */
 export function trackDailyVisit(now = new Date()): void {
   if (!analyticsEnabled()) return;
   const today = localDay(now);
@@ -124,5 +136,7 @@ export function trackDailyVisit(now = new Date()): void {
   }
   if (getSetting<number | null>("site", "lastVisitSent", null) === today) return;
   setSetting("site", "lastVisitSent", today);
-  track("daily_visit", { day: visitDay(first, today) });
+  const visits = visitCount(getSetting<number | null>("site", "visits", null), first, today);
+  setSetting("site", "visits", visits);
+  track("daily_visit", { day: visitDay(first, today), visits });
 }

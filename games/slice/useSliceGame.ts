@@ -10,7 +10,8 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
-import { clearInProgress, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
+import { computeStats } from "@/lib/stats";
+import { clearInProgress, getHistory, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase, type SavedCut } from "./game";
 import { maxScore, totalScore } from "./scoring";
 import { puzzleToPlay, storageKeyFor } from "./schedule";
@@ -87,9 +88,11 @@ export function useSliceGame(): SliceGameState {
     const play = { game: "slice", puzzle: number, preview: load.preview } as const;
     if (action.type === "cut" && game.round === 0 && game.tries === 0) track("puzzle_started", play);
     if (phase(next, puzzle) === "finished") {
-      track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length) });
       saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalScore(next.cuts) });
       clearInProgress(storageKey);
+      // After saving, so the streak includes today.
+      const streak = computeStats(getHistory<SavedResult>(storageKey), number).currentStreak;
+      track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length), streak });
     } else {
       saveInProgress(storageKey, number, next);
     }
