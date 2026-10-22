@@ -173,7 +173,7 @@ export default function DownstreamGame() {
       <KeyboardControls onKey={onKey} />
       <section className="relative z-10 flex flex-col overflow-y-auto bg-card p-8 shadow-[8px_0_30px_-18px_rgb(18_26_43/0.3)]">
         <h1 className="sr-only">
-          Downstream {g.preview ? "preview" : "No."} {number}
+          Downstream {g.preview ? "yesterday's No." : "No."} {number}
           {finished ? ": today's results" : `, drop ${g.game.drop + 1} of ${puzzle.drops.length}`}
         </h1>
         <GameTopBar number={number} preview={g.preview} />

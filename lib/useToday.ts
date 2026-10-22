@@ -7,7 +7,7 @@
 import { useSyncExternalStore } from "react";
 import { getPuzzleNumber } from "@/lib/daily";
 
-export type Today = { number: number | null; date: string };
+export type Today = { number: number; date: string };
 
 const noSubscription = () => () => {};
 let cached: { key: string; value: Today } | null = null;
@@ -16,9 +16,8 @@ function read(): Today {
   const now = new Date();
   const key = now.toDateString();
   if (cached?.key === key) return cached.value; // stable object between renders
-  const n = getPuzzleNumber(now);
   const value: Today = {
-    number: n >= 1 ? n : null,
+    number: getPuzzleNumber(now),
     date: now.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }),
   };
   cached = { key, value };

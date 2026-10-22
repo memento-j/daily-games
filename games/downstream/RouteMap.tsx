@@ -434,22 +434,11 @@ export default function RouteMap({
     if (to <= from) return;
     const final = to >= totalKm - 0.01;
     const target = slice(to);
-    const wide = map.cameraForBounds(boundsOf([pin, ...target.geometry.coordinates, ...seaPoints]), { padding, maxZoom: 6 });
-    // At a stop (not the sea), settle a little closer to the stretch just revealed,
-    // so each stop visibly shows something; the sea buttons stay pinned in view.
-    const near = final ? undefined : map.cameraForBounds(boundsOf([pin, ...target.geometry.coordinates]), { padding, maxZoom: 7 });
-    const overview =
-      wide && near
-        ? (() => {
-            const w = wide.center as { lng: number; lat: number };
-            const n = near.center as { lng: number; lat: number };
-            return {
-              ...wide,
-              center: { lng: lerp(w.lng, n.lng, 0.35), lat: lerp(w.lat, n.lat, 0.35) },
-              zoom: Math.min((wide.zoom ?? 3) + 0.7, near.zoom ?? 7),
-            };
-          })()
-        : wide;
+    // Every flow ends back on the full view: the pin, all four seas and the water so far,
+    // framed like the drop's first view. (Stops used to settle 0.7 zoom levels closer to
+    // the stretch just revealed, which left part of the board out of view while the
+    // player decided; removed 2026-10-22 after player feedback.)
+    const overview = map.cameraForBounds(boundsOf([pin, ...target.geometry.coordinates, ...seaPoints]), { padding, maxZoom: 6 });
     pinDot?.classList.add("is-origin"); // the water has left the pin: mark where it fell
 
     function ripple(at: number[], color: string, rings: number) {

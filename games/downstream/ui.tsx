@@ -5,19 +5,17 @@
 // actions, drop-blue for water (the sea the drop really reaches), white cards.
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import YesterdayLink from "@/components/YesterdayLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { track } from "@/lib/analytics";
-import { getPuzzleNumber, padPuzzleNumber } from "@/lib/daily";
-import { lastOpenPuzzle } from "@/lib/schedule";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import type { GameState } from "./game";
-import { storageKeyFor } from "./schedule";
+import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "./schedule";
 import { dropEmoji, dropPoints, EMOJI_LEGEND, maxPoints, totalPoints, type DropResult } from "./scoring";
 import { isMuted, setMuted, sound } from "./sound";
 import { describeStart, describeStop } from "./describe";
@@ -25,7 +23,6 @@ import type { Drop, Puzzle } from "./types";
 import type { Load } from "./useDownstreamGame";
 import { useStats } from "./useTodayResult";
 
-const MAX_PREVIEWS = 60;
 
 /** The small top bar: back to the list of games, and which puzzle this is. */
 export function GameTopBar({ number, preview }: { number: number | null; preview: boolean }) {
@@ -48,7 +45,7 @@ export function GameTopBar({ number, preview }: { number: number | null; preview
         <ThemeToggle />
         {number !== null && (
           <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold text-ink-soft shadow-card">
-            {preview ? "Preview" : "No."} {number}
+            {preview ? "Yesterday · No." : "No."} {number}
           </span>
         )}
       </span>
@@ -393,6 +390,7 @@ export function DaySummary({
           {EMOJI_LEGEND.map(([e, meaning]) => `${e} ${meaning}`).join("  ·  ")}
         </p>
       </div>
+      {!preview && <YesterdayLink path="/downstream/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's five raindrops are still waiting to find the sea." />}
 
       <div>
         <p className="text-sm font-semibold text-ink-soft">{onView ? "Your drops · pick one to see its route" : "Your drops"}</p>
@@ -464,7 +462,6 @@ export function DaySummary({
       <p className="font-display text-[20px] font-semibold tracking-[-0.02em]">
         <Countdown />
       </p>
-      {preview && <PreviewList />}
     </div>
   );
 }
@@ -480,11 +477,15 @@ export function GameNotice({ load, preview }: { load: Exclude<Load, { status: "r
         <div className="mt-8" role="status">
           {load.status === "comingSoon" && (
             <>
-              <p className="font-display text-3xl font-semibold tracking-[-0.03em]">Downstream launches soon<span className="text-coral">.</span></p>
-              <p className="mt-2 text-ink-soft">Until then, try a preview puzzle.</p>
-              <div className="mt-6">
-                <PreviewList />
-              </div>
+              {/* A ?puzzle= number other than today's or yesterday's. */}
+              <p className="font-display text-3xl font-semibold tracking-[-0.03em]">That puzzle isn&apos;t available<span className="text-coral">.</span></p>
+              <p className="mt-2 text-ink-soft">Only today&apos;s and yesterday&apos;s puzzles can be played.</p>
+              <a href="/downstream/" className="mt-6 inline-flex items-center gap-1.5 text-sm font-semibold text-coral-deep">
+                Play today&apos;s puzzle
+                <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
+                  <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </a>
             </>
           )}
           {load.status === "missing" && (
@@ -499,46 +500,3 @@ export function GameNotice({ load, preview }: { load: Exclude<Load, { status: "r
   );
 }
 
-/** Before launch: links to every generated puzzle, for playtesting; after it, to past puzzles
- *  only, never future ones. Links keep the current layout. */
-export function PreviewList() {
-  const [available, setAvailable] = useState<number[] | null>(null);
-  const base = usePathname(); // previews open in whichever layout you are on
-
-  // Find which puzzle files exist by checking 0001, 0002, ... until one is missing.
-  useEffect(() => {
-    // Abort on leave, so a half-finished probe doesn't keep requesting files.
-    const controller = new AbortController();
-    async function probe() {
-      const found: number[] = [];
-      for (let n = 1; n <= Math.min(MAX_PREVIEWS, lastOpenPuzzle()); n++) {
-        const res = await fetch(`/data/downstream/${padPuzzleNumber(n)}.json`, { method: "HEAD", signal: controller.signal }).catch(() => null);
-        if (controller.signal.aborted) return;
-        if (!res?.ok) break;
-        found.push(n);
-      }
-      setAvailable(found);
-    }
-    probe();
-    return () => controller.abort();
-  }, []);
-
-  if (!available) return null;
-  if (available.length === 0) return <p className="text-ink-soft">No preview puzzles yet.</p>;
-  return (
-    <div>
-      <p className="text-sm font-semibold text-ink-faint">{getPuzzleNumber() >= 1 ? "Play a past puzzle" : "Play a preview"}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {available.map((n) => (
-          <Link
-            key={n}
-            href={`${base}?puzzle=${n}`}
-            className="grid size-10 place-items-center rounded-full bg-card text-sm font-bold ring-1 ring-line transition-colors hover:text-coral-deep hover:ring-coral"
-          >
-            {n}
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}

@@ -7,12 +7,12 @@
 import { useSyncExternalStore } from "react";
 import { getHistory, subscribe } from "@/lib/storage";
 import { computeStats, type Stats } from "@/lib/stats";
-import { puzzleToPlay, storageKeyFor } from "./schedule";
+import { getPuzzleNumber } from "@/lib/daily";
+import { GAME_KEY } from "./schedule";
 import type { SavedResult } from "./useDownstreamGame";
 
 export type TodayResult = {
   number: number;
-  preview: boolean;
   result: SavedResult | null; // null = not finished today
   stats: Stats;
 };
@@ -20,11 +20,11 @@ export type TodayResult = {
 let cache: { key: string; value: TodayResult } | null = null;
 
 function read(): TodayResult {
-  const { number, preview } = puzzleToPlay(null);
-  const history = getHistory<SavedResult>(storageKeyFor(preview));
-  const key = `${number}|${preview}|${JSON.stringify(history)}`;
+  const number = getPuzzleNumber();
+  const history = getHistory<SavedResult>(GAME_KEY);
+  const key = `${number}|${JSON.stringify(history)}`;
   if (cache?.key === key) return cache.value; // same object while nothing changed
-  const value = { number, preview, result: history[number] ?? null, stats: computeStats(history, number) };
+  const value = { number, result: history[number] ?? null, stats: computeStats(history, number) };
   cache = { key, value };
   return value;
 }

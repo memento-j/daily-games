@@ -13,11 +13,10 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import YesterdayLink from "@/components/YesterdayLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { track } from "@/lib/analytics";
-import { getPuzzleNumber } from "@/lib/daily";
-import { lastOpenPuzzle } from "@/lib/schedule";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
@@ -27,7 +26,7 @@ import { crosses, perfectLine, share } from "@/games/slice/cut";
 import { triesLeft, type SavedCut } from "@/games/slice/game";
 import { lineThrough } from "@/games/slice/geometry";
 import type { SliceScene } from "@/games/slice/scene";
-import { storageKeyFor } from "@/games/slice/schedule";
+import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "@/games/slice/schedule";
 import { bandOf, formatShare, LOSS_PER_POINT, MAX_SCORE, maxScore, scoreCut, totalScore } from "@/games/slice/scoring";
 import { isMuted, setMuted, sound } from "@/games/slice/sound";
 import type { Puzzle, Round } from "@/games/slice/types";
@@ -233,7 +232,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             <ThemeToggle />
             <SoundButton />
             <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-ink-soft shadow-card">
-              {preview ? "Preview" : "No."} {number}
+              {preview ? "Yesterday · No." : "No."} {number}
             </span>
           </div>
         </div>
@@ -251,18 +250,12 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
               {/* This round's score waits for the reveal, so it never gives the cut away. */}
               <RoundScores scores={puzzle.rounds.map((_, i) => (i === g.game.round && !revealDone ? null : (g.game.cuts[i]?.score ?? null)))} />
             </div>
-            {/* Keyed by round, so the badge and highlight replay for every new question. */}
+            {/* Keyed by round, so the highlight replays for every new question. (A
+                Population / Land badge sat above it until 2026-10-22: with every round
+                a population round it said the same thing each time.) */}
             <div key={roundIndex} className="mt-2">
-              <span
-                className={`rise-in inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-bold tracking-wide uppercase shadow-card ${
-                  isPopulation ? "bg-coral text-white" : "bg-card text-ink"
-                }`}
-              >
-                {isPopulation ? <PopulationIcon /> : <LandIcon />}
-                {isPopulation ? "Population" : "Land"}
-              </span>
               <h1
-                className={`font-display mt-2 max-w-[22ch] leading-tight font-semibold tracking-[-0.02em] text-balance transition-[font-size] duration-300 ${
+                className={`font-display max-w-[22ch] leading-tight font-semibold tracking-[-0.02em] text-balance transition-[font-size] duration-300 ${
                   g.phase === "cutting" ? "text-[26px] lg:text-[34px]" : "text-[19px] lg:text-[22px]"
                 }`}
               >
@@ -421,7 +414,7 @@ function Summary({
     <div className="flex max-h-[50svh] flex-col gap-3 overflow-y-auto px-1 *:shrink-0">
       <div className="flex items-end justify-between gap-3">
         <div>
-          <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">Today&apos;s slices</h1>
+          <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s slices" : "Today\u2019s slices"}</h1>
           <p className="text-xs text-ink-faint">
             Each cut starts at {MAX_SCORE} and loses {LOSS_PER_POINT} for every percentage point off.
           </p>
@@ -433,6 +426,7 @@ function Summary({
       </div>
       <ShareButton number={number} preview={preview} cuts={cuts} />
       <TryDownstream />
+      {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's four countries are still waiting to be split." />}
 
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (
@@ -477,7 +471,6 @@ function Summary({
         </dl>
       )}
       <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />
-      {preview && <PreviewList />}
     </div>
   );
 }
@@ -537,63 +530,6 @@ function ShareButton({ number, preview, cuts }: { number: number; preview: boole
   );
 }
 
-/** Playtesting before launch: every generated puzzle, found by probing 0001.json, 0002.json, ...
- *  After launch: past puzzles only, never future ones. */
-function PreviewList() {
-  const [found, setFound] = useState<number[] | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const list: number[] = [];
-      for (let n = 1; n <= Math.min(60, lastOpenPuzzle()); n++) {
-        const res = await fetch(`/data/slice/${String(n).padStart(4, "0")}.json`, { method: "HEAD" }).catch(() => null);
-        if (!res?.ok) break;
-        list.push(n);
-      }
-      if (!cancelled) setFound(list);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  if (!found?.length) return null;
-  return (
-    <div>
-      <p className="text-sm font-semibold text-ink-faint">{getPuzzleNumber() >= 1 ? "Play a past puzzle" : "Play a preview"}</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {found.map((n) => (
-          // A plain link: a fresh page load gives each preview a fresh board.
-          <a
-            key={n}
-            href={`/slice/?puzzle=${n}`}
-            className="grid size-10 place-items-center rounded-full bg-card text-sm font-bold ring-1 ring-line hover:ring-coral"
-          >
-            {n}
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function PopulationIcon() {
-  return (
-    <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
-      <circle cx="7" cy="6.5" r="2.6" fill="currentColor" />
-      <circle cx="13.6" cy="7.4" r="2.1" fill="currentColor" opacity="0.75" />
-      <path d="M2.5 16c.4-3 2.2-4.6 4.5-4.6s4.1 1.6 4.5 4.6zM12 16c.2-2.1.9-3.6 2.2-4.1 1.7.2 2.9 1.6 3.3 4.1z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function LandIcon() {
-  return (
-    <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
-      <path d="M2 16l5-8 3.2 4.6L12.5 9 18 16z" fill="currentColor" />
-    </svg>
-  );
-}
-
 /** Sound on/off, remembered (storage setting "slice" / "muted"). */
 function SoundButton() {
   const muted = useSyncExternalStore(subscribe, isMuted, () => false);
@@ -627,15 +563,18 @@ function Notice({ load }: { load: Exclude<Load, { status: "ready" }> }) {
     <div className="font-sans grid h-svh place-items-center bg-mat p-6 text-ink">
       <div className="max-w-[420px] rounded-[26px] bg-card p-7 shadow-card">
         <p className="font-display text-2xl font-semibold">
-          {load.status === "missing" ? "Today's countries are still being cut. Check back soon." : "There's no puzzle with that number."}
+          {load.status === "missing"
+            ? "Today's countries are still being cut. Check back soon."
+            : "That puzzle isn't available. Only today's and yesterday's puzzles can be played."}
         </p>
         <Countdown prefix="New countries in" className="mt-3 block text-ink-soft" />
-        <Link href="/" className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-coral-deep">
+        {/* A plain link: ?puzzle= is gone after a fresh load of /slice/. */}
+        <a href="/slice/" className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold text-coral-deep">
+          Play today&apos;s puzzle
           <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
-            <path d="M16 10H5M9 5.5 4.5 10 9 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          All games
-        </Link>
+        </a>
       </div>
     </div>
   );

@@ -155,7 +155,7 @@ function PhonePlay(p: Props) {
   return (
     <div ref={rootRef} className="font-sans relative h-svh overflow-hidden bg-land text-ink">
       <h1 className="sr-only">
-        Downstream {p.preview ? "preview" : "No."} {p.number}, drop {p.game.drop + 1} of {p.puzzle.drops.length}
+        Downstream {p.preview ? "yesterday's No." : "No."} {p.number}, drop {p.game.drop + 1} of {p.puzzle.drops.length}
       </h1>
       {/* The top bar comes first in the markup (and tab order); it floats over the map. */}
       <MapTopBar number={p.number} preview={p.preview} />
@@ -281,7 +281,7 @@ function PhoneSummary(p: Props): ReactNode {
   return (
     <div className="font-sans flex flex-col bg-land text-ink">
       <h1 className="sr-only">
-        Downstream {p.preview ? "preview" : "No."} {p.number}: today&apos;s results
+        Downstream {p.preview ? "yesterday's No." : "No."} {p.number}: results
       </h1>
       <div className="sticky top-0 h-[34svh] min-h-[230px]">
         <MapTopBar number={p.number} preview={p.preview} />

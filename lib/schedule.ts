@@ -2,23 +2,14 @@
 
 import { getPuzzleNumber } from "./daily";
 
-// Before launch there's no "today's puzzle" yet; Play opens this preview instead
-// of a "coming soon" screen, so it's always one click into a puzzle.
-export const PRE_LAUNCH_PREVIEW = 1;
-
-/** The last puzzle a visit may open. Once launched that's today's: past puzzles stay
- *  playable, future ones don't (no peeking ahead). Before launch, any (playtesting). */
-export function lastOpenPuzzle(today = getPuzzleNumber()): number {
-  return today >= 1 ? today : Infinity;
-}
-
-/** ?puzzle=N if given, else today's puzzle, else (before launch) the first preview.
- *  A future ?puzzle=N gives NaN, which the games show as "coming soon". */
+/** Today's puzzle, or ?puzzle=N. Only today's and yesterday's can be played
+ *  (developer's call, 2026-10-22): ?puzzle=today is the real puzzle; yesterday's plays
+ *  as a preview (`preview: true`), saved apart so it never changes streaks or stats.
+ *  Any other N, older, future or not a number, gives NaN: "That puzzle isn't available". */
 export function puzzleToPlay(override: string | null, today = getPuzzleNumber()): { number: number; preview: boolean } {
-  if (override !== null) {
-    const n = Number(override);
-    return { number: n > lastOpenPuzzle(today) ? NaN : n, preview: true };
-  }
-  if (today >= 1) return { number: today, preview: false };
-  return { number: PRE_LAUNCH_PREVIEW, preview: true };
+  if (override === null) return { number: today, preview: false };
+  const n = Number(override);
+  if (n === today) return { number: today, preview: false };
+  if (n === today - 1 && n >= 1) return { number: n, preview: true };
+  return { number: NaN, preview: true };
 }
