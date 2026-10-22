@@ -105,14 +105,17 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   }, [sceneReady, theme]);
 
   // Tell the scene how much of the screen the interface covers, so the country is
-  // framed in the space between.
+  // framed in the space between. Measured against the board itself, not the window:
+  // with the page scrolled (the how-to-play text sits below the game), window-based
+  // numbers framed the country too high, behind the header (fixed 2026-10-22).
   function measureInsets() {
+    const box = holder.current?.getBoundingClientRect();
     const t = top.current?.getBoundingClientRect();
     const b = bottom.current?.getBoundingClientRect();
-    if (!t || !b || !scene.current) return;
+    if (!box || !t || !b || !scene.current) return;
     scene.current.setInsets({
-      top: Math.round(t.bottom + 8),
-      bottom: Math.round(window.innerHeight - b.top + 8),
+      top: Math.round(t.bottom - box.top + 8),
+      bottom: Math.round(box.bottom - b.top + 8),
     });
   }
   useEffect(() => {
@@ -411,7 +414,10 @@ function Summary({
   const stats = useStats(storageKeyFor(preview), number);
   return (
     // The sheet scrolls; its blocks keep their size (in a flex column they'd shrink to fit).
-    <div className="flex max-h-[50svh] flex-col gap-3 overflow-y-auto px-1 *:shrink-0">
+    // On phones it stays low (about a third of the screen) so the board keeps most of it:
+    // the score and Share show, the next card peeks in, and the fade at the bottom edge
+    // says there's more below. Desktop has the room for half.
+    <div className="sheet-fade flex max-h-[34svh] flex-col gap-3 overflow-y-auto px-1 pb-5 *:shrink-0 lg:max-h-[50svh]">
       <div className="flex items-end justify-between gap-3">
         <div>
           <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s slices" : "Today\u2019s slices"}</h1>
@@ -426,7 +432,7 @@ function Summary({
       </div>
       <ShareButton number={number} preview={preview} cuts={cuts} />
       <TryDownstream />
-      {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's four countries are still waiting to be split." />}
+      {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's countries are still waiting to be split." />}
 
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (

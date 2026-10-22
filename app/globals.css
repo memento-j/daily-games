@@ -609,3 +609,9 @@ button:not(:disabled),
     animation: none;
   }
 }
+
+/* A scrolling sheet's bottom edge fades out, so a half-shown card reads as "more below"
+   rather than as cut off. The sheet's bottom padding lets its last line clear the fade. */
+.sheet-fade {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+}
