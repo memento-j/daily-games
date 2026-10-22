@@ -27,7 +27,7 @@ import { triesLeft, type SavedCut } from "@/games/slice/game";
 import { lineThrough } from "@/games/slice/geometry";
 import type { SliceScene } from "@/games/slice/scene";
 import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "@/games/slice/schedule";
-import { bandOf, formatShare, LOSS_PER_POINT, MAX_SCORE, maxScore, scoreCut, totalScore } from "@/games/slice/scoring";
+import { bandOf, formatShare, HALF_EVERY_POINTS, MAX_SCORE, maxScore, missOf, scoreCut, totalScore } from "@/games/slice/scoring";
 import { isMuted, setMuted, sound } from "@/games/slice/sound";
 import type { Puzzle, Round } from "@/games/slice/types";
 import { useSliceGame, type Load } from "@/games/slice/useSliceGame";
@@ -35,8 +35,8 @@ import { useStats } from "@/games/slice/useTodayResult";
 import { useTodayResult as useDownstreamToday } from "@/games/downstream/useTodayResult";
 import { capitalise, fractionWords, goal, instruction, measure, perfectLineText, possessive } from "@/games/slice/words";
 
-// One word for each score band (bandOf in scoring.ts: 90+, 70+, 20+, below).
-const BAND_WORDS = ["Spot on", "So close", "Not bad", "Way off"];
+// One word for each band (bandOf in scoring.ts: up to 1 point off, up to 5, under 10, 10 or more).
+const BAND_WORDS = ["Spot on", "Pretty close", "Not bad", "Way off"];
 const LABEL = "pointer-events-none absolute top-0 left-0 rounded-full bg-card/90 px-3 py-1 text-[17px] font-bold tabular-nums shadow-card";
 
 export default function SliceGame() {
@@ -149,7 +149,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
         perfectLine(round, cut.line),
         share(round, cut.line),
         scoreCut(round, cut.line).positive,
-        bandOf(cut.score),
+        bandOf(missOf(cut.share, round.target)),
         () => setRevealDone(true),
         true,
       );
@@ -167,7 +167,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     }
     g.act({ type: "cut", line });
     const scored = scoreCut(round, line);
-    scene.current?.reveal(line, perfectLine(round, line), share(round, line), scored.positive, bandOf(scored.score), () => setRevealDone(true));
+    scene.current?.reveal(line, perfectLine(round, line), share(round, line), scored.positive, bandOf(scored.miss), () => setRevealDone(true));
   }
 
   function next() {
@@ -314,7 +314,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             <div key="result" className="flex flex-col gap-2">
               <p className="px-1 text-[15px] leading-snug">
                 <span className="font-semibold">
-                  {BAND_WORDS[bandOf(cut.score)]}. {cut.score} points.
+                  {BAND_WORDS[bandOf(missOf(cut.share, round.target))]}. {cut.score} points.
                 </span>{" "}
                 You cut off {formatShare(cut.share)}. The aim was {formatShare(round.target)}.
               </p>
@@ -422,7 +422,7 @@ function Summary({
         <div>
           <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s slices" : "Today\u2019s slices"}</h1>
           <p className="text-xs text-ink-faint">
-            Each cut starts at {MAX_SCORE} and loses {LOSS_PER_POINT} for every percentage point off.
+            Each cut starts at {MAX_SCORE} and halves for every {HALF_EVERY_POINTS} percentage points off.
           </p>
         </div>
         <p className="shrink-0 text-right">

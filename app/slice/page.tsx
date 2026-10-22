@@ -49,7 +49,7 @@ export default function SlicePage() {
               ],
               [
                 "See how close you got.",
-                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100: you lose 10 for every percentage point you're off. Cutting off 47.7% instead of 50%, for example, is 2.3 points off, so 77. Not happy? Cut again once: your better cut counts. When you're done, Show perfect cut reveals the ideal line at your angle.",
+                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100, halving for every 7 percentage points you're off: 1 point off scores 91, 7 off scores 50, 10 off still scores 37. Cutting off 47.7% instead of 50%, for example, is 2.3 points off, so 80. Not happy? Cut again once: your better cut counts. When you're done, Show perfect cut reveals the ideal line at your angle.",
               ],
               ["Share your score.", "After four rounds you have a score out of 400. Share it, with each round's score, to compare with friends. It never gives away the answers."],
             ].map(([title, text], i) => (
