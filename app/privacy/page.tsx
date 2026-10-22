@@ -14,7 +14,7 @@ export const metadata: Metadata = pageMetadata({
   path: "/privacy/",
 });
 
-const UPDATED = "20 October 2026";
+const UPDATED = "21 October 2026";
 
 export default function PrivacyPage() {
   return (
@@ -47,8 +47,8 @@ export default function PrivacyPage() {
         <li>the page you visit, the site that linked you here, and your browser, operating system, device type, screen size and language;</li>
         <li>your approximate location (country, region and city), worked out from your IP address, which is not stored;</li>
         <li>
-          game events: starting a puzzle, finishing it with your total score, and a once-a-day visit that says how many days it has been since your
-          first visit.
+          game events: starting a puzzle, finishing it with your total score, pressing Share (whether it was shared or copied, never what you
+          shared or who to), and a once-a-day visit that says how many days it has been since your first visit.
         </li>
       </ul>
       <p>

@@ -2,8 +2,8 @@
 // nothing of PostHog's stored on the player's device, so no consent banner is needed.
 // PostHog counts page views by itself; the game events below are sent with `track`.
 //
-// The launch questions are just two: do players finish, and do they come back. So the
-// events are few on purpose: puzzle_started / puzzle_finished, and daily_visit.
+// The launch questions: do players finish, do they share, and do they come back. So the
+// events are few on purpose: puzzle_started / puzzle_finished, result_shared, daily_visit.
 //
 // Cookieless PostHog can't follow a person across days, so each browser sends one
 // `daily_visit` a day carrying how many days it has been since its first visit (0 = the
@@ -32,6 +32,8 @@ export type Events = {
   daily_visit: { day: number };
   puzzle_started: Play;
   puzzle_finished: Play & { points: number; maxPoints: number };
+  /** The Share button: the share sheet was used, the text was copied, or neither worked. */
+  result_shared: Play & { outcome: "shared" | "copied" | "failed" };
 };
 
 type PostHog = { __loaded?: boolean; capture: (name: string, data?: object) => void };

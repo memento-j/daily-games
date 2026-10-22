@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
+import { track } from "@/lib/analytics";
 import { getPuzzleNumber } from "@/lib/daily";
 import { lastOpenPuzzle } from "@/lib/schedule";
 import { shareResult, shareText } from "@/lib/share";
@@ -32,6 +33,7 @@ import { isMuted, setMuted, sound } from "@/games/slice/sound";
 import type { Puzzle, Round } from "@/games/slice/types";
 import { useSliceGame, type Load } from "@/games/slice/useSliceGame";
 import { useStats } from "@/games/slice/useTodayResult";
+import { useTodayResult as useDownstreamToday } from "@/games/downstream/useTodayResult";
 import { capitalise, fractionWords, goal, instruction, measure, perfectLineText, possessive } from "@/games/slice/words";
 
 // One word for each score band (bandOf in scoring.ts: 90+, 70+, 20+, below).
@@ -429,7 +431,8 @@ function Summary({
           <span className="text-sm text-ink-faint tabular-nums">/{maxScore(cuts.length)}</span>
         </p>
       </div>
-      <ShareButton number={number} cuts={cuts} />
+      <ShareButton number={number} preview={preview} cuts={cuts} />
+      <TryDownstream />
 
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (
@@ -479,7 +482,31 @@ function Summary({
   );
 }
 
-function ShareButton({ number, cuts }: { number: number; cuts: SavedCut[] }) {
+/** Done with Slice: point to today's Downstream, unless it's already been played today. */
+function TryDownstream() {
+  const today = useDownstreamToday();
+  if (!today || today.result) return null; // still reading storage, or Downstream is done
+  return (
+    <Link
+      href="/downstream/"
+      className="group flex items-center gap-3 rounded-2xl bg-sea p-3 ring-1 ring-drop/15 transition-shadow hover:ring-drop/40"
+    >
+      <svg viewBox="0 0 24 24" className="size-8 shrink-0 text-drop" aria-hidden="true">
+        <path d="M12 2.5c3.2 4.3 6.5 8.4 6.5 12a6.5 6.5 0 0 1-13 0c0-3.6 3.3-7.7 6.5-12Z" fill="currentColor" />
+        <path d="M9 15.5a3 3 0 0 0 2.5 2.8" fill="none" stroke="white" strokeOpacity="0.7" strokeWidth="1.6" strokeLinecap="round" />
+      </svg>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">Next: today&apos;s Downstream</span>
+        <span className="block text-xs text-ink-soft">A raindrop lands somewhere on Earth. Which sea does it reach?</span>
+      </span>
+      <svg viewBox="0 0 20 20" className="size-4 shrink-0 text-ink-soft transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
+        <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </Link>
+  );
+}
+
+function ShareButton({ number, preview, cuts }: { number: number; preview: boolean; cuts: SavedCut[] }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
   async function share() {
     sound.tap();
@@ -493,6 +520,7 @@ function ShareButton({ number, cuts }: { number: number; cuts: SavedCut[] }) {
       url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
     });
     const outcome = await shareResult(text);
+    track("result_shared", { game: "slice", puzzle: number, preview, outcome });
     if (outcome !== "shared") {
       setState(outcome);
       window.setTimeout(() => setState("idle"), 2200);

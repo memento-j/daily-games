@@ -76,13 +76,13 @@ WELL_KNOWN = {
 
 # --- Daily puzzles ---
 DEFAULT_DAYS = 10
-# One round per entry, in play order: (mode, share to cut off). The last round cuts off
-# 10% or its mirror, 90% (seeded per puzzle). Countries go easiest first: the round
-# order follows how far people and land disagree in each (`cuts.surprise`).
-# Every round is a population round (developer's call, 2026-10-21: population is the
-# game's hook); the half-the-land round became a second half-the-population round.
-# The game still plays "area" rounds if a file has one.
-DAY_ROUNDS = [("population", 1 / 2), ("population", 1 / 2), ("population", 1 / 3), ("population", 0.1)]
+# One round per entry, in play order: (mode, share to cut off). Countries go easiest
+# first: the round order follows how far people and land disagree (`cuts.surprise`).
+# Every round is half the population (developer's calls, 2026-10-21: population is the
+# game's hook, so the half-the-land round went; then players were confused when a day
+# switched from halves to a third or a tenth, so every round became a half). The game
+# still plays other targets and "area" rounds if a file has them (#1 does).
+DAY_ROUNDS = [("population", 1 / 2)] * 4
 # Natural Earth's short names, as a sentence says them ("Cut off a third of
 # the Philippines' people").
 DISPLAY_NAMES = {

@@ -10,6 +10,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
+import { track } from "@/lib/analytics";
 import { getPuzzleNumber, padPuzzleNumber } from "@/lib/daily";
 import { lastOpenPuzzle } from "@/lib/schedule";
 import { shareResult, shareText } from "@/lib/share";
@@ -298,11 +299,13 @@ export function useFirstTime(): [boolean, () => void] {
 /** Share the day's result: the system share sheet on phones, the clipboard elsewhere. */
 export function ShareButton({
   number,
+  preview,
   results,
   maxPointsTotal,
   primary = true,
 }: {
   number: number;
+  preview: boolean;
   results: DropResult[];
   maxPointsTotal: number;
   primary?: boolean;
@@ -319,6 +322,7 @@ export function ShareButton({
       url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
     });
     const outcome = await shareResult(text);
+    track("result_shared", { game: "downstream", puzzle: number, preview, outcome });
     if (outcome !== "shared") {
       setState(outcome);
       window.setTimeout(() => setState("idle"), 2200);
@@ -380,7 +384,7 @@ export function DaySummary({
       </div>
 
       <div className="flex flex-col gap-2">
-        <ShareButton number={number} results={game.results} maxPointsTotal={max} />
+        <ShareButton number={number} preview={preview} results={game.results} maxPointsTotal={max} />
         <p className="text-center text-sm text-ink-soft">
           Shares as <span className="font-semibold text-ink" aria-hidden="true">{marks}</span>
           <span className="sr-only">your five squares and</span> {points}/{max}, never the answers.

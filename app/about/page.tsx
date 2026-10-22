@@ -25,7 +25,7 @@ export default function AboutPage() {
         <Link href="/slice/">Slice</Link>
       </h3>
       <p>
-        Draw one straight line across a real country to cut off a share of its population: half, a third, or a tenth. It looks like a test of
+        Draw one straight line across a real country to split its population exactly in half. It looks like a test of
         shapes, but it isn&apos;t: the population crowds into cities, coasts and river valleys, so the line that looks right is often far off.
       </p>
       <h3>

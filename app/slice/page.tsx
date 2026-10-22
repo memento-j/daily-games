@@ -11,7 +11,7 @@ import { gameJsonLd, pageMetadata } from "@/lib/seo";
 import SliceGame from "./SliceGame";
 
 const DESCRIPTION =
-  "A daily geography puzzle: draw one straight line across a real country to cut off half, a third or a tenth of its population. Four countries a day, free.";
+  "A daily geography puzzle: draw one straight line across a real country to cut its population exactly in half. Four countries a day, free.";
 
 export const metadata: Metadata = pageMetadata({ title: "Slice: cut a country's population in half", description: DESCRIPTION, path: "/slice/" });
 
@@ -35,14 +35,13 @@ export default function SlicePage() {
             countries&apos; populations crowd into a small part of their land, so the obvious cut is often far off.
           </p>
           <p className="mt-2 leading-relaxed text-ink-soft">
-            Every day you get four real countries, each with a goal like &ldquo;Cut off half of Germany&apos;s population&rdquo; or &ldquo;Cut off
-            a third of Japan&apos;s population&rdquo;. You get one straight line to do it, and a second try if you want it.
+            Every day you get four real countries and one goal for each: cut its population exactly in half. You get one straight line to do it, and a second try if you want it.
           </p>
           <ol className="mt-4 flex flex-col gap-3">
             {[
               [
                 "Read the goal.",
-                "It says how much of the population to cut off: half, a third or a tenth. Think about where the population lives, not how big the country looks: it crowds into cities, coasts and river valleys, so the line that splits the shape in half rarely splits the population in half.",
+                "Split the population in half. Think about where the population lives, not how big the country looks: it crowds into cities, coasts and river valleys, so the line that splits the shape in half rarely splits the population in half.",
               ],
               [
                 "Draw your line.",
@@ -50,7 +49,7 @@ export default function SlicePage() {
               ],
               [
                 "See how close you got.",
-                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100: you lose 10 for every percentage point you're off. Aiming for 33.3% and cutting off 31%, for example, is 2.3 points off, so 77. Not happy? Cut again once: your better cut counts. When you're done, Show perfect cut reveals the ideal line at your angle.",
+                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100: you lose 10 for every percentage point you're off. Cutting off 47.7% instead of 50%, for example, is 2.3 points off, so 77. Not happy? Cut again once: your better cut counts. When you're done, Show perfect cut reveals the ideal line at your angle.",
               ],
               ["Share your score.", "After four rounds you have a score out of 400. Share it, with each round's score, to compare with friends. It never gives away the answers."],
             ].map(([title, text], i) => (
