@@ -6,6 +6,7 @@ import { pageMetadata, siteJsonLd } from "@/lib/seo";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import DownstreamStatus from "./DownstreamStatus";
 import SliceStatus from "./SliceStatus";
+import { DownstreamYesterday, SliceYesterday } from "./HomeYesterday";
 import SiteFooter from "@/components/SiteFooter";
 import ThemeToggle from "@/components/ThemeToggle";
 import TodayDate from "./TodayDate";
@@ -75,6 +76,7 @@ export default function Home() {
                 </span>
                 <MiniSlice />
               </Link>
+              <SliceYesterday />
             </li>
             <li>
               <Link
@@ -94,6 +96,7 @@ export default function Home() {
                 </span>
                 <MiniMap />
               </Link>
+              <DownstreamYesterday />
             </li>
             <ComingSoon number={3} line="Still an idea on a napkin." />
           </ul>

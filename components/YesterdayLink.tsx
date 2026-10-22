@@ -12,9 +12,10 @@ import { PeekerParts } from "@/components/Peeker";
 import { getPuzzleNumber } from "@/lib/daily";
 import { getHistory, subscribe } from "@/lib/storage";
 
-export default function YesterdayLink({ path, storageKeys, teaser }: { path: string; storageKeys: string[]; teaser: string }) {
-  // A number (or 0 for "nothing to offer"), so the snapshot is stable between renders.
-  const yesterday = useSyncExternalStore(
+/** Yesterday's puzzle number while it's unplayed in any of these storage keys, else 0.
+ *  (A number, not an object, so the snapshot is stable between renders.) */
+export function useUnplayedYesterday(storageKeys: string[]): number {
+  return useSyncExternalStore(
     subscribe,
     () => {
       const n = getPuzzleNumber() - 1;
@@ -22,6 +23,10 @@ export default function YesterdayLink({ path, storageKeys, teaser }: { path: str
     },
     () => 0,
   );
+}
+
+export default function YesterdayLink({ path, storageKeys, teaser }: { path: string; storageKeys: string[]; teaser: string }) {
+  const yesterday = useUnplayedYesterday(storageKeys);
   if (!yesterday) return null;
   return (
     // A plain link: a fresh page load starts the game cleanly on the other puzzle.

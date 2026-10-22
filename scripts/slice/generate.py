@@ -42,7 +42,8 @@ Usage (from the repo root):
 #   1. Read existing puzzle files: the last number, and which countries were used lately.
 #   2. Each day, draw countries from the pool (big enough, not contested, not used in
 #      the last COUNTRY_REUSE_DAYS), favouring populous ones and one per continent. The
-#      first WELL_KNOWN_DAYS puzzles draw only from the WELL_KNOWN list.
+#      each round draws from its familiarity tiers (DAY_TIERS: WELL_KNOWN, RECOGNISABLE,
+#      the rest), so every day opens on a country players know.
 #   3. Build them, order them by how far people and land disagree (easiest first), and
 #      give each a round from DAY_ROUNDS.
 
@@ -61,7 +62,7 @@ from shapely.geometry import MultiPolygon
 from config import (
     BOX, CONTESTED, COUNTRY_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
     OUTLINE_SIMPLIFY, POOL_MIN_KM2, POOL_MIN_PEOPLE, POPULATION_TIF, POPULATION_TOLERANCE, PUZZLE_DIR,
-    VALIDATION_COUNTRIES, WELL_KNOWN, WELL_KNOWN_DAYS,
+    DAY_TIERS, EASY_DAYS, RECOGNISABLE, VALIDATION_COUNTRIES, WELL_KNOWN,
 )
 from countries import find, load_countries, mainland, parts
 from cuts import people_share, perfect_cut, surprise
@@ -255,38 +256,41 @@ def read_existing() -> tuple[int, dict[str, int]]:
     return last, used
 
 
+def tier(admin: str) -> int:
+    """How familiar a country is: 1 well known, 2 recognisable, 3 the rest (config.py)."""
+    return 1 if admin in WELL_KNOWN else 2 if admin in RECOGNISABLE else 3
+
+
 def pick_day(candidates: list, used: dict[str, int], day: int, rng: np.random.Generator) -> list:
-    """Draw len(DAY_ROUNDS) countries, populous ones more often, one per continent where
-    the pool allows."""
-    if day <= WELL_KNOWN_DAYS:
-        candidates = [c for c in candidates if c.ADMIN in WELL_KNOWN]
+    """One country per round, each from its DAY_TIERS (nearest tier if those are used
+    up), populous ones more often, a new continent each time where possible."""
     fresh = [c for c in candidates if day - used.get(c.ADMIN, -10**6) > COUNTRY_REUSE_DAYS]
     if len(fresh) < len(DAY_ROUNDS):
         raise SystemExit(f"Day {day}: only {len(fresh)} countries unused in {COUNTRY_REUSE_DAYS} days; lower "
                          "COUNTRY_REUSE_DAYS or widen the pool")
-    weight = np.sqrt([c.POP_EST for c in fresh])
-    order = rng.choice(len(fresh), size=len(fresh), replace=False, p=weight / weight.sum())
     chosen, continents = [], set()
-    for i in order:  # first pass: one per continent
-        if fresh[i].CONTINENT not in continents:
-            chosen.append(fresh[i])
-            continents.add(fresh[i].CONTINENT)
-        if len(chosen) == len(DAY_ROUNDS):
-            return chosen
-    for i in order:  # not enough continents left: fill up
-        if fresh[i] not in chosen:
-            chosen.append(fresh[i])
-        if len(chosen) == len(DAY_ROUNDS):
-            break
+    for tiers in DAY_TIERS[: len(DAY_ROUNDS)]:
+        if day <= EASY_DAYS:
+            tiers = tuple(t for t in tiers if t < 3) or (2,)
+        left = [c for c in fresh if c not in chosen]
+        # The slot's own tiers, else the nearest ones that still have countries.
+        for width in range(3):
+            options = [c for c in left if any(abs(tier(c.ADMIN) - t) <= width for t in tiers)]
+            if options:
+                break
+        options = [c for c in options if c.CONTINENT not in continents] or options
+        weight = np.sqrt([c.POP_EST for c in options])
+        pick = options[rng.choice(len(options), p=weight / weight.sum())]
+        chosen.append(pick)
+        continents.add(pick.CONTINENT)
     return chosen
-
 
 def generate(days: int, seed: int | None) -> None:
     countries = load_countries()
     candidates = pool(countries)
-    unknown = WELL_KNOWN - {c.ADMIN for c in candidates}
-    if unknown:  # a typo, or a country that left the pool, would silently shrink the list
-        raise SystemExit(f"WELL_KNOWN names not in the pool: {sorted(unknown)}")
+    unknown = (WELL_KNOWN | RECOGNISABLE) - {c.ADMIN for c in candidates}
+    if unknown:  # a typo, or a country that left the pool, would silently shrink a tier
+        raise SystemExit(f"WELL_KNOWN / RECOGNISABLE names not in the pool: {sorted(unknown)}")
     last, used = read_existing()
     rng = np.random.default_rng(last if seed is None else seed)
     PUZZLE_DIR.mkdir(parents=True, exist_ok=True)
@@ -294,8 +298,9 @@ def generate(days: int, seed: int | None) -> None:
     with rasterio.open(POPULATION_TIF) as src:
         for day in range(last + 1, last + days + 1):
             picked = [build(countries, src, c.ADMIN) for c in pick_day(candidates, used, day, rng)]
-            # Easiest first: how far an area half-cut misses half the people, on average.
-            picked.sort(key=lambda c: np.mean([g for _, g in surprise(c.outline, c.points)]))
+            # Easiest first: the most familiar tier first, then how far an area half-cut
+            # misses half the people, on average (players' intuition fails more).
+            picked.sort(key=lambda c: (tier(c.id), np.mean([g for _, g in surprise(c.outline, c.points)])))
             rounds = []
             for country, (mode, target) in zip(picked, DAY_ROUNDS):
                 if target == 0.1 and rng.random() < 0.5:

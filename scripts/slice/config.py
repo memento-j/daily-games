@@ -62,10 +62,10 @@ POOL_MIN_PEOPLE = 1_000_000
 # reach the 60 days first hoped for: the pool runs dry after ~30.
 COUNTRY_REUSE_DAYS = 28
 
-# The first WELL_KNOWN_DAYS puzzles only use countries most players can picture, so
-# nobody's first week is spent guessing at shapes they've never seen (developer's call,
-# 2026-10-18). 36 countries: enough for 4 a day for 7 days under the 28-day reuse rule.
-WELL_KNOWN_DAYS = 7
+# How familiar a country is, in three tiers: WELL_KNOWN (1), RECOGNISABLE (2), the
+# rest of the pool (3). Every day mixes them (DAY_TIERS) and plays them most familiar
+# first (developer's call, 2026-10-22: finishes and scores dropped once the first week's
+# well-known countries ran out and whole days of little-known ones followed).
 WELL_KNOWN = {
     "United States of America", "Canada", "Mexico", "Brazil", "Argentina", "Chile", "Peru", "Colombia",
     "United Kingdom", "France", "Germany", "Italy", "Spain", "Portugal", "Ireland", "Norway", "Sweden",
@@ -73,11 +73,27 @@ WELL_KNOWN = {
     "Saudi Arabia", "Iran", "Japan", "South Korea", "Thailand", "Vietnam", "Indonesia", "Philippines",
     "Australia", "New Zealand",
 }
+# Places most players can picture or place on a map, though not the very famous.
+RECOGNISABLE = {
+    "Netherlands", "Belgium", "Switzerland", "Austria", "Denmark", "Czechia", "Hungary", "Romania", "Bulgaria",
+    "Croatia", "Cuba", "Dominican Republic", "Haiti", "Costa Rica", "Panama", "Guatemala", "Venezuela", "Ecuador",
+    "Bolivia", "Uruguay", "Paraguay", "Iraq", "Afghanistan", "Malaysia", "North Korea", "Sri Lanka", "Nepal",
+    "Mongolia", "Kazakhstan", "Bangladesh", "Myanmar", "Cambodia", "Jordan", "United Arab Emirates", "Algeria",
+    "Tunisia", "Libya", "Ghana", "Madagascar", "United Republic of Tanzania", "Uganda", "Zimbabwe",
+    "Democratic Republic of the Congo",
+}
+# The tiers each round may draw from, in play order: a well-known opener, then
+# well-known or recognisable, then recognisable, then the day's challenge. A slot with
+# nothing left in its tiers takes the nearest tier that has. The first EASY_DAYS
+# puzzles keep the lesser-known tier out entirely, for new players' first week.
+DAY_TIERS = [(1,), (1, 2), (2,), (2, 3)]
+EASY_DAYS = 7
 
 # --- Daily puzzles ---
 DEFAULT_DAYS = 10
 # One round per entry, in play order: (mode, share to cut off). Countries go easiest
-# first: the round order follows how far people and land disagree (`cuts.surprise`).
+# first: most familiar tier first, then within a tier by how far people and land
+# disagree (`cuts.surprise`).
 # Every round is half the population (developer's calls, 2026-10-21: population is the
 # game's hook, so the half-the-land round went; then players were confused when a day
 # switched from halves to a third or a tenth, so every round became a half). The game
