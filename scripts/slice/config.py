@@ -81,7 +81,7 @@ DEFAULT_DAYS = 10
 # Every round is half the population (developer's calls, 2026-10-21: population is the
 # game's hook, so the half-the-land round went; then players were confused when a day
 # switched from halves to a third or a tenth, so every round became a half). The game
-# still plays other targets and "area" rounds if a file has them (#1 does).
+# still plays other targets and "area" rounds if a file has them.
 DAY_ROUNDS = [("population", 1 / 2)] * 4
 # Natural Earth's short names, as a sentence says them ("Cut off a third of
 # the Philippines' people").

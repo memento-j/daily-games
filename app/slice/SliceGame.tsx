@@ -431,8 +431,9 @@ function Summary({
         </p>
       </div>
       <ShareButton number={number} preview={preview} cuts={cuts} />
-      <TryDownstream />
+      {/* One more of this game first, then the other game. */}
       {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's countries are still waiting to be split." />}
+      <TryDownstream />
 
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (

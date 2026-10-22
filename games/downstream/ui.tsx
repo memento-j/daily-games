@@ -14,6 +14,7 @@ import { track } from "@/lib/analytics";
 import { shareResult, shareText } from "@/lib/share";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
+import { useTodayResult as useSliceToday } from "@/games/slice/useTodayResult";
 import type { GameState } from "./game";
 import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "./schedule";
 import { dropEmoji, dropPoints, EMOJI_LEGEND, maxPoints, totalPoints, type DropResult } from "./scoring";
@@ -390,7 +391,11 @@ export function DaySummary({
           {EMOJI_LEGEND.map(([e, meaning]) => `${e} ${meaning}`).join("  ·  ")}
         </p>
       </div>
-      {!preview && <YesterdayLink path="/downstream/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's raindrops are still looking for the sea." />}
+      {/* One more of this game first, then the other game. (Hidden when both have nothing to offer.) */}
+      <div className="flex flex-col gap-2.5 empty:hidden">
+        {!preview && <YesterdayLink path="/downstream/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's raindrops are still looking for the sea." />}
+        <TrySlice />
+      </div>
 
       <div>
         <p className="text-sm font-semibold text-ink-soft">{onView ? "Your drops · pick one to see its route" : "Your drops"}</p>
@@ -463,6 +468,29 @@ export function DaySummary({
         <Countdown />
       </p>
     </div>
+  );
+}
+
+/** Done with Downstream: point to today's Slice, unless it's already been played today.
+ *  In Slice's own look: a paper slab on the cutting mat, with the coral dashed cut. */
+function TrySlice() {
+  const today = useSliceToday();
+  if (!today || today.result) return null; // still reading storage, or Slice is done
+  return (
+    <Link href="/slice/" className="group flex items-center gap-3 rounded-2xl bg-mat p-3 ring-1 ring-slab-side/30 transition-shadow hover:ring-slab-side/70">
+      <svg viewBox="0 0 32 32" className="size-8 shrink-0" aria-hidden="true">
+        <path d="M6 9.5 14 5l12 4.5-1.5 11L17 27 6.5 22.5Z" transform="translate(0 1.6)" fill="var(--color-slab-side)" />
+        <path d="M6 9.5 14 5l12 4.5-1.5 11L17 27 6.5 22.5Z" fill="var(--color-slab)" />
+        <path d="M3.5 19.5 28.5 10" fill="none" stroke="var(--color-coral)" strokeWidth="2" strokeLinecap="round" strokeDasharray="3 2.6" />
+      </svg>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-semibold">Next: today&apos;s Slice</span>
+        <span className="block text-xs text-ink-soft">One straight line to cut a country&apos;s population in half. Harder than it looks.</span>
+      </span>
+      <svg viewBox="0 0 20 20" className="size-4 shrink-0 text-ink-soft transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
+        <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+      </svg>
+    </Link>
   );
 }
 
