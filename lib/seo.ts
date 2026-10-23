@@ -14,9 +14,12 @@ type Page = {
   description: string;
   path: string; // "/slice/" (with the trailing slash the site uses)
   absoluteTitle?: boolean; // true: use `title` as it is, with no " · Pondo" added
+  /** A preview image of its own, for pages that can't use the opengraph-image file
+   *  convention (one image per country under a single dynamic route). */
+  image?: { url: string; width: number; height: number; alt: string };
 };
 
-export function pageMetadata({ title, description, path, absoluteTitle }: Page): Metadata {
+export function pageMetadata({ title, description, path, absoluteTitle, image }: Page): Metadata {
   const full = absoluteTitle ? title : `${title} · ${SITE_NAME}`;
   return {
     title: absoluteTitle ? { absolute: title } : title,
@@ -24,9 +27,9 @@ export function pageMetadata({ title, description, path, absoluteTitle }: Page):
     // The one true address of this page: ?puzzle=N links count as this page, not as
     // copies of it, and so does the old workers.dev address while it's still on.
     alternates: { canonical: path },
-    openGraph: { title: full, description, url: path, siteName: SITE_NAME, type: "website", locale: "en_US" },
+    openGraph: { title: full, description, url: path, siteName: SITE_NAME, type: "website", locale: "en_US", ...(image && { images: [image] }) },
     // X shows the big image card only when asked to; it reads the Open Graph image.
-    twitter: { card: "summary_large_image", title: full, description },
+    twitter: { card: "summary_large_image", title: full, description, ...(image && { images: [image.url] }) },
   };
 }
 
@@ -60,6 +63,34 @@ export function gameJsonLd({ name, description, path }: { name: string; descript
         itemListElement: [
           { "@type": "ListItem", position: 1, name: SITE_NAME, item: absolute("/") },
           { "@type": "ListItem", position: 2, name, item: absolute(path) },
+        ],
+      },
+    ],
+  };
+}
+
+/** Structured data for a country page: an article answering one question, plus the
+ *  breadcrumb ("Pondo › Countries › Japan"). */
+export function countryJsonLd({ headline, description, path, image, name }: { headline: string; description: string; path: string; image: string; name: string }) {
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      {
+        "@type": "Article",
+        headline,
+        description,
+        url: absolute(path),
+        image: absolute(image),
+        about: { "@type": "Country", name },
+        publisher: { "@id": absolute("/#organization") },
+        isPartOf: { "@id": absolute("/#website") },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: SITE_NAME, item: absolute("/") },
+          { "@type": "ListItem", position: 2, name: "Countries", item: absolute("/countries/") },
+          { "@type": "ListItem", position: 3, name, item: absolute(path) },
         ],
       },
     ],

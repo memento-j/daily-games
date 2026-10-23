@@ -51,6 +51,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import time
 from dataclasses import dataclass
 
@@ -60,7 +61,7 @@ import shapely
 from shapely.geometry import MultiPolygon
 
 from config import (
-    BOX, CONTESTED, COUNTRY_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
+    BOX, CONTESTED, COUNTRY_REUSE_DAYS, WELL_KNOWN_REUSE_DAYS, PRACTICE_FILE, PRACTICE_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
     OUTLINE_SIMPLIFY, POOL_MIN_KM2, POOL_MIN_PEOPLE, POPULATION_TIF, POPULATION_TOLERANCE, PUZZLE_DIR,
     DAY_TIERS, EASY_DAYS, RECOGNISABLE, VALIDATION_COUNTRIES, WELL_KNOWN,
 )
@@ -261,10 +262,22 @@ def tier(admin: str) -> int:
     return 1 if admin in WELL_KNOWN else 2 if admin in RECOGNISABLE else 3
 
 
+def practice_ids() -> set[str]:
+    """The countries open for practice: the `id`s in games/slice/practice.ts."""
+    return set(re.findall(r'id: "([^"]+)"', PRACTICE_FILE.read_text(encoding="utf-8")))
+
+
 def pick_day(candidates: list, used: dict[str, int], day: int, rng: np.random.Generator) -> list:
     """One country per round, each from its DAY_TIERS (nearest tier if those are used
     up), populous ones more often, a new continent each time where possible."""
-    fresh = [c for c in candidates if day - used.get(c.ADMIN, -10**6) > COUNTRY_REUSE_DAYS]
+    practice = practice_ids()
+
+    def gap(c) -> int:
+        if c.ADMIN in practice:
+            return PRACTICE_REUSE_DAYS
+        return WELL_KNOWN_REUSE_DAYS if tier(c.ADMIN) == 1 else COUNTRY_REUSE_DAYS
+
+    fresh = [c for c in candidates if day - used.get(c.ADMIN, -10**6) > gap(c)]
     if len(fresh) < len(DAY_ROUNDS):
         raise SystemExit(f"Day {day}: only {len(fresh)} countries unused in {COUNTRY_REUSE_DAYS} days; lower "
                          "COUNTRY_REUSE_DAYS or widen the pool")

@@ -13,6 +13,7 @@ import { padPuzzleNumber } from "@/lib/daily";
 import { computeStats } from "@/lib/stats";
 import { clearInProgress, getHistory, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase, type SavedCut } from "./game";
+import { practiceCountry, practicePuzzle, type PracticeCountry } from "./practice";
 import { maxScore, totalScore } from "./scoring";
 import { puzzleToPlay, storageKeyFor } from "./schedule";
 import type { Puzzle } from "./types";
@@ -24,7 +25,8 @@ export type Load =
   | { status: "loading" }
   | { status: "comingSoon" }
   | { status: "missing" }
-  | { status: "ready"; number: number; puzzle: Puzzle; preview: boolean };
+  | { status: "noPractice" } // ?country= names a country that isn't open for practice
+  | { status: "ready"; number: number; puzzle: Puzzle; preview: boolean; practice: PracticeCountry | null };
 
 export type SliceGameState = {
   load: Load;
@@ -35,8 +37,11 @@ export type SliceGameState = {
 };
 
 export function useSliceGame(): SliceGameState {
-  // ?puzzle=3 plays a specific puzzle (for playtesting before launch).
-  const override = useSearchParams().get("puzzle");
+  // ?puzzle=N plays yesterday's puzzle (lib/schedule.ts); ?country=japan practises one
+  // past country (games/slice/practice.ts).
+  const params = useSearchParams();
+  const override = params.get("puzzle");
+  const countryParam = params.get("country");
   const [load, setLoad] = useState<Load>({ status: "loading" });
   const [game, setGame] = useState<GameState>(initialState);
 
@@ -44,7 +49,30 @@ export function useSliceGame(): SliceGameState {
   // bundled into the JavaScript.
   useEffect(() => {
     let cancelled = false;
+    async function loadPractice() {
+      const country = practiceCountry(countryParam);
+      if (!country) {
+        setLoad({ status: "noPractice" });
+        return;
+      }
+      let puzzle: Puzzle | null = null;
+      try {
+        const res = await fetch(`/data/slice/${padPuzzleNumber(country.puzzle)}.json`);
+        if (res.ok) puzzle = practicePuzzle((await res.json()) as Puzzle, country);
+      } catch {
+        // offline or similar: treated like a missing puzzle below
+      }
+      if (cancelled) return;
+      if (!puzzle) {
+        setLoad({ status: "missing" });
+        return;
+      }
+      // Always a fresh start: practice is saved nowhere.
+      setGame(initialState);
+      setLoad({ status: "ready", number: country.puzzle, puzzle, preview: true, practice: country });
+    }
     async function loadPuzzle() {
+      if (countryParam !== null) return loadPractice();
       const { number, preview } = puzzleToPlay(override);
       const storageKey = storageKeyFor(preview);
       if (!Number.isInteger(number) || number < 1) {
@@ -69,13 +97,13 @@ export function useSliceGame(): SliceGameState {
       if (finished) setGame({ ...initialState, round: puzzle.rounds.length, cuts: finished.cuts });
       else if (isValidState(saved, puzzle)) setGame(saved);
       else setGame(initialState);
-      setLoad({ status: "ready", number, puzzle, preview });
+      setLoad({ status: "ready", number, puzzle, preview, practice: null });
     }
     loadPuzzle();
     return () => {
       cancelled = true;
     };
-  }, [override]);
+  }, [override, countryParam]);
 
   function act(action: Action) {
     if (load.status !== "ready") return;
@@ -84,6 +112,13 @@ export function useSliceGame(): SliceGameState {
     const next = step(game, action, puzzle);
     if (next === game) return;
     setGame(next);
+    // Practice: nothing saved, and its own analytics events.
+    if (load.practice) {
+      const country = load.practice.name;
+      if (action.type === "cut" && game.round === 0 && game.tries === 0) track("practice_started", { country });
+      if (phase(next, puzzle) === "finished") track("practice_finished", { country, points: totalScore(next.cuts) });
+      return;
+    }
     // Analytics (lib/analytics.ts): the first cut of a fresh puzzle and the finished day.
     const play = { game: "slice", puzzle: number, preview: load.preview } as const;
     if (action.type === "cut" && game.round === 0 && game.tries === 0) track("puzzle_started", play);
@@ -102,7 +137,7 @@ export function useSliceGame(): SliceGameState {
     load,
     game,
     phase: load.status === "ready" ? phase(game, load.puzzle) : null,
-    preview: load.status === "ready" ? load.preview : override !== null,
+    preview: load.status === "ready" ? load.preview : override !== null || countryParam !== null,
     act,
   };
 }

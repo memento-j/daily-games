@@ -47,7 +47,8 @@ export default function PrivacyPage() {
         <li>the page you visit, the site that linked you here, and your browser, operating system, device type, screen size and language;</li>
         <li>your approximate location (country, region and city), worked out from your IP address, which is not stored;</li>
         <li>
-          game events: starting a puzzle, finishing it with your total score and current streak, pressing Share or saving the result picture (whether it was
+          game events: starting a puzzle, finishing it with your total score and current streak, starting and finishing a Slice practice country (which
+          country, and its score), pressing a country page&apos;s button to try that country, pressing Share or saving the result picture (whether it was
           shared, copied or saved, never what you shared or who to), and a once-a-day visit that says how many days it has been since your first visit and on how many
           different days you&apos;ve visited.
         </li>

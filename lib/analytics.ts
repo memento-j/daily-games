@@ -39,6 +39,12 @@ export type Events = {
   /** The Share button: the share sheet was used, the text was copied, or neither worked;
    *  or "Save the picture" downloaded the result card (saved). */
   result_shared: Play & { outcome: "shared" | "copied" | "failed" | "saved" };
+  /** Slice's practice mode (games/slice/practice.ts): a past country, saved nowhere.
+   *  Kept apart from puzzle_started / puzzle_finished so it never mixes into the daily numbers. */
+  practice_started: { country: string };
+  practice_finished: { country: string; points: number };
+  /** A country page's "Split Japan yourself" button (app/countries/): do readers become players? */
+  country_practice_clicked: { country: string };
 };
 
 type PostHog = { __loaded?: boolean; capture: (name: string, data?: object) => void };

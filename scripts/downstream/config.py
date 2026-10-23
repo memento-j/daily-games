@@ -42,7 +42,9 @@ MIN_PIN_SEPARATION_KM = 1000  # spread each day's pins across regions
 # applies a change to existing puzzles.
 STAGE_FRACTIONS = [0.25, 0.50, 0.75]
 # Screen until each difficulty has this many candidates per drop needed, or until
-# SCREEN_LIMIT. Hard buckets rarely fill, so runs usually stop at the limit (~2 min);
+# SCREEN_LIMIT. Hard buckets rarely fill, so runs usually stop at the limit (~7 min);
 # each day then gets the hardest drops available (difficulty is relative per day).
+# 15,000 since 2026-10-23: at 5,000 a 21-day batch ran out of hard drops and five days
+# had nothing harder than difficulty 2.
 POOL_PER_SLOT = 2
-SCREEN_LIMIT = 5_000
+SCREEN_LIMIT = 15_000

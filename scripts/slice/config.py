@@ -61,6 +61,15 @@ POOL_MIN_PEOPLE = 1_000_000
 # No country twice within this many days. 4 rounds a day from ~125 countries can't
 # reach the 60 days first hoped for: the pool runs dry after ~30.
 COUNTRY_REUSE_DAYS = 28
+# Well-known countries come back sooner: after 3 weeks, so #1's can return from #22
+# (developer's call, 2026-10-23). With 28 days for them too, all 36 were used up by #21
+# and #22-#29 would have been almost all little-known countries.
+WELL_KNOWN_REUSE_DAYS = 20
+# Countries open for practice (games/slice/practice.ts, read from there so the list lives
+# in one place) stay out of the daily puzzles for longer: someone who practised one
+# shouldn't meet it again as a daily a few weeks later (developer's call, 2026-10-23).
+PRACTICE_FILE = HERE.parent.parent / "games" / "slice" / "practice.ts"
+PRACTICE_REUSE_DAYS = 60
 
 # How familiar a country is, in three tiers: WELL_KNOWN (1), RECOGNISABLE (2), the
 # rest of the pool (3). Every day mixes them (DAY_TIERS) and plays them most familiar

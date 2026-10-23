@@ -633,3 +633,16 @@ button:not(:disabled),
     animation: none;
   }
 }
+
+/* The country pages' map (app/countries/): the cutting mat's faint grid behind the board. */
+.country-mat {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.28) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.28) 1.5px, transparent 1.5px);
+  background-size: 36px 36px;
+}
+:root[data-theme="dark"] .country-mat {
+  background-image:
+    linear-gradient(rgb(255 255 255 / 0.05) 1.5px, transparent 1.5px),
+    linear-gradient(90deg, rgb(255 255 255 / 0.05) 1.5px, transparent 1.5px);
+}

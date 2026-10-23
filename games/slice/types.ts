@@ -15,6 +15,7 @@ export type PeoplePoint = [number, number, number];
 export type Mode = "area" | "population";
 
 export type Round = {
+  id?: string; // Natural Earth's name, for reuse tracking and practice (games/slice/practice.ts)
   country: string;
   mode: Mode;
   target: number; // the share to cut off, 0..1 (e.g. 0.5, 1/3, 0.1)

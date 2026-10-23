@@ -26,6 +26,7 @@ import { GAME_NAME } from "@/games/slice/config";
 import { crosses, perfectLine, share } from "@/games/slice/cut";
 import { triesLeft, type SavedCut } from "@/games/slice/game";
 import { lineThrough } from "@/games/slice/geometry";
+import { otherPractice, PRACTICE, type PracticeCountry } from "@/games/slice/practice";
 import type { SliceScene } from "@/games/slice/scene";
 import { drawSliceCard } from "@/games/slice/shareCard";
 import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "@/games/slice/schedule";
@@ -33,7 +34,7 @@ import { bandOf, formatShare, HALF_EVERY_POINTS, MAX_SCORE, maxScore, missOf, sc
 import { isMuted, setMuted, sound } from "@/games/slice/sound";
 import type { Puzzle, Round } from "@/games/slice/types";
 import { useSliceGame, type Load } from "@/games/slice/useSliceGame";
-import { useStats } from "@/games/slice/useTodayResult";
+import { useStats, useTodayResult as useSliceToday } from "@/games/slice/useTodayResult";
 import { useTodayResult as useDownstreamToday } from "@/games/downstream/useTodayResult";
 import { capitalise, fractionWords, goal, instruction, measure, perfectLineText, possessive } from "@/games/slice/words";
 
@@ -48,7 +49,7 @@ export default function SliceGame() {
 }
 
 function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; game: ReturnType<typeof useSliceGame> }) {
-  const { number, puzzle, preview } = load;
+  const { number, puzzle, preview, practice } = load;
   const holder = useRef<HTMLDivElement>(null);
   const labelA = useRef<HTMLDivElement>(null);
   const labelB = useRef<HTMLDivElement>(null);
@@ -236,25 +237,35 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <SoundButton />
-            <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-ink-soft shadow-card">
-              {preview ? "Yesterday · No." : "No."} {number}
-            </span>
+            {practice ? (
+              <span className="rounded-full bg-coral-soft px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-coral-deep shadow-card">Practice</span>
+            ) : (
+              <span className="rounded-full bg-card px-3 py-1.5 text-xs font-semibold whitespace-nowrap text-ink-soft shadow-card">
+                {preview ? "Yesterday · No." : "No."} {number}
+              </span>
+            )}
           </div>
         </div>
 
-        {finished ? (
+        {finished && practice ? null : finished ? (
           <p className="font-display mt-4 max-w-[28ch] text-[17px] leading-snug font-semibold lg:text-[20px]">
             <span className="text-ink-faint">Round {roundIndex + 1}.</span> {instruction(round)}
           </p>
         ) : (
           <>
-            <div className="mt-3 flex items-center justify-between">
-              <p className="text-sm font-semibold">
-                Round {g.game.round + 1} <span className="text-ink-faint">of {puzzle.rounds.length}</span>
+            {practice ? (
+              <p className="mt-3 text-sm font-semibold">
+                Practice round <span className="font-normal text-ink-faint">· doesn&apos;t count toward your streak</span>
               </p>
-              {/* This round's score waits for the reveal, so it never gives the cut away. */}
-              <RoundScores scores={puzzle.rounds.map((_, i) => (i === g.game.round && !revealDone ? null : (g.game.cuts[i]?.score ?? null)))} />
-            </div>
+            ) : (
+              <div className="mt-3 flex items-center justify-between">
+                <p className="text-sm font-semibold">
+                  Round {g.game.round + 1} <span className="text-ink-faint">of {puzzle.rounds.length}</span>
+                </p>
+                {/* This round's score waits for the reveal, so it never gives the cut away. */}
+                <RoundScores scores={puzzle.rounds.map((_, i) => (i === g.game.round && !revealDone ? null : (g.game.cuts[i]?.score ?? null)))} />
+              </div>
+            )}
             {/* Keyed by round, so the highlight replays for every new question. (A
                 Population / Land badge sat above it until 2026-10-22: with every round
                 a population round it said the same thing each time.) */}
@@ -286,7 +297,9 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             revealing ? "pointer-events-none translate-y-3 opacity-0" : "pointer-events-auto transition-[opacity,translate] duration-500"
           }`}
         >
-          {finished ? (
+          {finished && practice ? (
+            <PracticeSummary country={practice} cut={g.game.cuts[0]} />
+          ) : finished ? (
             <Summary number={number} preview={preview} puzzle={puzzle} cuts={g.game.cuts} viewing={viewing} onView={setViewing} />
           ) : g.phase === "cutting" ? (
             // Keyed apart from the result below: sharing one element, the result text
@@ -366,7 +379,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                     disabled={!revealDone}
                     className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card"
                   >
-                    {g.game.round + 1 >= puzzle.rounds.length ? "See results" : "Next round"}
+                    {practice ? "Done" : g.game.round + 1 >= puzzle.rounds.length ? "See results" : "Next round"}
                   </button>
                 </div>
               )}
@@ -458,6 +471,7 @@ function Summary({
       {/* One more of this game first, then the other game. */}
       {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's countries are still waiting to be split." />}
       <TryDownstream />
+      <PracticeLinks />
 
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (
@@ -502,6 +516,75 @@ function Summary({
         </dl>
       )}
       <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />
+    </div>
+  );
+}
+
+/** Practice countries as small links. Plain links: a fresh page load starts the board cleanly. */
+function PracticeChips({ countries }: { countries: PracticeCountry[] }) {
+  return (
+    <ul className="flex flex-wrap gap-1.5">
+      {countries.map((c) => (
+        <li key={c.slug}>
+          <a
+            href={`/slice/?country=${c.slug}`}
+            className="block rounded-full bg-card px-3 py-1.5 text-[13px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-coral-deep/60"
+          >
+            {c.name}
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** On the day's summary: more to play, on countries from past days. */
+function PracticeLinks() {
+  return (
+    <div className="rounded-2xl bg-land p-3">
+      <p className="text-[15px] leading-tight font-semibold">Want more? Practice a past country.</p>
+      <p className="mt-0.5 mb-2.5 text-xs text-ink-soft">Just for fun: practice never touches your score or streak.</p>
+      <PracticeChips countries={PRACTICE} />
+    </div>
+  );
+}
+
+/** The end of a practice round: the score, then today's puzzle or another country. */
+function PracticeSummary({ country, cut }: { country: PracticeCountry; cut: SavedCut }) {
+  const today = useSliceToday();
+  return (
+    <div className="flex flex-col gap-3 px-1 pb-1">
+      <div className="flex items-end justify-between gap-3">
+        <div>
+          <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">
+            Practice: {country.name}
+            <span className="text-coral">.</span>
+          </h1>
+          <p className="text-xs text-ink-faint">Practice doesn&apos;t count toward your score, streak or stats.</p>
+        </div>
+        <p className="shrink-0 text-right">
+          <span className="font-display text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{cut.score}</span>
+          <span className="text-sm text-ink-faint tabular-nums">/{MAX_SCORE}</span>
+        </p>
+      </div>
+      {/* The one coral action: today's puzzle, while it's still to play. */}
+      {today && !today.result && (
+        <a
+          href="/slice/"
+          className="flex h-12 items-center justify-center gap-2 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-strong"
+        >
+          Play today&apos;s Slice
+          <svg viewBox="0 0 20 20" className="size-4" aria-hidden="true">
+            <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </a>
+      )}
+      <div>
+        {/* No "try again": today's puzzle is the next step (developer's call, 2026-10-23). */}
+        <p className="mb-2 text-sm font-semibold text-ink-soft">Practice another</p>
+        <PracticeChips countries={otherPractice(country.slug)} />
+      </div>
+      {today?.result && <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />}
     </div>
   );
 }
@@ -565,7 +648,9 @@ function Notice({ load }: { load: Exclude<Load, { status: "ready" }> }) {
         <p className="font-display text-2xl font-semibold">
           {load.status === "missing"
             ? "Today's countries are still being cut. Check back soon."
-            : "That puzzle isn't available. Only today's and yesterday's puzzles can be played."}
+            : load.status === "noPractice"
+              ? "That country isn't open for practice yet."
+              : "That puzzle isn't available. Only today's and yesterday's puzzles can be played."}
         </p>
         <Countdown prefix="New countries in" className="mt-3 block text-ink-soft" />
         {/* A plain link: ?puzzle= is gone after a fresh load of /slice/. */}

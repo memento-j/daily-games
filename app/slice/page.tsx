@@ -3,11 +3,13 @@
 // game is a Client Component that takes over in the browser.
 
 import type { Metadata } from "next";
+import Link from "next/link";
 import { Suspense } from "react";
 import JsonLd from "@/components/JsonLd";
 import Loading from "@/components/Loading";
 import SiteFooter from "@/components/SiteFooter";
 import { gameJsonLd, pageMetadata } from "@/lib/seo";
+import { PRACTICE } from "@/games/slice/practice";
 import SliceGame from "./SliceGame";
 
 const DESCRIPTION =
@@ -63,7 +65,24 @@ export default function SlicePage() {
               </li>
             ))}
           </ol>
-          <p className="mt-4 text-xs text-ink-faint">
+          <h2 className="font-display mt-8 text-xl font-semibold">Practice on past countries</h2>
+          <p className="mt-2 leading-relaxed text-ink-soft">
+            Want more than four a day? Practice on a country from an earlier puzzle. It plays just like a daily round, and it never touches your score, streak or stats.
+            Curious where everyone lives first? <Link href="/countries/" className="font-semibold text-coral-deep underline decoration-coral/40 underline-offset-[3px]">See the country maps</Link>.
+          </p>
+          <ul className="mt-3 flex flex-wrap gap-1.5">
+            {PRACTICE.map((c) => (
+              <li key={c.slug}>
+                <a
+                  href={`/slice/?country=${c.slug}`}
+                  className="block rounded-full bg-card px-3 py-1.5 text-sm font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-coral-deep/60"
+                >
+                  Split {c.name}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-6 text-xs text-ink-faint">
             Population: GHSL GHS-POP 2025 (European Commission, JRC), CC BY 4.0. Borders: Natural Earth. <a href="/about/#credits" className="underline underline-offset-2 hover:text-ink">Full credits</a>
           </p>
           <SiteFooter className="mt-10" />
