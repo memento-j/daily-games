@@ -64,3 +64,6 @@ CLAUDE.md
 /scripts/slice/cache
 /scripts/slice/out
 /scripts/slice/__pycache__
+
+# Store-listing images (icons, screenshots) made by scripts/marketing/shots.py
+/marketing/

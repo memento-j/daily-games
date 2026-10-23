@@ -5,19 +5,21 @@
 // actions, drop-blue for water (the sea the drop really reaches), white cards.
 
 import Link from "next/link";
-import { useState, useSyncExternalStore } from "react";
+import { useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import ShareButton from "@/components/ShareButton";
 import YesterdayLink from "@/components/YesterdayLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
-import { track } from "@/lib/analytics";
-import { shareResult, shareText } from "@/lib/share";
+import { shareText } from "@/lib/share";
+import { useShareCard } from "@/lib/shareCard";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import { useTodayResult as useSliceToday } from "@/games/slice/useTodayResult";
 import type { GameState } from "./game";
 import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "./schedule";
-import { dropEmoji, dropPoints, EMOJI_LEGEND, maxPoints, totalPoints, type DropResult } from "./scoring";
+import { dropEmoji, dropPoints, EMOJI_LEGEND, maxPoints, POINTS_BY_STAGE, totalPoints, type DropResult } from "./scoring";
+import { drawDownstreamCard } from "./shareCard";
 import { isMuted, setMuted, sound } from "./sound";
 import { describeStart, describeStop } from "./describe";
 import type { Drop, Puzzle } from "./types";
@@ -294,56 +296,6 @@ export function useFirstTime(): [boolean, () => void] {
   ];
 }
 
-/** Share the day's result: the system share sheet on phones, the clipboard elsewhere. */
-export function ShareButton({
-  number,
-  preview,
-  results,
-  maxPointsTotal,
-  primary = true,
-}: {
-  number: number;
-  preview: boolean;
-  results: DropResult[];
-  maxPointsTotal: number;
-  primary?: boolean;
-}) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  async function share() {
-    sound.tap();
-    const text = shareText({
-      game: "Downstream",
-      number,
-      marks: results.map(dropEmoji),
-      points: totalPoints(results),
-      maxPoints: maxPointsTotal,
-      url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
-    });
-    const outcome = await shareResult(text);
-    track("result_shared", { game: "downstream", puzzle: number, preview, outcome });
-    if (outcome !== "shared") {
-      setState(outcome);
-      window.setTimeout(() => setState("idle"), 2200);
-    }
-  }
-  return (
-    <button
-      type="button"
-      onClick={share}
-      className={
-        primary
-          ? "group flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale,translate] duration-200 hover:bg-coral-strong active:scale-[0.98]"
-          : "flex h-12 w-full items-center justify-center gap-2 rounded-full bg-card text-[15px] font-semibold text-ink ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
-      }
-    >
-      <svg viewBox="0 0 20 20" className="size-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M10 13V3.5M6.5 7 10 3.5 13.5 7M4 11v4.5h12V11" />
-      </svg>
-      <span aria-live="polite">{state === "copied" ? "Copied. Paste it anywhere" : state === "failed" ? "Couldn't copy" : "Share your result"}</span>
-    </button>
-  );
-}
-
 /**
  * The day's results. The routes lead: each drop is a row that replays its route
  * on the map (it opens on the day's biggest surprise). Then the share line,
@@ -369,6 +321,17 @@ export function DaySummary({
   const max = maxPoints(puzzle.drops.length);
   const stats = useStats(storageKeyFor(preview), number);
   const marks = game.results.map(dropEmoji).join("");
+  const text = shareText({
+    game: "Downstream",
+    number,
+    marks: game.results.map(dropEmoji),
+    points,
+    maxPoints: max,
+    url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
+  });
+  // The picture: each drop filled as far as it scored.
+  const drops = game.results.map((r) => ({ points: dropPoints(r), max: POINTS_BY_STAGE[0], guessed: r.guess !== null }));
+  const card = useShareCard(JSON.stringify([number, drops]), `downstream-${number}.png`, (ctx, f) => drawDownstreamCard(ctx, f, number, drops, points, max));
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -382,11 +345,20 @@ export function DaySummary({
       </div>
 
       <div className="flex flex-col gap-2">
-        <ShareButton number={number} preview={preview} results={game.results} maxPointsTotal={max} />
-        <p className="text-center text-sm text-ink-soft">
-          Shares as <span className="font-semibold text-ink" aria-hidden="true">{marks}</span>
-          <span className="sr-only">your five squares and</span> {points}/{max}, never the answers.
-        </p>
+        <ShareButton
+          game="downstream"
+          number={number}
+          preview={preview}
+          text={text}
+          card={card}
+          onTap={sound.tap}
+          caption={
+            <>
+              Shares as <span className="font-semibold text-ink" aria-hidden="true">{marks}</span>
+              <span className="sr-only">your five squares and</span> {points}/{max}, never the answers.
+            </>
+          }
+        />
         <p className="text-center text-xs text-ink-faint" aria-hidden="true">
           {EMOJI_LEGEND.map(([e, meaning]) => `${e} ${meaning}`).join("  ·  ")}
         </p>

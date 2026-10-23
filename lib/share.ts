@@ -24,12 +24,16 @@ export type ShareOutcome = "shared" | "copied" | "failed";
 /**
  * Phones open the system share sheet (Messages, WhatsApp, ...); elsewhere the
  * text is copied. Cancelling the share sheet counts as shared (nothing to do).
+ * With a picture (lib/shareCard.ts) phones send it along with the text, where the
+ * share sheet takes files. Call it straight from the tap: phones only open the share
+ * sheet in answer to one, so the picture must already be drawn.
  */
-export async function shareResult(text: string): Promise<ShareOutcome> {
+export async function shareResult(text: string, image?: File | null): Promise<ShareOutcome> {
   const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
   if (touch && typeof navigator.share === "function") {
+    const files = image && navigator.canShare?.({ files: [image] }) ? [image] : undefined;
     try {
-      await navigator.share({ text });
+      await navigator.share(files ? { files, text } : { text });
       return "shared";
     } catch (e) {
       if ((e as Error).name === "AbortError") return "shared";

@@ -36,8 +36,9 @@ export type Events = {
   /** `streak`: the player's streak in this game after this puzzle, as the summary shows
    *  it (lib/stats.ts, with its forgiven days). */
   puzzle_finished: Play & { points: number; maxPoints: number; streak: number };
-  /** The Share button: the share sheet was used, the text was copied, or neither worked. */
-  result_shared: Play & { outcome: "shared" | "copied" | "failed" };
+  /** The Share button: the share sheet was used, the text was copied, or neither worked;
+   *  or "Save the picture" downloaded the result card (saved). */
+  result_shared: Play & { outcome: "shared" | "copied" | "failed" | "saved" };
 };
 
 type PostHog = { __loaded?: boolean; capture: (name: string, data?: object) => void };

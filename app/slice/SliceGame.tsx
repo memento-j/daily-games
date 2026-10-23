@@ -13,11 +13,12 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import ShareButton from "@/components/ShareButton";
 import YesterdayLink from "@/components/YesterdayLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
-import { track } from "@/lib/analytics";
-import { shareResult, shareText } from "@/lib/share";
+import { shareText } from "@/lib/share";
+import { useShareCard } from "@/lib/shareCard";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { subscribe } from "@/lib/storage";
 import { useTheme } from "@/lib/useTheme";
@@ -26,6 +27,7 @@ import { crosses, perfectLine, share } from "@/games/slice/cut";
 import { triesLeft, type SavedCut } from "@/games/slice/game";
 import { lineThrough } from "@/games/slice/geometry";
 import type { SliceScene } from "@/games/slice/scene";
+import { drawSliceCard } from "@/games/slice/shareCard";
 import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "@/games/slice/schedule";
 import { bandOf, formatShare, HALF_EVERY_POINTS, MAX_SCORE, maxScore, missOf, scoreCut, totalScore } from "@/games/slice/scoring";
 import { isMuted, setMuted, sound } from "@/games/slice/sound";
@@ -412,6 +414,20 @@ function Summary({
   onView: (i: number) => void;
 }) {
   const stats = useStats(storageKeyFor(preview), number);
+  const points = totalScore(cuts);
+  const max = maxScore(cuts.length);
+  // "Slice #4 312/400", then each round's score: no countries, no answers.
+  const text = shareText({
+    game: GAME_NAME,
+    number,
+    points,
+    maxPoints: max,
+    detail: cuts.map((c) => c.score).join(" · "),
+    url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
+  });
+  // The picture: one strip per round, showing how close the cut came to the aim.
+  const rounds = cuts.map((c, i) => ({ share: c.share, target: puzzle.rounds[i].target, score: c.score }));
+  const card = useShareCard(JSON.stringify([number, rounds]), `slice-${number}.png`, (ctx, f) => drawSliceCard(ctx, f, number, rounds, points, max));
   return (
     // The sheet scrolls; its blocks keep their size (in a flex column they'd shrink to fit).
     // On phones it stays low (about a third of the screen) so the board keeps most of it:
@@ -426,11 +442,19 @@ function Summary({
           </p>
         </div>
         <p className="shrink-0 text-right">
-          <span className="font-display text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{totalScore(cuts)}</span>
-          <span className="text-sm text-ink-faint tabular-nums">/{maxScore(cuts.length)}</span>
+          <span className="font-display text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{points}</span>
+          <span className="text-sm text-ink-faint tabular-nums">/{max}</span>
         </p>
       </div>
-      <ShareButton number={number} preview={preview} cuts={cuts} />
+      <ShareButton
+        game="slice"
+        number={number}
+        preview={preview}
+        text={text}
+        card={card}
+        onTap={sound.tap}
+        caption="How close you cut, never the countries."
+      />
       {/* One more of this game first, then the other game. */}
       {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's countries are still waiting to be split." />}
       <TryDownstream />
@@ -503,37 +527,6 @@ function TryDownstream() {
         <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
       </svg>
     </Link>
-  );
-}
-
-function ShareButton({ number, preview, cuts }: { number: number; preview: boolean; cuts: SavedCut[] }) {
-  const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
-  async function share() {
-    sound.tap();
-    // "Slice #4 312/400", then each round's score: no countries, no answers.
-    const text = shareText({
-      game: GAME_NAME,
-      number,
-      points: totalScore(cuts),
-      maxPoints: maxScore(cuts.length),
-      detail: cuts.map((c) => c.score).join(" · "),
-      url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
-    });
-    const outcome = await shareResult(text);
-    track("result_shared", { game: "slice", puzzle: number, preview, outcome });
-    if (outcome !== "shared") {
-      setState(outcome);
-      window.setTimeout(() => setState("idle"), 2200);
-    }
-  }
-  return (
-    <button
-      type="button"
-      onClick={share}
-      className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-strong"
-    >
-      {state === "copied" ? "Copied" : state === "failed" ? "Couldn't copy" : "Share"}
-    </button>
   );
 }
 

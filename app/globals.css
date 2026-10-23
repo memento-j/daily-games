@@ -615,3 +615,21 @@ button:not(:disabled),
 .sheet-fade {
   mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
 }
+
+/* The result card in the Share button (components/ShareButton.tsx): once drawn, it slides
+   up out of the button like a photo out of an envelope. Only translate and opacity move,
+   so the class's tilt and its hover lift keep working. */
+.share-card-in {
+  animation: share-card-in 700ms cubic-bezier(0.16, 1, 0.3, 1) 150ms backwards;
+}
+@keyframes share-card-in {
+  from {
+    translate: 0 22px;
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .share-card-in {
+    animation: none;
+  }
+}
