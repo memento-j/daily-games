@@ -46,5 +46,23 @@ STAGE_FRACTIONS = [0.25, 0.50, 0.75]
 # each day then gets the hardest drops available (difficulty is relative per day).
 # 15,000 since 2026-10-23: at 5,000 a 21-day batch ran out of hard drops and five days
 # had nothing harder than difficulty 2.
-POOL_PER_SLOT = 2
+POOL_PER_SLOT = 6  # 2 until 2026-10-28; more choice now that days also cap unfamiliar seas
 SCREEN_LIMIT = 15_000
+
+# Seas most players can name and place (developer's call, 2026-10-28). How hard a day
+# feels follows how many unfamiliar names it asks about more than its difficulty
+# ratings: #5-#8 rated easier than #1-#4 but had 8-9 unfamiliar names among their 20
+# options (Kara, Laptev, Makassar...) against 2-7, and scores and finishes dropped.
+# Player-facing names, as DISPLAY_NAMES in seas.py gives them.
+FAMILIAR_SEAS = {
+    "Atlantic Ocean", "Pacific Ocean", "Indian Ocean", "Arctic Ocean", "Southern Ocean",
+    "Mediterranean Sea", "Caribbean Sea", "Gulf of Mexico", "Black Sea", "Red Sea", "North Sea",
+    "Baltic Sea", "Persian Gulf", "Arabian Sea", "Bay of Bengal", "South China Sea",
+    "East China Sea", "Yellow Sea", "Sea of Japan", "Hudson Bay", "Gulf of Alaska", "Bering Sea",
+    "Gulf of California", "Gulf of St. Lawrence", "Coral Sea", "Tasman Sea", "Adriatic Sea",
+    "Aegean Sea", "English Channel", "Irish Sea", "Bay of Biscay", "Gulf of Guinea",
+}
+# Per day: at most this many answers outside FAMILIAR_SEAS (the hard drop can be one)...
+MAX_UNFAMILIAR_ANSWERS = 1
+# ...and at most this many unfamiliar names among all the day's options (5 drops x 4).
+MAX_UNFAMILIAR_OPTIONS = 5

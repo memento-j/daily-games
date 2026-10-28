@@ -73,7 +73,8 @@ from shapely.geometry import LineString
 from shapely.ops import substring
 
 from config import (
-    CACHE_DIR, COORD_DECIMALS, DAY_DIFFICULTIES, DEFAULT_DAYS, HARD_DIFFICULTY, HARD_RIVER_REUSE_DAYS,
+    CACHE_DIR, COORD_DECIMALS, DAY_DIFFICULTIES, DEFAULT_DAYS, FAMILIAR_SEAS, HARD_DIFFICULTY, HARD_RIVER_REUSE_DAYS,
+    MAX_UNFAMILIAR_ANSWERS, MAX_UNFAMILIAR_OPTIONS,
     MIN_PIN_SEPARATION_KM, MIN_ROUTE_KM, MOUTH_MAX_SEA_KM, OUT_DIR, POOL_PER_SLOT, PUZZLE_DIR,
     RIVER_COLUMNS, RIVER_REUSE_DAYS, RIVERS_PARQUET, RIVERS_SHP, SAME_RIVER_MIN_KM, SCREEN_LIMIT,
     SEAS_PARQUET, SEAS_SRC, SIMPLIFY_DEG, STAGE_FRACTIONS,
@@ -215,6 +216,13 @@ class Candidate:
     answer: str  # display name
     nearby: list[str]  # display names, nearest to the pin first
     difficulty: int
+
+
+def unfamiliar(c: Candidate) -> int:
+    """How many of the drop's four options (the answer and the three seas nearest the
+    pin, as build_drop picks them) players are unlikely to know (FAMILIAR_SEAS)."""
+    options = [c.answer] + [s for s in c.nearby if s != c.answer][:3]
+    return sum(s not in FAMILIAR_SEAS for s in options)
 
 
 def screen(rivers: Rivers, seas: Seas, row: int, rng: np.random.Generator) -> Candidate | None:
@@ -375,26 +383,18 @@ def generate(days: int, seed: int | None) -> None:
           f"Pool by difficulty: {', '.join(f'{d}: {len(p)}' for d, p in pool.items())}")
 
     # PICK: one candidate per target difficulty, nearest available difficulty if empty.
+    # Familiar seas first: within a difficulty the candidates with the fewest unfamiliar
+    # options come first, and a day keeps under MAX_UNFAMILIAR_ANSWERS / _OPTIONS. If no
+    # candidate fits those caps, the slot takes the least unfamiliar one rather than fail.
+    for d in pool:
+        pool[d].sort(key=unfamiliar)  # stable: the random screening order breaks ties
     PUZZLE_DIR.mkdir(parents=True, exist_ok=True)
     for puzzle in range(last + 1, last + days + 1):
         drops, chosen = [], []
         for target in DAY_DIFFICULTIES:
-            for d in sorted(pool, key=lambda d: (abs(d - target), -d)):
-                for c in list(pool[d]):
-                    if (not river_allowed(c, recent)
-                            or any(c.main_riv == o.main_riv or c.answer == o.answer
-                                   or km_between(c.pin, o.pin) < MIN_PIN_SEPARATION_KM
-                                   for o in chosen)):
-                        continue
-                    pool[d].remove(c)
-                    drop = build_drop(rivers, seas, c, rng)
-                    if drop:
-                        chosen.append(c)
-                        drops.append(drop)
-                        break
-                else:
-                    continue
-                break
+            for strict in (True, False):
+                if fill_slot(target, strict, pool, chosen, drops, recent, rivers, seas, rng):
+                    break
         if len(drops) < len(DAY_DIFFICULTIES):
             sys.exit(f"Ran out of candidates at puzzle #{puzzle}; raise SCREEN_LIMIT.")
 
@@ -404,10 +404,35 @@ def generate(days: int, seed: int | None) -> None:
                                   ensure_ascii=False), encoding="utf-8")
         recent.append([(c.main_riv, c.pin) for c in chosen])
         used_pins |= {c.pin for c in chosen}
-        print(f"  #{puzzle:04d} {out.stat().st_size / 1024:5.0f} KB  "
+        print(f"  #{puzzle:04d} {out.stat().st_size / 1024:5.0f} KB  unfamiliar {sum(map(unfamiliar, chosen)):2d}/20  "
               + "  ".join(f"{d['difficulty']}:{d['answer']}" for d in drops))
 
     print(f"\nLast generated puzzle: #{last + days}. Files in {PUZZLE_DIR}")
+
+
+def fill_slot(target: int, strict: bool, pool: dict, chosen: list, drops: list, recent: list,
+              rivers: Rivers, seas: Seas, rng: np.random.Generator) -> bool:
+    """Adds one drop for this difficulty slot (nearest difficulty if it's empty).
+    `strict` also keeps the day under the unfamiliar-sea caps. False if nothing fits."""
+    answers = sum(c.answer not in FAMILIAR_SEAS for c in chosen)
+    options = sum(map(unfamiliar, chosen))
+    for d in sorted(pool, key=lambda d: (abs(d - target), -d)):
+        for c in list(pool[d]):
+            if strict and (answers + (c.answer not in FAMILIAR_SEAS) > MAX_UNFAMILIAR_ANSWERS
+                           or options + unfamiliar(c) > MAX_UNFAMILIAR_OPTIONS):
+                continue
+            if (not river_allowed(c, recent)
+                    or any(c.main_riv == o.main_riv or c.answer == o.answer
+                           or km_between(c.pin, o.pin) < MIN_PIN_SEPARATION_KM
+                           for o in chosen)):
+                continue
+            pool[d].remove(c)
+            drop = build_drop(rivers, seas, c, rng)
+            if drop:
+                chosen.append(c)
+                drops.append(drop)
+                return True
+    return False
 
 
 # --------------------------------------------------------------------------- #
