@@ -579,6 +579,8 @@ function PracticeSummary({ country, cut }: { country: PracticeCountry; cut: Save
           </svg>
         </a>
       )}
+      {/* Then the other game: practice was pulling players away from Downstream (2026-10-27). */}
+      <TryDownstream />
       <div>
         {/* No "try again": today's puzzle is the next step (developer's call, 2026-10-23). */}
         <p className="mb-2 text-sm font-semibold text-ink-soft">Practice another</p>
