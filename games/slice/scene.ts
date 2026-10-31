@@ -36,6 +36,15 @@ const SCISSORS_SIZE = 1.8; // big enough to read on a phone
 const DASH = 0.16; // the "cut here" line: dash and gap lengths (world units)
 const GAP = 0.11;
 
+// The compass letters on the mat (N, E, S, W): how big, and how far outside the
+// country's bounding box (to the letter's middle). The board is always WORLD wide, so
+// these suit any country. Big enough to read once the reveal tilts the mat away. While
+// drawing they sit close in, inside the framing's 8% pad, so they cost the country no
+// size on screen (precision matters; developer's call, 2026-10-31); as the pieces slide
+// apart they step out by the same distance (SPLIT / 2), so the pieces never ride over them.
+const COMPASS_SIZE = 0.6;
+const COMPASS_GAP = COMPASS_SIZE / 2 + 0.1;
+
 // The reveal's timing, in seconds after Cut. sound.reveal plays to the same clock.
 const SNIP_EVERY = 0.2; // one snip per scissor close
 const SNIPS = 6;
@@ -64,6 +73,7 @@ type Palette = {
   inkEdged: boolean; // draw that edge (dark mode, where the line itself is light)
   slit: number;
   steel: number;
+  compass: number; // the N, E, S, W letters on the mat: a quiet step off the mat's own colour
   sky: number;
   ground: number;
   skyLight: number; // hemisphere intensity
@@ -83,6 +93,7 @@ const PALETTES: Record<Theme, Palette> = {
     inkEdged: false,
     slit: 0x5b463c,
     steel: 0xe3e7ec,
+    compass: 0x6f8572,
     sky: 0xfff6ea,
     ground: 0xb9c4b3,
     skyLight: 1.5,
@@ -106,6 +117,7 @@ const PALETTES: Record<Theme, Palette> = {
     inkEdged: true,
     slit: 0x5b463c,
     steel: 0xd0d5dc,
+    compass: 0x5a6b80,
     sky: 0xf1e6d6,
     ground: 0x18212c,
     skyLight: 1.0,
@@ -113,7 +125,7 @@ const PALETTES: Record<Theme, Palette> = {
   },
 };
 // The palette colours a material can take; it keeps its role so setTheme can recolour it.
-type Role = "top" | "side" | "countedTop" | "coral" | "otherPeople" | "ink" | "inkEdge" | "slit" | "steel";
+type Role = "top" | "side" | "countedTop" | "coral" | "otherPeople" | "ink" | "inkEdge" | "slit" | "steel" | "compass";
 
 type Piece = { group: THREE.Group; dir: THREE.Vector3; columns: THREE.InstancedMesh | null; heights: number[]; delays: number[]; centre: THREE.Vector3; positions: THREE.Vector3[] };
 
@@ -194,6 +206,35 @@ function matTexture(p: Palette, anisotropy: number): THREE.CanvasTexture {
   return tex;
 }
 
+/** One compass letter as a white glyph on a clear square, in the site's display face
+ *  (next/font's name for it, from the CSS variable), tinted by its material. Redrawn
+ *  once the face has loaded, in case it hadn't yet. */
+function letterTexture(letter: string, anisotropy: number): THREE.CanvasTexture {
+  const size = 128;
+  const canvas = document.createElement("canvas");
+  canvas.width = canvas.height = size;
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = anisotropy;
+  const face = getComputedStyle(document.body).getPropertyValue("--font-bricolage").trim() || "Helvetica Neue, Arial, sans-serif";
+  const font = `600 ${size * 0.82}px ${face}`;
+  const draw = () => {
+    const g = canvas.getContext("2d")!;
+    g.clearRect(0, 0, size, size);
+    g.fillStyle = "#fff";
+    g.font = font;
+    g.textAlign = "center";
+    g.textBaseline = "alphabetic";
+    const m = g.measureText(letter);
+    // Centre the capital's ink, not its em box.
+    g.fillText(letter, size / 2, size / 2 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
+    tex.needsUpdate = true;
+  };
+  draw();
+  document.fonts?.load(font).then(draw, () => {});
+  return tex;
+}
+
 export class SliceScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -209,6 +250,7 @@ export class SliceScene {
   private sky: THREE.HemisphereLight;
   private sun: THREE.DirectionalLight;
   private mat: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
+  private compass = new THREE.Group(); // N, E, S, W on the mat, placed around each country
 
   // The current round, and how its board coordinates map onto the table.
   private round: Round | null = null;
@@ -309,6 +351,7 @@ export class SliceScene {
     this.mat.rotation.x = -Math.PI / 2;
     this.mat.receiveShadow = true;
     this.scene.add(this.mat);
+    this.buildCompass();
 
     // The "cut here" line: coral dashes between the handles, fainter ones across the board.
     const dashGeo = new THREE.BoxGeometry(1, 0.025, 1);
@@ -351,6 +394,42 @@ export class SliceScene {
     this.resize();
     new ResizeObserver(() => this.resize()).observe(container);
     this.loop();
+  }
+
+  /** N, E, S, W lying flat on the mat, so players keep their bearings once the reveal
+   *  swings the camera round. They are part of the table, so they turn and tilt with
+   *  every view for free. True north: the puzzle's outline is an equal-area map centred
+   *  on the country (scripts/slice), so north is straight up the board (-z here) through
+   *  its middle. Each letter reads upright from the south, as on a map. They lie on the
+   *  mat, under the slab, the cut line, the bars and the labels, so nothing is ever
+   *  hidden behind them; setRound places them just outside each country. */
+  private buildCompass() {
+    const geo = new THREE.PlaneGeometry(COMPASS_SIZE, COMPASS_SIZE);
+    geo.rotateX(-Math.PI / 2); // flat on the mat, the glyph's top towards north (-z)
+    this.disposables.push(geo);
+    const anisotropy = this.renderer.capabilities.getMaxAnisotropy();
+    for (const letter of ["N", "E", "S", "W"]) {
+      const map = letterTexture(letter, anisotropy);
+      // Lit like the mat (not a flat colour), so the slab's shadow falls on them too.
+      const material = this.tint(new THREE.MeshStandardMaterial({ map, transparent: true, depthWrite: false, roughness: 0.95 }), "compass");
+      const mesh = new THREE.Mesh(geo, material);
+      mesh.name = letter;
+      mesh.position.y = 0.004; // just above the mat
+      mesh.receiveShadow = true;
+      this.compass.add(mesh);
+      this.disposables.push(map, material);
+    }
+    this.scene.add(this.compass);
+  }
+
+  /** The compass just outside the country's bounding box (centred on the table), stepped
+   *  out by `apart` (0..1) of the pieces' slide. */
+  private placeCompass(apart: number) {
+    const gap = COMPASS_GAP + (SPLIT / 2) * apart;
+    const halfW = ((this.bmax[0] - this.bmin[0]) * this.s) / 2 + gap;
+    const halfH = ((this.bmax[1] - this.bmin[1]) * this.s) / 2 + gap;
+    const spots: Record<string, [number, number]> = { N: [0, -halfH], S: [0, halfH], E: [halfW, 0], W: [-halfW, 0] };
+    for (const mesh of this.compass.children) mesh.position.set(spots[mesh.name][0], mesh.position.y, spots[mesh.name][1]);
   }
 
   /** Give a material its palette colour, and remember the role for setTheme. */
@@ -470,6 +549,7 @@ export class SliceScene {
     this.bmax = [x1, y1];
     this.min = [x0 - pad, y0 - pad];
     this.max = [x1 + pad, y1 + pad];
+    this.placeCompass(0);
     this.polygons = toPolygons(round.outline);
     this.slab = this.extrude(this.polygons, "top");
     this.scene.add(this.slab);
@@ -961,6 +1041,7 @@ export class SliceScene {
         piece.group.visible = split;
         piece.group.position.copy(piece.dir).multiplyScalar((SPLIT / 2) * apart);
       }
+      this.placeCompass(apart);
       // The camera swings round to a three-quarter view.
       const cam = easeInOut(window01(t, T.camera[0], T.camera[1]));
       this.setCamera({
@@ -1004,6 +1085,7 @@ export class SliceScene {
   }
 
   private clearReveal() {
+    this.placeCompass(0);
     for (const piece of this.pieces) this.scene.remove(piece.group);
     this.pieces = [];
     if (this.perfect) this.scene.remove(this.perfect);
