@@ -9,6 +9,7 @@ Usage (from the repo root):
     python scripts/slice/generate.py generate [--days N]    # add the next 10 daily puzzles
     python scripts/slice/generate.py repopulate             # turn land rounds in existing files into population rounds
     python scripts/slice/generate.py refact                 # re-measure the fact line of every existing round
+    python scripts/slice/generate.py recities               # add the hint's cities to every existing round
 """
 
 # How it works, start to finish
@@ -56,13 +57,17 @@ import re
 import time
 from dataclasses import dataclass
 
+import geopandas as gpd
 import numpy as np
 import rasterio
 import shapely
+from pyproj import Transformer
 from shapely.geometry import MultiPolygon
+from shapely.geometry import Point as ShapelyPoint
+from shapely.ops import nearest_points
 
 from config import (
-    BOX, CONTESTED, POPULATION_CRS, COUNTRY_REUSE_DAYS, WELL_KNOWN_REUSE_DAYS, PRACTICE_FILE, PRACTICE_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
+    BOX, CITY_COAST_KM, CITY_NAME_FIXES, CONTESTED, HINT_CITIES, POPULATION_CRS, UCDB_GPKG, UCDB_LAYER, COUNTRY_REUSE_DAYS, WELL_KNOWN_REUSE_DAYS, PRACTICE_FILE, PRACTICE_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
     OUTLINE_SIMPLIFY, POOL_MIN_KM2, POOL_MIN_PEOPLE, POPULATION_TIF, POPULATION_TOLERANCE, PUZZLE_DIR,
     DAY_TIERS, EASY_DAYS, RECOGNISABLE, VALIDATION_COUNTRIES, WELL_KNOWN,
 )
@@ -82,16 +87,17 @@ class Country:
     population: float
     land_km2: float
     dense_pct: float  # the whole country's land that holds half its people, % (see dense_share)
+    cities: list  # the hint: the HINT_CITIES biggest cities, [x, y] in box units (top_cities)
+    city_names: list  # their names, labelled on the reveal once the round is settled
     grid_km: float  # the smallest quadtree square
     dropped: int
     dropped_area: float
 
 
-def build(countries, src, name: str) -> Country:
-    row = find(countries, name)
+def board(row, src):
+    """A country's board: the kept parts (mainland), the map from its projection to the
+    0..BOX box, and the simplified outline in box units. Shared by build and recities."""
     m = mainland(row.ADMIN, row.geometry, lambda part: people(src, part))
-    c = cells(src, m.lonlat, m.crs)
-    points, grid = aggregate(c)
 
     # Fit the box: the longer side spans 0..BOX, the shorter is centred; y flips.
     minx, miny, maxx, maxy = m.projected.bounds
@@ -107,6 +113,20 @@ def build(countries, src, name: str) -> Country:
     outline = MultiPolygon([p for p in parts(outline) if not p.is_empty])
     outline = shapely.set_precision(outline, 10**-OUTLINE_DECIMALS)
     outline = MultiPolygon(parts(shapely.orient_polygons(outline)))
+    return m, to_box, outline
+
+
+def cities_of(row, m, to_box, outline) -> tuple[list, list]:
+    to_crs = Transformer.from_crs("EPSG:4326", m.crs, always_xy=True)
+    return top_cities(m.lonlat, outline, lambda lon, lat: to_box(np.array([to_crs.transform(lon, lat)]))[0])
+
+
+def build(countries, src, name: str) -> Country:
+    row = find(countries, name)
+    m, to_box, outline = board(row, src)
+    c = cells(src, m.lonlat, m.crs)
+    points, grid = aggregate(c)
+    cities, city_names = cities_of(row, m, to_box, outline)
     return Country(
         id=row.ADMIN,
         name=row.NAME,
@@ -117,6 +137,8 @@ def build(countries, src, name: str) -> Country:
         population=float(c[:, 2].sum()),
         land_km2=m.projected.area / 1e6,
         dense_pct=dense_share(src, row.geometry),
+        cities=cities,
+        city_names=city_names,
         grid_km=grid / 1000,
         dropped=m.dropped,
         dropped_area=m.dropped_area,
@@ -212,6 +234,56 @@ def possessive(name: str) -> str:
     return f"{name}'" if name.endswith("s") else f"{name}'s"
 
 
+_centres = None
+
+
+def urban_centres():
+    """Every urban centre in the GHSL Urban Centre Database, with its 2025 population and
+    its centre point (lon, lat). Read once."""
+    global _centres
+    if _centres is None:
+        stats = gpd.read_file(UCDB_GPKG, layer=UCDB_LAYER, columns=["ID_UC_G0", "GC_UCN_MAI_2025", "GC_CNT_GAD_2025", "GC_POP_TOT_2025"], ignore_geometry=True)
+        # The centres' "LON"/"LAT" fields are Mollweide metres, so use the point geometry.
+        points = gpd.read_file(UCDB_GPKG, layer="UC_centroids", columns=["ID_UC_G0"]).to_crs("EPSG:4326")
+        _centres = points.merge(stats, on="ID_UC_G0")
+    return _centres
+
+
+def top_cities(lonlat, outline, to_box) -> tuple[list, list]:
+    """The hint: the country's HINT_CITIES most populous cities, as [x, y] box points,
+    and their names (labelled on the reveal once a round is settled).
+
+    Source: the GHSL Urban Centre Database 2025 (GHS-UCDB R2024A, European Commission
+    JRC, CC BY 4.0). One definition of "city" for every country: an urban centre, the
+    contiguous built-up cluster of dense 1 km cells (the UN's Degree of Urbanisation),
+    with its 2025 population on the same GHSL grid as the puzzle. So a coastal city
+    isn't undercounted and a suburb never stands in for its city (both happened with
+    Natural Earth's places, tried first). Only centres on the board's own outline count
+    (Honolulu isn't on the lower 48). A centre point that falls just off the simplified
+    outline is moved onto it, just inside, so every dot sits on the country. Only the
+    country's own centres: the database names each centre's country, read from the
+    centres inside the outline, since the coastal margin reaches across borders too
+    (Goma for Rwanda, N'Djamena for Cameroon). A name like "Colombo [Sri Jayawardenepura
+    Kotte]" keeps its first part, for the label."""
+    centres = urban_centres()
+    inside = centres[centres.within(lonlat)]
+    if inside.empty:
+        return [], []
+    country = inside.GC_CNT_GAD_2025.mode()[0]
+    near = centres[(centres.GC_CNT_GAD_2025 == country) & centres.within(lonlat.buffer(CITY_COAST_KM / 111))]
+    here = near.sort_values("GC_POP_TOT_2025", ascending=False).head(HINT_CITIES)
+    inner = outline.buffer(-3)  # 3 box units inside the coast
+    out = []
+    for p in here.geometry:
+        x, y = to_box(p.x, p.y)
+        pt = ShapelyPoint(x, y)
+        if not outline.contains(pt):
+            pt = nearest_points(inner if not inner.is_empty else outline, pt)[0]
+        out.append([round(pt.x, 1), round(pt.y, 1)])
+    names = [str(n).split(" [")[0].strip() for n in here.GC_UCN_MAI_2025]
+    return out, [CITY_NAME_FIXES.get(n, n) for n in names]
+
+
 def dense_share(src: rasterio.DatasetReader, lonlat) -> float:
     """How much of a country's land holds half its people, in %: the most crowded 1 km
     cells (each 1 km2: GHSL's grid is equal-area), added up until they hold half the
@@ -251,6 +323,8 @@ def round_json(country: Country, mode: str, target: float) -> dict:
         "outline": rings,
         "population": int(round(country.population, -3)),
         "fact": fact(country),
+        "cities": country.cities,
+        "cityNames": country.city_names,
     }
     if mode == "population":
         out["points"] = [[int(round(x)), int(round(y)), int(round(w))] for x, y, w in country.points if round(w) > 0]
@@ -364,6 +438,27 @@ def repopulate() -> None:
                       flush=True)
 
 
+def recities() -> None:
+    """Adds the hint's cities and their names (top_cities) to every round in the existing
+    puzzle files; nothing else changes. Remakes each country's board (not its people
+    points) for exact positions."""
+    countries = load_countries()
+    built: dict[str, tuple[list, list]] = {}
+    with rasterio.open(POPULATION_TIF) as src:
+        for path in sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json")):
+            puzzle = json.loads(path.read_text(encoding="utf-8"))
+            names = []
+            for r in puzzle["rounds"]:
+                if r["id"] not in built:
+                    row = find(countries, r["id"])
+                    built[r["id"]] = cities_of(row, *board(row, src))
+                    print(f"  {r['country']}: {', '.join(built[r['id']][1])}", flush=True)
+                r["cities"], r["cityNames"] = built[r["id"]]
+                names.append(r["country"])
+            path.write_text(json.dumps(puzzle, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            print(f"#{puzzle['puzzle']:04d}  {', '.join(names)}", flush=True)
+
+
 def refact() -> None:
     """Re-measures the fact line of every round in the existing puzzle files (dense_share);
     everything else in the files is untouched."""
@@ -396,6 +491,7 @@ def main() -> None:
     g.add_argument("--seed", type=int, default=None, help="default: the last puzzle number (repeatable runs)")
     sub.add_parser("repopulate", help="turn the land rounds of existing puzzles into half-the-population rounds")
     sub.add_parser("refact", help="re-measure the fact line of every round in the existing puzzles")
+    sub.add_parser("recities", help="add the hint's three biggest cities to every round in the existing puzzles")
     args = parser.parse_args()
     if args.cmd == "validate":
         run(list(VALIDATION_COUNTRIES), VALIDATION_COUNTRIES)
@@ -405,6 +501,8 @@ def main() -> None:
         repopulate()
     elif args.cmd == "refact":
         refact()
+    elif args.cmd == "recities":
+        recities()
     else:
         run(args.names, {})
 

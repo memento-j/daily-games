@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initialState, isValidState, MAX_TRIES, phase, step, triesLeft, type GameState } from "../../../games/slice/game";
+import { hintCount, hinted, initialState, isValidState, MAX_TRIES, phase, step, triesLeft, withHints, type GameState } from "../../../games/slice/game";
 import { lineAt } from "../../../games/slice/geometry";
 import type { Puzzle, Ring, Round } from "../../../games/slice/types";
 
@@ -9,7 +9,19 @@ const square: Ring = [
   [100, 100],
   [0, 100],
 ];
-const round: Round = { country: "Testland", mode: "area", target: 0.5, outline: [square], population: 1, fact: "" };
+const round: Round = {
+  country: "Testland",
+  mode: "area",
+  target: 0.5,
+  outline: [square],
+  population: 1,
+  fact: "",
+  cities: [
+    [20, 20],
+    [50, 50],
+    [80, 30],
+  ],
+};
 const puzzle: Puzzle = { puzzle: 1, rounds: [round, round] };
 const perfect = lineAt(0, 50); // 50%: scores 100
 const near = lineAt(0, 53); // 47%: 3 points off, scores 70
@@ -66,6 +78,41 @@ describe("two tries per round", () => {
     const cut = step(initialState, { type: "cut", line: perfect }, puzzle);
     expect(step(cut, { type: "cut", line: perfect }, puzzle)).toBe(cut); // must choose again or keep
     expect(step(cut, { type: "next" }, puzzle)).toBe(cut); // the perfect cut is still hidden: no skipping
+  });
+});
+
+describe("the hint", () => {
+  it("can be taken while cutting, once per round, and stays through both tries", () => {
+    let s = run(initialState, { type: "hint" });
+    expect(hinted(s, 0)).toBe(true);
+    expect(run(s, { type: "hint" })).toBe(s); // once per round
+    s = run(s, { type: "cut", line: near }, { type: "again" });
+    expect(hinted(s, 0)).toBe(true);
+    s = run(s, { type: "cut", line: perfect }, { type: "next" });
+    expect(hinted(s, 1)).toBe(false);
+    expect(s.hints).toEqual([true]);
+  });
+
+  it("never changes the score", () => {
+    const plain = run(initialState, { type: "cut", line: near });
+    const helped = run(initialState, { type: "hint" }, { type: "cut", line: near });
+    expect(helped.cuts[0].score).toBe(plain.cuts[0].score);
+  });
+
+  it("isn't available after cutting, or for a round without cities", () => {
+    const cut = run(initialState, { type: "cut", line: near });
+    expect(run(cut, { type: "hint" })).toBe(cut);
+    const noCities: Puzzle = { puzzle: 1, rounds: [{ ...round, cities: undefined }] };
+    expect(step(initialState, { type: "hint" }, noCities)).toBe(initialState);
+  });
+
+  it("counts for analytics, and old saves without hints still load", () => {
+    expect(hintCount([true, false, true])).toBe(2);
+    expect(hintCount(undefined)).toBe(0);
+    const old = { round: 0, cuts: [], tries: 0, last: null, again: false, kept: false };
+    expect(isValidState(old, puzzle)).toBe(true);
+    expect(withHints(old as unknown as GameState).hints).toEqual([]);
+    expect(isValidState({ ...old, hints: ["yes"] }, puzzle)).toBe(false);
   });
 });
 

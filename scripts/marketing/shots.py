@@ -56,7 +56,7 @@ def icons(browser):
 
 def cut(page, w, h, cy, dx, dy):
     """Draw a line from the board's middle, retrying a little lower if it misses."""
-    button = page.get_by_role("button", name="Cut", exact=True)
+    button = page.get_by_role("button", name="Slice", exact=True)
     for attempt in range(8):
         y = cy + (attempt % 4) * 0.03 * h
         page.mouse.move(w * 0.5, y)

@@ -65,6 +65,12 @@ export default function AboutPage() {
           <strong>Country borders (Slice):</strong> <a href="https://www.naturalearthdata.com/">Natural Earth</a>, Admin 0 Countries 1:10m. Public domain.
         </li>
         <li>
+          <strong>Cities (Slice&apos;s hint and city names):</strong> Mari Rivero I., Melchiorri M., Florio P., Schiavina M., et al. (2024): GHS-UCDB
+          R2024A, <a href="https://human-settlement.emergency.copernicus.eu/ghs_ucdb_2024.php">GHS Urban Centre Database 2025</a>. European Commission,
+          Joint Research Centre (JRC). Licensed <a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>. Each country&apos;s three most
+          populous urban centres in 2025 (a city&apos;s whole built-up area, not the city proper); we shortened a few names, such as Conakry&apos;s.
+        </li>
+        <li>
           <strong>Rivers (Downstream):</strong> HydroRIVERS, from <a href="https://www.hydrosheds.org/">HydroSHEDS</a>. Lehner, B., Grill, G. (2013): Global
           river hydrography and network routing: baseline data and new approaches to study the world&apos;s large river systems. Hydrological Processes,
           27(15): 2171-2186.

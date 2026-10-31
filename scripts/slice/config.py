@@ -9,8 +9,18 @@ POPULATION_TIF = (
     HERE / "GHS_POP_E2025_GLOBE_R2023A_54009_1000_V1_0" / "GHS_POP_E2025_GLOBE_R2023A_54009_1000_V1_0.tif"
 )
 POPULATION_CRS = "ESRI:54009"  # GHSL's Mollweide grid: equal-area, every cell is 1 km x 1 km
+# GHSL Urban Centre Database 2025 (GHS-UCDB R2024A V1.2, CC BY 4.0): the hint's cities.
+UCDB_GPKG = HERE / "GHS_UCDB_GLOBE_R2024A" / "GHS_UCDB_GLOBE_R2024A.gpkg"
+UCDB_LAYER = "GHSL_UCDB_THEME_GENERAL_CHARACTERISTICS_GLOBE_R2024A"
 OUT_DIR = HERE / "out"
 PUZZLE_DIR = HERE.parent.parent / "public" / "data" / "slice"
+
+# --- The hint's cities (top_cities) ---
+HINT_CITIES = 3  # by 2025 population of their urban centre (generate.py top_cities)
+CITY_COAST_KM = 5  # a coastal centre's point may sit just off Natural Earth's coastline
+# Where the database labels a centre with a name players won't know, though it is that
+# city: Conakry's metro area is listed as "Coyah; Dubréka", Mbuji-Mayi as its province.
+CITY_NAME_FIXES = {"Coyah": "Conakry", "Kasaï-Oriental": "Mbuji-Mayi"}
 
 # --- Outline ---
 # Natural Earth draws a country with every territory it owns (France includes French
@@ -19,7 +29,10 @@ PUZZLE_DIR = HERE.parent.parent / "public" / "data" / "slice"
 # is within MAINLAND_GAP_KM of a part already kept (so island chains like Indonesia or
 # Japan hold together). Guess-and-check these against the validation previews.
 MAINLAND_GAP_KM = 400  # also drops Alaska (~800 km across Canada) and Hawaii (developer's call)
-MAINLAND_GAP_OVERRIDES: dict[str, int] = {}  # per-country gap, by Natural Earth ADMIN name
+# per-country gap, by Natural Earth ADMIN name. Malaysia: the peninsula (Kuala Lumpur, ~80%
+# of the people) is ~600 km across the sea from Borneo, the bigger part, which the 400 km
+# gap kept alone: #15's board held 19% of the people (caught 2026-10-31). Keep both.
+MAINLAND_GAP_OVERRIDES: dict[str, int] = {"Malaysia": 900}
 FAR_KM = 8000  # parts further than this from the main part are dropped before projecting
 SPECK_FRACTION = 0.0002  # parts smaller than this share of the country's area are dropped...
 SPECK_PEOPLE = 0.001  # ...unless they hold at least this share of its people

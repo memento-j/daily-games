@@ -36,14 +36,14 @@ const SCISSORS_SIZE = 1.8; // big enough to read on a phone
 const DASH = 0.16; // the "cut here" line: dash and gap lengths (world units)
 const GAP = 0.11;
 
-// The compass letters on the mat (N, E, S, W): how big, and how far outside the
-// country's bounding box (to the letter's middle). The board is always WORLD wide, so
-// these suit any country. Big enough to read once the reveal tilts the mat away. While
-// drawing they sit close in, inside the framing's 8% pad, so they cost the country no
-// size on screen (precision matters; developer's call, 2026-10-31); as the pieces slide
-// apart they step out by the same distance (SPLIT / 2), so the pieces never ride over them.
-const COMPASS_SIZE = 0.6;
-const COMPASS_GAP = COMPASS_SIZE / 2 + 0.1;
+// The hint's city dots: one size for all three, big enough to see on a phone, small
+// enough to leave the coastline readable. A dark dot in a paper-white ring. Two cities
+// closer than CITY_APART (Khujand and Ghafurov, 0.15 apart on Tajikistan's board) are
+// nudged apart along the line between them, so they always read as two dots.
+const CITY_DOT = 0.11;
+const CITY_RING = 0.15;
+const CITY_APART = CITY_RING * 2 + 0.03;
+const CITY_REACH = 90; // px: how far from its city a name may move to find room, with a leader line
 
 // The reveal's timing, in seconds after Cut. sound.reveal plays to the same clock.
 const SNIP_EVERY = 0.2; // one snip per scissor close
@@ -73,7 +73,8 @@ type Palette = {
   inkEdged: boolean; // draw that edge (dark mode, where the line itself is light)
   slit: number;
   steel: number;
-  compass: number; // the N, E, S, W letters on the mat: a quiet step off the mat's own colour
+  city: number; // the hint's city dots (on the paper slab, which stays light at night)
+  cityRing: number;
   sky: number;
   ground: number;
   skyLight: number; // hemisphere intensity
@@ -93,7 +94,8 @@ const PALETTES: Record<Theme, Palette> = {
     inkEdged: false,
     slit: 0x5b463c,
     steel: 0xe3e7ec,
-    compass: 0x6f8572,
+    city: 0x1d2a44,
+    cityRing: 0xffffff,
     sky: 0xfff6ea,
     ground: 0xb9c4b3,
     skyLight: 1.5,
@@ -117,7 +119,8 @@ const PALETTES: Record<Theme, Palette> = {
     inkEdged: true,
     slit: 0x5b463c,
     steel: 0xd0d5dc,
-    compass: 0x5a6b80,
+    city: 0x1d2a44,
+    cityRing: 0xfffaf3,
     sky: 0xf1e6d6,
     ground: 0x18212c,
     skyLight: 1.0,
@@ -125,7 +128,7 @@ const PALETTES: Record<Theme, Palette> = {
   },
 };
 // The palette colours a material can take; it keeps its role so setTheme can recolour it.
-type Role = "top" | "side" | "countedTop" | "coral" | "otherPeople" | "ink" | "inkEdge" | "slit" | "steel" | "compass";
+type Role = "top" | "side" | "countedTop" | "coral" | "otherPeople" | "ink" | "inkEdge" | "slit" | "steel" | "city" | "cityRing";
 
 type Piece = { group: THREE.Group; dir: THREE.Vector3; columns: THREE.InstancedMesh | null; heights: number[]; delays: number[]; centre: THREE.Vector3; positions: THREE.Vector3[] };
 
@@ -206,35 +209,6 @@ function matTexture(p: Palette, anisotropy: number): THREE.CanvasTexture {
   return tex;
 }
 
-/** One compass letter as a white glyph on a clear square, in the site's display face
- *  (next/font's name for it, from the CSS variable), tinted by its material. Redrawn
- *  once the face has loaded, in case it hadn't yet. */
-function letterTexture(letter: string, anisotropy: number): THREE.CanvasTexture {
-  const size = 128;
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = size;
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = anisotropy;
-  const face = getComputedStyle(document.body).getPropertyValue("--font-bricolage").trim() || "Helvetica Neue, Arial, sans-serif";
-  const font = `600 ${size * 0.82}px ${face}`;
-  const draw = () => {
-    const g = canvas.getContext("2d")!;
-    g.clearRect(0, 0, size, size);
-    g.fillStyle = "#fff";
-    g.font = font;
-    g.textAlign = "center";
-    g.textBaseline = "alphabetic";
-    const m = g.measureText(letter);
-    // Centre the capital's ink, not its em box.
-    g.fillText(letter, size / 2, size / 2 + (m.actualBoundingBoxAscent - m.actualBoundingBoxDescent) / 2);
-    tex.needsUpdate = true;
-  };
-  draw();
-  document.fonts?.load(font).then(draw, () => {});
-  return tex;
-}
-
 export class SliceScene {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
@@ -250,7 +224,8 @@ export class SliceScene {
   private sky: THREE.HemisphereLight;
   private sun: THREE.DirectionalLight;
   private mat: THREE.Mesh<THREE.PlaneGeometry, THREE.MeshStandardMaterial>;
-  private compass = new THREE.Group(); // N, E, S, W on the mat, placed around each country
+  private cities: Point[] | null = null; // the hint's city dots, while shown (showCities)
+  private cityDot: { dot: THREE.CylinderGeometry; ring: THREE.CylinderGeometry; dotMat: THREE.MeshStandardMaterial; ringMat: THREE.MeshStandardMaterial } | null = null;
 
   // The current round, and how its board coordinates map onto the table.
   private round: Round | null = null;
@@ -308,6 +283,14 @@ export class SliceScene {
   private shares: [number, number] = [0, 0];
   private onRevealDone: (() => void) | null = null;
   private revealDone = false;
+  // The cities' names, labelled once a round is settled (showCityNames): the label
+  // elements, the names, and where each sits (worked out once per reveal).
+  private cityLabels: HTMLElement[] = [];
+  private cityLeaders: HTMLElement[] = []; // thin lines from a city to a name placed further out
+  private citySpots: number[] = []; // each name's spot last frame (placeCityLabels)
+  private cityNames: string[] | null = null;
+  private cityAnchors: { piece: number; rest: THREE.Vector3 }[] | null = null;
+  private revealLine: Line | null = null;
 
   constructor(container: HTMLElement, labels: HTMLElement[], perfectLabel: HTMLElement, onDraft: (draft: Draft | null) => void, theme: Theme = "light") {
     this.palette = PALETTES[theme];
@@ -351,7 +334,6 @@ export class SliceScene {
     this.mat.rotation.x = -Math.PI / 2;
     this.mat.receiveShadow = true;
     this.scene.add(this.mat);
-    this.buildCompass();
 
     // The "cut here" line: coral dashes between the handles, fainter ones across the board.
     const dashGeo = new THREE.BoxGeometry(1, 0.025, 1);
@@ -396,40 +378,166 @@ export class SliceScene {
     this.loop();
   }
 
-  /** N, E, S, W lying flat on the mat, so players keep their bearings once the reveal
-   *  swings the camera round. They are part of the table, so they turn and tilt with
-   *  every view for free. True north: the puzzle's outline is an equal-area map centred
-   *  on the country (scripts/slice), so north is straight up the board (-z here) through
-   *  its middle. Each letter reads upright from the south, as on a map. They lie on the
-   *  mat, under the slab, the cut line, the bars and the labels, so nothing is ever
-   *  hidden behind them; setRound places them just outside each country. */
-  private buildCompass() {
-    const geo = new THREE.PlaneGeometry(COMPASS_SIZE, COMPASS_SIZE);
-    geo.rotateX(-Math.PI / 2); // flat on the mat, the glyph's top towards north (-z)
-    this.disposables.push(geo);
-    const anisotropy = this.renderer.capabilities.getMaxAnisotropy();
-    for (const letter of ["N", "E", "S", "W"]) {
-      const map = letterTexture(letter, anisotropy);
-      // Lit like the mat (not a flat colour), so the slab's shadow falls on them too.
-      const material = this.tint(new THREE.MeshStandardMaterial({ map, transparent: true, depthWrite: false, roughness: 0.95 }), "compass");
-      const mesh = new THREE.Mesh(geo, material);
-      mesh.name = letter;
-      mesh.position.y = 0.004; // just above the mat
-      mesh.receiveShadow = true;
-      this.compass.add(mesh);
-      this.disposables.push(map, material);
-    }
-    this.scene.add(this.compass);
+  /** The hint: dots on the country's three biggest cities (board points), all alike, no
+   *  names. They sit on the slab under the "cut here" line and stay for the round:
+   *  setRound clears them (a new round, or a second try, which the screen re-hints);
+   *  the reveal gives each piece the dots that fall on it, so they ride the split. */
+  showCities(points: Point[] | null) {
+    this.cities = points && points.length ? points : null;
+    if (this.slab) this.placeCityDots(this.slab, () => true);
   }
 
-  /** The compass just outside the country's bounding box (centred on the table), stepped
-   *  out by `apart` (0..1) of the pieces' slide. */
-  private placeCompass(apart: number) {
-    const gap = COMPASS_GAP + (SPLIT / 2) * apart;
-    const halfW = ((this.bmax[0] - this.bmin[0]) * this.s) / 2 + gap;
-    const halfH = ((this.bmax[1] - this.bmin[1]) * this.s) / 2 + gap;
-    const spots: Record<string, [number, number]> = { N: [0, -halfH], S: [0, halfH], E: [halfW, 0], W: [-halfW, 0] };
-    for (const mesh of this.compass.children) mesh.position.set(spots[mesh.name][0], mesh.position.y, spots[mesh.name][1]);
+  /** (Re)lay the city dots on one slab or piece: the ones `keep` accepts. */
+  private placeCityDots(group: THREE.Group, keep: (p: Point) => boolean) {
+    for (const old of group.children.filter((c) => c.userData.city)) group.remove(old);
+    if (!this.cities) return;
+    if (!this.cityDot) {
+      this.cityDot = {
+        dot: new THREE.CylinderGeometry(CITY_DOT, CITY_DOT, 0.012, 24),
+        ring: new THREE.CylinderGeometry(CITY_RING, CITY_RING, 0.008, 32),
+        dotMat: this.tint(new THREE.MeshStandardMaterial({ roughness: 0.6 }), "city"),
+        ringMat: this.tint(new THREE.MeshStandardMaterial({ roughness: 0.8 }), "cityRing"),
+      };
+      this.disposables.push(this.cityDot.dot, this.cityDot.ring, this.cityDot.dotMat, this.cityDot.ringMat);
+    }
+    // Where each dot goes on the table: at its city, nudged clear of close neighbours.
+    const spots = this.cities.map((p) => this.toWorld(p, TOP));
+    for (let pass = 0; pass < 4; pass++)
+      for (let i = 0; i < spots.length; i++)
+        for (let j = i + 1; j < spots.length; j++) {
+          const d = spots[j].clone().sub(spots[i]);
+          const len = d.length();
+          if (len >= CITY_APART) continue;
+          const push = d.lengthSq() > 1e-9 ? d.normalize() : new THREE.Vector3(1, 0, 0);
+          push.multiplyScalar((CITY_APART - len) / 2);
+          spots[i].sub(push);
+          spots[j].add(push);
+        }
+    const look = this.cityDot;
+    this.cities.forEach((p, i) => {
+      if (!keep(p)) return;
+      const marker = new THREE.Group();
+      marker.userData.city = true;
+      const ring = new THREE.Mesh(look.ring, look.ringMat);
+      ring.position.y = 0.004;
+      const dot = new THREE.Mesh(look.dot, look.dotMat);
+      dot.position.y = 0.009; // both under the dashed line (TOP + 0.02)
+      marker.add(ring, dot);
+      marker.position.copy(spots[i]);
+      group.add(marker);
+    });
+  }
+
+  /** The DOM elements for the cities' names (three, like the cities), and their leader lines. */
+  setCityLabels(els: HTMLElement[], leaders: HTMLElement[] = []) {
+    this.cityLabels = els;
+    this.cityLeaders = leaders;
+    for (const el of [...els, ...leaders]) el.style.opacity = "0";
+  }
+
+  /** Label the round's biggest cities by name (or stop, with null). Only once a round is
+   *  settled: the screen decides when; the names show once the reveal has finished. */
+  showCityNames(names: string[] | null) {
+    this.cityNames = names && names.length ? names : null;
+    // The name goes in the label's [data-name] part (the rest is its dot).
+    this.cityLabels.forEach((el, i) => ((el.querySelector("[data-name]") ?? el).textContent = this.cityNames?.[i] ?? ""));
+  }
+
+  /** Where each city's name hangs: on whichever piece holds the city, just above the
+   *  tallest column near it, so the name reads as labelling that tower of people. */
+  private anchorCities() {
+    const cities = this.round?.cities ?? [];
+    const line = this.revealLine;
+    if (!line || !this.pieces.length) return [];
+    return cities.map((p) => {
+      const piece = p[0] * line.normal[0] + p[1] * line.normal[1] > line.offset ? 0 : 1;
+      const rest = this.toWorld(p, TOP);
+      let tallest = 0;
+      const { positions, heights } = this.pieces[piece] ?? { positions: [], heights: [] };
+      positions.forEach((q, k) => {
+        if (Math.hypot(q.x - rest.x, q.z - rest.z) < 0.3) tallest = Math.max(tallest, heights[k]);
+      });
+      rest.y = TOP + tallest + 0.12;
+      return { piece, rest };
+    });
+  }
+
+  /** Each frame: put every name beside its city, at the first spot that touches nothing
+   *  (the pieces' share labels, the perfect cut's label, the names already placed, the
+   *  interface above and below the board, the screen edge). Right beside it first (above,
+   *  below, right, left); on a crowded phone screen, further out in rings up to
+   *  CITY_REACH px, with a thin leader line back to the city, so a name is only hidden
+   *  when its city is off screen or there's truly no room. A name keeps last frame's spot
+   *  while that's still free, so it doesn't hop about as the view turns. */
+  private placeCityLabels() {
+    const show = !!this.cityNames && this.revealDone && this.phase === "reveal";
+    const hide = (i: number) => {
+      this.cityLabels[i].style.opacity = "0";
+      if (this.cityLeaders[i]) this.cityLeaders[i].style.opacity = "0";
+      this.citySpots[i] = -1;
+    };
+    if (!show) {
+      this.cityLabels.forEach((_, i) => hide(i));
+      return;
+    }
+    this.cityAnchors ??= this.anchorCities();
+    const box = this.renderer.domElement.getBoundingClientRect();
+    type Rect = { x0: number; y0: number; x1: number; y1: number };
+    const pad = 4;
+    const rectOf = (el: HTMLElement): Rect => {
+      const r = el.getBoundingClientRect();
+      return { x0: r.left - box.left - pad, y0: r.top - box.top - pad, x1: r.right - box.left + pad, y1: r.bottom - box.top + pad };
+    };
+    const taken: Rect[] = [...this.labels, this.perfectLabel].filter((el) => Number(el.style.opacity || 0) > 0.05).map(rectOf);
+    const overlaps = (a: Rect, b: Rect) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    this.cityLabels.forEach((el, i) => {
+      const anchor = this.cityAnchors?.[i];
+      const piece = anchor && this.pieces[anchor.piece];
+      if (!anchor || !piece || !this.cityNames?.[i]) return hide(i);
+      const v = anchor.rest.clone().add(piece.group.position).project(this.camera);
+      const ax = ((v.x + 1) / 2) * box.width;
+      const ay = ((1 - v.y) / 2) * box.height;
+      if (v.z >= 1 || ax < 0 || ax > box.width || ay < this.insets.top || ay > box.height - this.insets.bottom) return hide(i);
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
+      const gap = 6;
+      // Candidate top-left corners: beside the city, then rings further out.
+      const spots: [number, number][] = [
+        [ax - w / 2, ay - h - gap], // above
+        [ax - w / 2, ay + gap], // below
+        [ax + gap + 4, ay - h / 2], // right
+        [ax - w - gap - 4, ay - h / 2], // left
+      ];
+      for (const r of [34, 52, 70, CITY_REACH])
+        for (let k = 0; k < 12; k++) {
+          const a = -Math.PI / 2 + (k * Math.PI) / 6; // starting straight up
+          spots.push([ax + Math.cos(a) * (r + w / 2) - w / 2, ay + Math.sin(a) * (r + h) - h / 2]);
+        }
+      const rectAt = ([x, y]: [number, number]): Rect => ({ x0: x - pad, y0: y - pad, x1: x + w + pad, y1: y + h + pad });
+      const free = (r: Rect) =>
+        r.x0 >= 4 && r.x1 <= box.width - 4 && r.y0 >= this.insets.top && r.y1 <= box.height - this.insets.bottom && !taken.some((t) => overlaps(r, t));
+      const last = this.citySpots[i];
+      const pick = last >= 0 && last < spots.length && free(rectAt(spots[last])) ? last : spots.findIndex((s) => free(rectAt(s)));
+      if (pick < 0) return hide(i);
+      this.citySpots[i] = pick;
+      const [x, y] = spots[pick];
+      taken.push(rectAt(spots[pick]));
+      el.style.transform = `translate(${x}px, ${y}px)`;
+      el.style.opacity = "1";
+      // Further out than beside the city: a leader from the city to the name's nearest edge.
+      const leader = this.cityLeaders[i];
+      if (!leader) return;
+      if (pick < 4) {
+        leader.style.opacity = "0";
+        return;
+      }
+      const ex = Math.min(Math.max(ax, x), x + w);
+      const ey = Math.min(Math.max(ay, y), y + h);
+      const len = Math.hypot(ex - ax, ey - ay);
+      leader.style.width = `${len}px`;
+      leader.style.transform = `translate(${ax}px, ${ay}px) rotate(${Math.atan2(ey - ay, ex - ax)}rad)`;
+      leader.style.opacity = "1";
+    });
   }
 
   /** Give a material its palette colour, and remember the role for setTheme. */
@@ -549,7 +657,7 @@ export class SliceScene {
     this.bmax = [x1, y1];
     this.min = [x0 - pad, y0 - pad];
     this.max = [x1 + pad, y1 + pad];
-    this.placeCompass(0);
+    this.cities = null;
     this.polygons = toPolygons(round.outline);
     this.slab = this.extrude(this.polygons, "top");
     this.scene.add(this.slab);
@@ -776,6 +884,8 @@ export class SliceScene {
     this.onRevealDone = onDone;
     this.revealDone = false;
     this.shares = [positiveShare, 1 - positiveShare];
+    this.revealLine = line;
+    this.cityAnchors = null;
     // Swing from where the camera is; a board shown straight into a reveal
     // (a resumed game) has never placed it, so start from the drawing view.
     const placed = this.camera.position.lengthSq() > 1e-6;
@@ -822,6 +932,7 @@ export class SliceScene {
       const mine = points.filter((p) => p[0] * side.normal[0] + p[1] * side.normal[1] > side.offset);
       const piece: Piece = { group, dir: i === 0 ? n.clone() : n.clone().negate(), columns: null, heights: [], delays: [], centre: new THREE.Vector3(), positions: [] };
       if (mine.length) piece.columns = this.columns(mine, heaviest, footprint, counted ? "coral" : "otherPeople", piece);
+      this.placeCityDots(group, (p) => p[0] * side.normal[0] + p[1] * side.normal[1] > side.offset);
       const rings = polys.flatMap((poly) => poly) as Ring[];
       const c = centroid(rings) ?? [this.c[0], this.c[1]];
       piece.centre = this.toWorld(c, TOP);
@@ -1041,7 +1152,6 @@ export class SliceScene {
         piece.group.visible = split;
         piece.group.position.copy(piece.dir).multiplyScalar((SPLIT / 2) * apart);
       }
-      this.placeCompass(apart);
       // The camera swings round to a three-quarter view.
       const cam = easeInOut(window01(t, T.camera[0], T.camera[1]));
       this.setCamera({
@@ -1085,7 +1195,6 @@ export class SliceScene {
   }
 
   private clearReveal() {
-    this.placeCompass(0);
     for (const piece of this.pieces) this.scene.remove(piece.group);
     this.pieces = [];
     if (this.perfect) this.scene.remove(this.perfect);
@@ -1115,6 +1224,7 @@ export class SliceScene {
     this.animateReveal(now);
     this.animatePerfect(now);
     if (this.controls.enabled) this.controls.update();
+    this.placeCityLabels();
     this.renderer.render(this.scene, this.camera);
     if (this.round && this.onShown) {
       const shown = this.onShown;

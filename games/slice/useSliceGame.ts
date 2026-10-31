@@ -12,14 +12,15 @@ import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
 import { computeStats } from "@/lib/stats";
 import { clearInProgress, getHistory, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
-import { initialState, isValidState, phase, step, type Action, type GameState, type Phase, type SavedCut } from "./game";
+import { hintCount, initialState, isValidState, phase, step, withHints, type Action, type GameState, type Phase, type SavedCut } from "./game";
 import { practiceCountry, practicePuzzle, type PracticeCountry } from "./practice";
 import { maxScore, totalScore } from "./scoring";
 import { GAME_KEY, puzzleToPlay, storageKeyFor } from "./schedule";
 import type { Puzzle } from "./types";
 
-// `points` feeds the shared streaks and stats (lib/stats.ts averages it).
-export type SavedResult = { cuts: SavedCut[]; points: number };
+// `points` feeds the shared streaks and stats (lib/stats.ts averages it). `hints`: which
+// rounds used the hint, for the share text's 💡 (missing on results saved before hints).
+export type SavedResult = { cuts: SavedCut[]; points: number; hints?: boolean[] };
 
 export type Load =
   | { status: "loading" }
@@ -96,8 +97,8 @@ export function useSliceGame(): SliceGameState {
       // shows that result rather than starting a fresh catch-up game.
       const finished = getResult<SavedResult>(storageKey, number) ?? (preview ? getResult<SavedResult>(GAME_KEY, number) : null);
       const saved = getInProgress<unknown>(storageKey, number);
-      if (finished) setGame({ ...initialState, round: puzzle.rounds.length, cuts: finished.cuts });
-      else if (isValidState(saved, puzzle)) setGame(saved);
+      if (finished) setGame({ ...initialState, round: puzzle.rounds.length, cuts: finished.cuts, hints: finished.hints ?? [] });
+      else if (isValidState(saved, puzzle)) setGame(withHints(saved));
       else setGame(initialState);
       setLoad({ status: "ready", number, puzzle, preview, practice: null });
     }
@@ -118,18 +119,18 @@ export function useSliceGame(): SliceGameState {
     if (load.practice) {
       const country = load.practice.name;
       if (action.type === "cut" && game.round === 0 && game.tries === 0) track("practice_started", { country });
-      if (phase(next, puzzle) === "finished") track("practice_finished", { country, points: totalScore(next.cuts) });
+      if (phase(next, puzzle) === "finished") track("practice_finished", { country, points: totalScore(next.cuts), hintsUsed: hintCount(next.hints) });
       return;
     }
     // Analytics (lib/analytics.ts): the first cut of a fresh puzzle and the finished day.
     const play = { game: "slice", puzzle: number, preview: load.preview } as const;
     if (action.type === "cut" && game.round === 0 && game.tries === 0) track("puzzle_started", play);
     if (phase(next, puzzle) === "finished") {
-      saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalScore(next.cuts) });
+      saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalScore(next.cuts), hints: next.hints });
       clearInProgress(storageKey);
       // After saving, so the streak includes today.
       const streak = computeStats(getHistory<SavedResult>(storageKey), number).currentStreak;
-      track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length), streak });
+      track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length), streak, hintsUsed: hintCount(next.hints) });
     } else {
       saveInProgress(storageKey, number, next);
     }

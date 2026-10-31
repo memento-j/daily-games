@@ -32,7 +32,7 @@ describe("fractionWords", () => {
 describe("instruction", () => {
   it("says what to cut off, of land or of people", () => {
     expect(instruction(round("Egypt", "population", 1 / 3))).toBe("Cut off a third of Egypt's population.");
-    expect(instruction(round("the United Kingdom", "area", 0.5))).toBe("Cut off half of the United Kingdom's land.");
+    expect(instruction(round("the United Kingdom", "area", 0.5))).toBe("Split the United Kingdom's land in half.");
   });
 });
 

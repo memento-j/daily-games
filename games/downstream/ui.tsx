@@ -457,7 +457,7 @@ function TrySlice() {
       </svg>
       <span className="min-w-0 flex-1">
         <span className="block text-sm font-semibold">Next: today&apos;s Slice</span>
-        <span className="block text-xs text-ink-soft">One straight line to cut a country&apos;s population in half. Harder than it looks.</span>
+        <span className="block text-xs text-ink-soft">One straight line to split a country&apos;s population in half. Harder than it looks.</span>
       </span>
       <svg viewBox="0 0 20 20" className="size-4 shrink-0 text-ink-soft transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
         <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

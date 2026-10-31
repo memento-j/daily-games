@@ -24,7 +24,8 @@ import { subscribe } from "@/lib/storage";
 import { useTheme } from "@/lib/useTheme";
 import { GAME_NAME } from "@/games/slice/config";
 import { crosses, perfectLine, share } from "@/games/slice/cut";
-import { triesLeft, type SavedCut } from "@/games/slice/game";
+import { hinted, triesLeft, type SavedCut } from "@/games/slice/game";
+import { HintIcon, HintMark } from "@/games/slice/HintIcon";
 import { lineThrough } from "@/games/slice/geometry";
 import { otherPractice, PRACTICE, type PracticeCountry } from "@/games/slice/practice";
 import type { SliceScene } from "@/games/slice/scene";
@@ -41,6 +42,12 @@ import { capitalise, fractionWords, goal, instruction, measure, perfectLineText,
 // One word for each band (bandOf in scoring.ts: up to 1 point off, up to 5, under 10, 10 or more).
 const BAND_WORDS = ["Spot on", "Pretty close", "Not bad", "Way off"];
 const LABEL = "pointer-events-none absolute top-0 left-0 rounded-full bg-card/90 px-3 py-1 text-[17px] font-bold tabular-nums shadow-card";
+// Every button on the board's card: one height, shape and type size, in every phase.
+const BUTTON = "h-12 rounded-full px-4 text-[16px] font-semibold";
+// A city's name on the settled board: quieter than the share labels, with a small ink
+// dot like the hint's, so it reads as a place rather than a number.
+const CITY_LABEL =
+  "pointer-events-none absolute top-0 left-0 flex items-center gap-1 rounded-full bg-card/90 py-0.5 pr-2 pl-1.5 text-[12px] leading-tight font-semibold whitespace-nowrap text-ink shadow-card transition-opacity duration-300 lg:text-[13px]";
 
 export default function SliceGame() {
   const g = useSliceGame();
@@ -54,6 +61,8 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   const labelA = useRef<HTMLDivElement>(null);
   const labelB = useRef<HTMLDivElement>(null);
   const perfectLabel = useRef<HTMLDivElement>(null);
+  const cityLabels = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
+  const cityLeaders = [useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null), useRef<HTMLDivElement>(null)];
   const top = useRef<HTMLDivElement>(null);
   const bottom = useRef<HTMLDivElement>(null);
   const scene = useRef<SliceScene | null>(null);
@@ -90,6 +99,10 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
           setMessage(null);
         });
         scene.current = made;
+        made.setCityLabels(
+          cityLabels.map((r) => r.current!),
+          cityLeaders.map((r) => r.current!),
+        );
         made.onShown = () => setBoardShown(true);
         measureInsets();
         setSceneReady(true);
@@ -100,6 +113,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
       made?.dispose();
       scene.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the label refs are stable
   }, []);
 
   // Light or dark: the table recolours in place, even mid-round.
@@ -141,12 +155,16 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     // Cut just now on this board (its reveal already played), or kept after that.
     const wasCut = shown.current === `cutting:${roundIndex}` || shown.current === `result:${roundIndex}`;
     shown.current = key;
+    // The round's city hint, if taken, goes back on after every setRound (which clears it).
+    const cities = hinted(g.game, roundIndex) ? (round.cities ?? null) : null;
     if (g.phase === "cutting") {
       s.setRound(round); // clears the draft, which resets the hint via onDraft
+      s.showCities(cities);
       sound.announce(round.mode);
     } else if (cut && !wasCut) {
       // Not cut just now on this board: show the cut already made, finished, in silence.
       s.setRound(round);
+      s.showCities(cities);
       s.reveal(
         cut.line,
         perfectLine(round, cut.line),
@@ -158,7 +176,15 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
       );
       if (finished) s.showPerfect(true);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- g.game is read for the hint only when the board changes
   }, [sceneReady, key, g.phase, round, roundIndex, cut, finished]);
+
+  // The cities' names, once the round is over (both tries used, or the cut kept) and in
+  // the day's summary: never before or between cuts, hinted or not.
+  const namesShown = finished || (g.phase === "settled" && !!cut);
+  useEffect(() => {
+    if (sceneReady) scene.current?.showCityNames(namesShown ? (round.cityNames ?? null) : null);
+  }, [sceneReady, namesShown, round, key]);
 
   function confirm() {
     const draft = scene.current?.getDraft();
@@ -171,6 +197,17 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
     g.act({ type: "cut", line });
     const scored = scoreCut(round, line);
     scene.current?.reveal(line, perfectLine(round, line), share(round, line), scored.positive, bandOf(scored.miss), () => setRevealDone(true));
+  }
+
+  // The hint: the three biggest cities as dots, for the rest of this round. No score cost.
+  const hintOn = !finished && hinted(g.game, roundIndex);
+  // Most countries have three urban centres to show; a few small ones fewer (Lesotho: one).
+  const cityCount = Math.min(round.cities?.length ?? 0, 3);
+  const biggest = cityCount > 1 ? `the ${cityCount} biggest cities` : "the biggest city";
+  function takeHint() {
+    sound.tap();
+    g.act({ type: "hint" });
+    scene.current?.showCities(round.cities ?? null);
   }
 
   function next() {
@@ -218,6 +255,18 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
       <div ref={labelA} className={LABEL} style={{ opacity: 0 }} />
       <div ref={labelB} className={LABEL} style={{ opacity: 0 }} />
       <div ref={perfectLabel} className={`${LABEL} bg-ink! text-[13px]! text-card`} style={{ opacity: 0 }} />
+      {/* A name placed away from its city gets a thin leader line back to it, ending in a dot. */}
+      {cityLeaders.map((ref, i) => (
+        <div key={i} ref={ref} className="pointer-events-none absolute top-0 left-0 h-px origin-left bg-ink/55 transition-opacity duration-300" style={{ opacity: 0 }} aria-hidden="true">
+          <span className="absolute -top-[2px] -left-[2.5px] size-[5px] rounded-full bg-ink" />
+        </div>
+      ))}
+      {cityLabels.map((ref, i) => (
+        <div key={i} ref={ref} className={CITY_LABEL} style={{ opacity: 0 }} aria-hidden="true">
+          <span className="size-1.5 shrink-0 rounded-full bg-ink" />
+          <span data-name />
+        </div>
+      ))}
 
       <div ref={top} className="pointer-events-none absolute inset-x-0 top-0 mx-auto max-w-[600px] p-4 lg:pt-6">
         <div className="pointer-events-auto flex items-center justify-between gap-2">
@@ -263,7 +312,10 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                   Round {g.game.round + 1} <span className="text-ink-faint">of {puzzle.rounds.length}</span>
                 </p>
                 {/* This round's score waits for the reveal, so it never gives the cut away. */}
-                <RoundScores scores={puzzle.rounds.map((_, i) => (i === g.game.round && !revealDone ? null : (g.game.cuts[i]?.score ?? null)))} />
+                <RoundScores
+                  scores={puzzle.rounds.map((_, i) => (i === g.game.round && !revealDone ? null : (g.game.cuts[i]?.score ?? null)))}
+                  hints={g.game.hints}
+                />
               </div>
             )}
             {/* Keyed by round, so the highlight replays for every new question. (A
@@ -276,9 +328,20 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                 }`}
               >
                 <span className="sr-only">{instruction(round)}</span>
+                {/* "Split Japan's population in half." (2026-10-31: "split", not "cut off";
+                    other aims keep "Cut off a third of ..."). The marks sweep in reading order. */}
                 <span aria-hidden="true">
-                  Cut off <span className="slice-mark">{fractionWords(round.target)}</span> of {possessive(round.country)}{" "}
-                  <span className="slice-mark slice-mark-late">{measure(round)}</span>.
+                  {fractionWords(round.target) === "half" ? (
+                    <>
+                      Split {possessive(round.country)} <span className="slice-mark">{measure(round)}</span> in{" "}
+                      <span className="slice-mark slice-mark-late">half</span>.
+                    </>
+                  ) : (
+                    <>
+                      Cut off <span className="slice-mark">{fractionWords(round.target)}</span> of {possessive(round.country)}{" "}
+                      <span className="slice-mark slice-mark-late">{measure(round)}</span>.
+                    </>
+                  )}
                 </span>
               </h1>
             </div>
@@ -298,9 +361,9 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
           }`}
         >
           {finished && practice ? (
-            <PracticeSummary country={practice} cut={g.game.cuts[0]} />
+            <PracticeSummary country={practice} cut={g.game.cuts[0]} hinted={!!g.game.hints[0]} />
           ) : finished ? (
-            <Summary number={number} preview={preview} puzzle={puzzle} cuts={g.game.cuts} viewing={viewing} onView={setViewing} />
+            <Summary number={number} preview={preview} puzzle={puzzle} cuts={g.game.cuts} hints={g.game.hints} viewing={viewing} onView={setViewing} />
           ) : g.phase === "cutting" ? (
             // Keyed apart from the result below: sharing one element, the result text
             // arrived at full opacity and faded out before the reveal (a flash of the score).
@@ -308,20 +371,39 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
               <p className={`px-1 text-[14px] ${message ? "font-semibold text-coral-deep" : "text-ink-soft"}`} aria-live="polite">
                 {message ??
                   (g.game.again && g.game.last
-                    ? `Second try. Your first cut took ${formatShare(g.game.last.share)} and scored ${g.game.last.score}. ${hasDraft ? "Press Cut when you're ready." : "Can you beat it?"}`
+                    ? `Second try. Your first cut took ${formatShare(g.game.last.share)} and scored ${g.game.last.score}. ${hasDraft ? "Press Slice when you're ready." : "Can you beat it?"}`
                     : hasDraft
-                      ? "Drag either end to fine-tune, then press Cut."
-                      : isPopulation
-                        ? "Think about where most of the population lives, not how big the country looks. Drag across it to draw your cut."
-                        : "Just the land this time: cities don't count. Drag across the country to draw your cut.")}
+                      ? "Drag either end to fine-tune, then press Slice."
+                      : hintOn
+                        ? `The ${cityCount > 1 ? "dots mark" : "dot marks"} ${biggest}. Your score isn't affected; your shared result just shows a 💡 for this round.`
+                        : isPopulation
+                          ? "Think about where most of the population lives, not how big the country looks. Drag across it to draw your cut."
+                          : "Just the land this time: cities don't count. Drag across the country to draw your cut.")}
               </p>
+              {/* The hint says what it does and what it costs on the button itself (developer's
+                  call, 2026-10-31: a modal would be one more tap, and few read the how-to-play).
+                  Every button on the card shares one shape (BUTTON): full-width rows, h-12, round. */}
+              {isPopulation && cityCount > 0 && (
+                <button
+                  type="button"
+                  onClick={takeHint}
+                  disabled={hintOn}
+                  aria-pressed={hintOn}
+                  className={`${BUTTON} flex items-center justify-center gap-2 bg-card ring-1 ring-ink/15 transition-shadow hover:ring-ink/35 disabled:text-ink-soft disabled:ring-ink/10`}
+                >
+                  <HintIcon on={hintOn} />
+                  <span>
+                    {hintOn ? `Showing ${biggest}` : `Hint: show ${biggest}`}
+                  </span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={confirm}
                 disabled={!hasDraft}
-                className="h-12 rounded-full bg-coral text-[18px] font-bold text-white transition-colors hover:bg-coral-strong disabled:bg-ink/10 disabled:text-ink-faint"
+                className={`${BUTTON} bg-coral font-bold text-white transition-colors hover:bg-coral-strong disabled:bg-ink/10 disabled:text-ink-faint`}
               >
-                Cut
+                Slice
               </button>
             </div>
           ) : cut ? (
@@ -335,7 +417,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
               </p>
               <p className="px-1 text-[13px] leading-snug text-ink-soft" aria-live="polite">
                 {g.phase === "result"
-                  ? "Cut again to try to beat it, or keep it. The perfect cut shows once you're done."
+                  ? "Slice again to try to beat it, or keep it. The perfect cut shows once you're done."
                   : perfectShown
                     ? perfectLineText(cut.line, perfectLine(round, cut.line))
                     : best && best !== cut
@@ -348,15 +430,15 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                     type="button"
                     onClick={again}
                     disabled={!revealDone}
-                    className="h-11 flex-1 rounded-full bg-card text-[15px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+                    className={`${BUTTON} flex-1 bg-card ring-1 ring-ink/15 transition-shadow hover:ring-ink/35`}
                   >
-                    Cut again · {triesLeft(g.game)} left
+                    Slice again · {triesLeft(g.game)} left
                   </button>
                   <button
                     type="button"
                     onClick={keep}
                     disabled={!revealDone}
-                    className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card"
+                    className={`${BUTTON} flex-1 bg-ink font-bold text-card`}
                   >
                     Keep this cut
                   </button>
@@ -368,7 +450,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                       type="button"
                       onClick={showPerfect}
                       disabled={!revealDone}
-                      className="h-11 flex-1 rounded-full bg-card text-[15px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
+                      className={`${BUTTON} flex-1 bg-card ring-1 ring-ink/15 transition-shadow hover:ring-ink/35`}
                     >
                       Show perfect cut
                     </button>
@@ -377,7 +459,7 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                     type="button"
                     onClick={next}
                     disabled={!revealDone}
-                    className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card"
+                    className={`${BUTTON} flex-1 bg-ink font-bold text-card`}
                   >
                     {practice ? "Done" : g.game.round + 1 >= puzzle.rounds.length ? "See results" : "Next round"}
                   </button>
@@ -391,8 +473,9 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   );
 }
 
-/** The day so far in the top bar: each finished round's score, a dash for the rest. */
-function RoundScores({ scores }: { scores: (number | null)[] }) {
+/** The day so far in the top bar: each finished round's score, a dash for the rest, and a
+ *  bulb on any round that used the hint (the current one as soon as it's taken). */
+function RoundScores({ scores, hints }: { scores: (number | null)[]; hints: boolean[] }) {
   const done = scores.filter((s) => s !== null).length;
   return (
     <p className="flex gap-1" aria-label={`${done} of ${scores.length} rounds done`}>
@@ -400,11 +483,12 @@ function RoundScores({ scores }: { scores: (number | null)[] }) {
         <span
           key={i}
           aria-hidden="true"
-          className={`grid h-6 min-w-8 place-items-center rounded-full px-1.5 text-xs font-bold tabular-nums ${
+          className={`flex h-6 min-w-8 items-center justify-center gap-0.5 rounded-full px-1.5 text-xs font-bold tabular-nums ${
             s === null ? "bg-card/60 text-ink-faint" : "bg-card text-ink shadow-card"
           }`}
         >
           {s ?? "–"}
+          {hints[i] && <HintMark />}
         </span>
       ))}
     </p>
@@ -416,6 +500,7 @@ function Summary({
   preview,
   puzzle,
   cuts,
+  hints,
   viewing,
   onView,
 }: {
@@ -423,19 +508,21 @@ function Summary({
   preview: boolean;
   puzzle: Puzzle;
   cuts: SavedCut[];
+  hints: boolean[];
   viewing: number;
   onView: (i: number) => void;
 }) {
   const stats = useStats(storageKeyFor(preview), number);
   const points = totalScore(cuts);
   const max = maxScore(cuts.length);
-  // "Slice #4 312/400", then each round's score: no countries, no answers.
+  // "Slice #4 312/400", then each round's score, with a 💡 after any round that took the
+  // hint: no countries, no answers.
   const text = shareText({
     game: GAME_NAME,
     number,
     points,
     maxPoints: max,
-    detail: cuts.map((c) => c.score).join(" · "),
+    detail: cuts.map((c, i) => `${c.score}${hints[i] ? "💡" : ""}`).join(" · "),
     url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
   });
   // The picture: one strip per round, showing how close the cut came to the aim.
@@ -489,7 +576,15 @@ function Summary({
                 {cuts[i].score}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="block text-sm font-semibold">{capitalise(r.country)}</span>
+                <span className="flex items-center gap-1.5 text-sm font-semibold">
+                  {capitalise(r.country)}
+                  {hints[i] && (
+                    <span className="flex items-center gap-0.5 text-xs font-medium text-coral-deep">
+                      <HintIcon on className="size-3.5" />
+                      hint
+                    </span>
+                  )}
+                </span>
                 <span className="block text-xs text-ink-soft">{goal(r)}</span>
               </span>
               <span className="text-right">
@@ -550,7 +645,7 @@ function PracticeLinks() {
 }
 
 /** The end of a practice round: the score, then today's puzzle or another country. */
-function PracticeSummary({ country, cut }: { country: PracticeCountry; cut: SavedCut }) {
+function PracticeSummary({ country, cut, hinted }: { country: PracticeCountry; cut: SavedCut; hinted: boolean }) {
   const today = useSliceToday();
   return (
     <div className="flex flex-col gap-3 px-1 pb-1">
@@ -565,6 +660,12 @@ function PracticeSummary({ country, cut }: { country: PracticeCountry; cut: Save
         <p className="shrink-0 text-right">
           <span className="font-display text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{cut.score}</span>
           <span className="text-sm text-ink-faint tabular-nums">/{MAX_SCORE}</span>
+          {hinted && (
+            <span className="mt-1 flex items-center justify-end gap-0.5 text-xs font-medium text-coral-deep">
+              <HintIcon on className="size-3.5" />
+              hint
+            </span>
+          )}
         </p>
       </div>
       {/* The one coral action: today's puzzle, while it's still to play. */}

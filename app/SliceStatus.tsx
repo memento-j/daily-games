@@ -1,20 +1,31 @@
 "use client";
 
-// The homepage's Slice card status: today's score and the countdown once played,
+// The homepage's Slice card status: today's score (with how many rounds used the hint,
+// by the hint's lightbulb) and the countdown once played,
 // a streak nudge when there is one, else the game's basics.
 
 import Countdown from "@/components/Countdown";
+import { hintCount } from "@/games/slice/game";
+import { HintIcon } from "@/games/slice/HintIcon";
 import { maxScore } from "@/games/slice/scoring";
 import { useTodayResult } from "@/games/slice/useTodayResult";
 
 export default function SliceStatus() {
   const t = useTodayResult();
   if (t?.result) {
+    const hints = hintCount(t.result.hints);
     return (
       <span className="flex flex-col gap-0.5 text-sm">
         <span className="font-semibold text-coral-deep tabular-nums">
           Done today · {t.result.points}/{maxScore(t.result.cuts.length)}
         </span>
+        {/* Its own line: on a phone, a third item after the score wrapped with a stray dot. */}
+        {hints > 0 && (
+          <span className="flex items-center gap-1 font-semibold text-coral-deep">
+            <HintIcon on className="size-3.5" />
+            {hints} {hints === 1 ? "hint" : "hints"} used
+          </span>
+        )}
         <Countdown prefix="Next slices in" className="text-ink-faint" />
       </span>
     );

@@ -13,9 +13,9 @@ import { PRACTICE } from "@/games/slice/practice";
 import SliceGame from "./SliceGame";
 
 const DESCRIPTION =
-  "A daily geography puzzle: draw one straight line across a real country to cut its population exactly in half. Four countries a day, free.";
+  "A daily geography puzzle: draw one straight line across a real country to split its population exactly in half. Four countries a day, free.";
 
-export const metadata: Metadata = pageMetadata({ title: "Slice: cut a country's population in half", description: DESCRIPTION, path: "/slice/" });
+export const metadata: Metadata = pageMetadata({ title: "Slice: split a country's population in half", description: DESCRIPTION, path: "/slice/" });
 
 export default function SlicePage() {
   return (
@@ -47,11 +47,11 @@ export default function SlicePage() {
               ],
               [
                 "Draw your line.",
-                "Drag across the country, from one side to the other. Drag either end to adjust the angle and position, then press Cut. Only one of the two pieces needs to match the goal: whichever is closer counts.",
+                "Drag across the country, from one side to the other. Drag either end to adjust the angle and position, then press Slice. Only one of the two pieces needs to match the goal: whichever is closer counts. Stuck? Press Hint to mark the country's three biggest cities with dots (urban areas by 2025 population, from the EU's GHSL Urban Centre Database). It costs no points; your shared score just shows a 💡 for that round. Once a round is over, the three cities are named on the board.",
               ],
               [
                 "See how close you got.",
-                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100, halving for every 7 percentage points you're off: 1 point off scores 91, 7 off scores 50, 10 off still scores 37. Cutting off 47.7% instead of 50%, for example, is 2.3 points off, so 80. Not happy? Cut again once: your better cut counts. When you're done, Show perfect cut reveals the ideal line at your angle.",
+                "The country splits along your line and the population rises in columns, so you can see where everyone actually lives. Each cut scores out of 100, halving for every 7 percentage points you're off: 1 point off scores 91, 7 off scores 50, 10 off still scores 37. Cutting off 47.7% instead of 50%, for example, is 2.3 points off, so 80. Not happy? Slice again once: your better cut counts. When you're done, Show perfect cut reveals the ideal line at your angle.",
               ],
               ["Share your score.", "After four rounds you have a score out of 400. Share it, with each round's score, to compare with friends. It never gives away the answers."],
             ].map(([title, text], i) => (
@@ -83,7 +83,7 @@ export default function SlicePage() {
             ))}
           </ul>
           <p className="mt-6 text-xs text-ink-faint">
-            Population: GHSL GHS-POP 2025 (European Commission, JRC), CC BY 4.0. Borders: Natural Earth. <a href="/about/#credits" className="underline underline-offset-2 hover:text-ink">Full credits</a>
+            Population: GHSL GHS-POP 2025 (European Commission, JRC), CC BY 4.0. Cities: GHSL Urban Centre Database 2025 (European Commission, JRC), CC BY 4.0. Borders: Natural Earth. <a href="/about/#credits" className="underline underline-offset-2 hover:text-ink">Full credits</a>
           </p>
           <SiteFooter className="mt-10" />
         </div>

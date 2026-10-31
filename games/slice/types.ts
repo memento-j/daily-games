@@ -23,6 +23,10 @@ export type Round = {
   points?: PeoplePoint[]; // population mode only
   population: number;
   fact: string;
+  /** The hint: the country's three biggest cities, unlabeled (scripts/slice top_cities). */
+  cities?: Point[];
+  /** Their names, labelled on the reveal once the round is settled (never before). */
+  cityNames?: string[];
 };
 
 export type Puzzle = {

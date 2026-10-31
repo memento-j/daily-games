@@ -6,7 +6,7 @@ export const SITE_NAME = "Pondo";
 export const SITE_TAGLINE = "Small daily puzzles";
 // What Google shows under the homepage's title: under ~160 characters, naming both games.
 export const SITE_DESCRIPTION =
-  "Two free daily geography games. Slice: cut a country's population in half with one line. Downstream: guess which sea a raindrop reaches.";
+  "Two free daily geography games. Slice: split a country's population in half with one line. Downstream: guess which sea a raindrop reaches.";
 
 // Where the site lives (the Worker's custom domain, wrangler.jsonc). Link previews, the
 // sitemap and canonical links all need full addresses, so they're built from this.

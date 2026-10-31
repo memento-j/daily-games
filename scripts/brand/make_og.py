@@ -209,7 +209,7 @@ def site_card() -> str:
       <div style="position:absolute;left:615px;top:62px;width:540px">
         <div class="brand display">{peeker(60)}<span style="font-size:42px">Pondo<span class="dot">.</span></span></div>
         <h1 class="display" style="font-size:72px;line-height:.98;margin-top:38px">Free daily geography puzzles<span class="dot">.</span></h1>
-        <p style="{games};margin-top:30px"><b class="display" style="color:{INK};font-size:28px;letter-spacing:-0.02em">Slice.</b> Cut a country’s population in half with one line.</p>
+        <p style="{games};margin-top:30px"><b class="display" style="color:{INK};font-size:28px;letter-spacing:-0.02em">Slice.</b> Split a country’s population in half with one line.</p>
         <p style="{games}"><b class="display" style="color:{INK};font-size:28px;letter-spacing:-0.02em">Downstream.</b> Guess which sea a raindrop reaches.</p>
       </div>
     """, LAND)
@@ -238,7 +238,7 @@ def slice_card() -> str:
         <div class="brand display">{peeker(48)}<span>Pondo<span class="dot">.</span></span></div>
         <h1 class="display" style="font-size:120px;line-height:1;margin-top:46px">Slice<span class="dot">.</span></h1>
         <p class="display" style="font-size:42px;line-height:1.08;letter-spacing:-0.025em;margin-top:22px">
-          Cut off half of Australia’s population with one straight line.</p>
+          Split Australia’s population in half with one straight line.</p>
         <p style="font-size:26px;color:{INK};margin-top:22px;font-weight:500;opacity:.75">A daily geography puzzle. Free.</p>
       </div>
       <!-- Where Australians live: the 1 km squares, not the piece drawn (that piece is ~5% of

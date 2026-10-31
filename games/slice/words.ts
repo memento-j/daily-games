@@ -28,9 +28,11 @@ export function measure(round: Round): string {
   return round.mode === "area" ? "land" : "population";
 }
 
-/** "Cut off a third of Egypt's population." */
+/** "Split Egypt's population in half." (a half), or "Cut off a third of Egypt's population." */
 export function instruction(round: Round): string {
-  return `Cut off ${fractionWords(round.target)} of ${possessive(round.country)} ${measure(round)}.`;
+  const amount = fractionWords(round.target);
+  if (amount === "half") return `Split ${possessive(round.country)} ${measure(round)} in half.`;
+  return `Cut off ${amount} of ${possessive(round.country)} ${measure(round)}.`;
 }
 
 /** The goal on its own, for the day's summary: "Half the land", "A third of the population". */
