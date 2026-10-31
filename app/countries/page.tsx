@@ -11,9 +11,9 @@ import { countryPages } from "./data";
 import Header from "./Header";
 
 export const metadata: Metadata = pageMetadata({
-  title: "Where do people live? Half of each country's population, mapped",
+  title: "Where do people live? Population maps by country",
   description:
-    "Half of a country's population often lives on a tiny share of its land. See where in Japan, the United States, Australia, Germany and South Korea, from 1 km population data, then try splitting them yourself.",
+    "Half of a country's population often lives in a tiny, crowded share of its land. See where in Japan, the US, Australia, Germany and South Korea.",
   path: "/countries/",
 });
 
@@ -46,7 +46,7 @@ export default function CountriesPage() {
                   <div className="px-5 pt-4 pb-5">
                     <h2 className="font-display text-[22px] leading-tight font-semibold tracking-[-0.02em] group-hover:text-coral-deep">{p.question}</h2>
                     <p className="mt-1.5 text-ink-soft">
-                      Half on just <strong className="font-semibold text-ink">{p.dense}</strong> of the land.
+                      Half in the most crowded <strong className="font-semibold text-ink">{p.dense}</strong> of the land.
                     </p>
                   </div>
                 </Link>

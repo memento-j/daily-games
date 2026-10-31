@@ -70,7 +70,7 @@ export function splitBoard(round: Round, line: Line, cell = 22): Board {
   return { crowded: clipRings(round.outline, line), other: clipRings(round.outline, flip), columns };
 }
 
-/** "2.2%" from the round's fact ("Half of Japan's population lives on just 2.2% of its
+/** "2.2%" from the round's fact ("Half of Japan's population lives in the most crowded 2.2% of its
  *  land."), the pipeline's measure on the 1 km population squares. */
 export function denseShare(round: Round): string | null {
   return round.fact.match(/([\d.]+%) of its land/)?.[1] ?? null;

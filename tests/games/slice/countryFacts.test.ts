@@ -16,7 +16,7 @@ const strip: Round = {
     [980, 50, 100],
   ],
   population: 400,
-  fact: "Half of Stripland's population lives on just 0.4% of its land.",
+  fact: "Half of Stripland's population lives in the most crowded 0.4% of its land.",
 };
 
 describe("compassOf", () => {

@@ -12,9 +12,13 @@ import type { ReactNode } from "react";
 export type Source = { label: string; url: string };
 
 export type CountryContent = {
-  /** The page's <title>, around the way people search ("where do most people in Japan live"). */
+  /** The page's <title>, around the way people search ("where do most people in Japan live").
+   *  Kept under ~60 characters so Google shows it whole; no figure in it. */
   title: string;
-  description: string;
+  /** Under ~160 characters, for the same reason. Takes the measured share ("2.2%", from the
+   *  puzzle file's fact line, always worded as "the most crowded 2.2%": it is not a piece
+   *  one cut could take), so the page can never say a different number from the game. */
+  description: (dense: string) => string;
   /** The heading over the researched section. */
   whyHeading: string;
   why: ReactNode[];
@@ -27,9 +31,9 @@ const A = ({ href, children }: { href: string; children: ReactNode }) => <a href
 
 export const CONTENT: Record<string, CountryContent> = {
   japan: {
-    title: "Where do most people in Japan live? Half on 2.2% of the land",
-    description:
-      "Half of Japan's population lives on just 2.2% of its land. See where on a map built from 1 km population data, why the plains are so crowded, and try splitting Japan in half yourself.",
+    title: "Where do most people in Japan live? Population map",
+    description: (dense) =>
+      `Half of Japan's population lives in the most crowded ${dense} of its land. See where on a 1 km population map, and try splitting Japan in half yourself.`,
     whyHeading: "Why Japan's population is so packed together",
     why: [
       <>
@@ -59,9 +63,9 @@ export const CONTENT: Record<string, CountryContent> = {
   },
 
   "united-states": {
-    title: "Where do most people in the US live? Half on 0.8% of the land",
-    description:
-      "Half of the United States' population lives on just 0.8% of its land. See where on a map built from 1 km population data, why the east carries the weight, and try splitting the US in half yourself.",
+    title: "Where do most people in the US live? Population map",
+    description: (dense) =>
+      `Half of the US population lives in the most crowded ${dense} of its land. See where on a 1 km population map, and try splitting the US in half yourself.`,
     whyHeading: "Why America's population leans east",
     why: [
       <>
@@ -81,7 +85,8 @@ export const CONTENT: Record<string, CountryContent> = {
         so, it is still in Missouri, as it has been for five censuses in a row.
       </>,
     ],
-    outlineNote: "The map shows the lower 48 states: Alaska and Hawaii are left out, as they are in the game.",
+    outlineNote:
+      "The map and the straight-line figures use the lower 48 states: Alaska and Hawaii are left out, as they are in the game. The share of the land that holds half the people counts the whole country, Alaska and Hawaii included.",
     sources: [
       { label: "Carolina Demography (UNC): half of Americans live in 145 counties (Census Bureau 2013 estimates)", url: "https://carolinademography.cpc.unc.edu/2014/12/15/half-of-north-carolinians-live-in-these-13-counties/" },
       { label: "U.S. Census Bureau: 2020 center of population, Hartville, Missouri", url: "https://www.census.gov/newsroom/press-releases/2021/center-of-population-hartville-missouri.html" },
@@ -90,9 +95,9 @@ export const CONTENT: Record<string, CountryContent> = {
   },
 
   australia: {
-    title: "Where do most people in Australia live? Half on 0.1% of the land",
-    description:
-      "Half of Australia's population lives on just 0.1% of its land. See where on a map built from 1 km population data, why it all crowds into one corner, and try splitting Australia in half yourself.",
+    title: "Where do most people in Australia live? Population map",
+    description: (dense) =>
+      `Half of Australia's population lives in the most crowded ${dense} of its land. See where on a 1 km population map, and try splitting it in half yourself.`,
     whyHeading: "Why Australia crowds into one corner",
     why: [
       <>
@@ -115,9 +120,9 @@ export const CONTENT: Record<string, CountryContent> = {
   },
 
   germany: {
-    title: "Where do most people in Germany live? Half on 3.2% of the land",
-    description:
-      "Half of Germany's population lives on 3.2% of its land, yet it's one of the most evenly spread big countries. See the map built from 1 km population data, and try splitting Germany in half yourself.",
+    title: "Where do most people in Germany live? Population map",
+    description: (dense) =>
+      `Half of Germany's population lives in the most crowded ${dense} of its land, yet it's one of the most evenly spread big countries. Try splitting it yourself.`,
     whyHeading: "Why Germany is spread so evenly",
     why: [
       <>
@@ -143,9 +148,9 @@ export const CONTENT: Record<string, CountryContent> = {
   },
 
   "south-korea": {
-    title: "Where do most people in South Korea live? Half on 1.4% of the land",
-    description:
-      "Half of South Korea's population lives on just 1.4% of its land, most of it around Seoul. See where on a map built from 1 km population data, and try splitting South Korea in half yourself.",
+    title: "Where do most people in South Korea live? Population map",
+    description: (dense) =>
+      `Half of South Korea's population lives in the most crowded ${dense} of its land, mostly around Seoul. See the map and try splitting it in half yourself.`,
     whyHeading: "Why half of South Korea lives around Seoul",
     why: [
       <>

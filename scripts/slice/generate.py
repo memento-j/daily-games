@@ -8,6 +8,7 @@ Usage (from the repo root):
     python scripts/slice/generate.py country NAME [NAME..]  # any country, with a preview
     python scripts/slice/generate.py generate [--days N]    # add the next 10 daily puzzles
     python scripts/slice/generate.py repopulate             # turn land rounds in existing files into population rounds
+    python scripts/slice/generate.py refact                 # re-measure the fact line of every existing round
 """
 
 # How it works, start to finish
@@ -61,11 +62,11 @@ import shapely
 from shapely.geometry import MultiPolygon
 
 from config import (
-    BOX, CONTESTED, COUNTRY_REUSE_DAYS, WELL_KNOWN_REUSE_DAYS, PRACTICE_FILE, PRACTICE_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
+    BOX, CONTESTED, POPULATION_CRS, COUNTRY_REUSE_DAYS, WELL_KNOWN_REUSE_DAYS, PRACTICE_FILE, PRACTICE_REUSE_DAYS, DAY_ROUNDS, DEFAULT_DAYS, DISPLAY_NAMES, OUT_DIR, OUTLINE_DECIMALS,
     OUTLINE_SIMPLIFY, POOL_MIN_KM2, POOL_MIN_PEOPLE, POPULATION_TIF, POPULATION_TOLERANCE, PUZZLE_DIR,
     DAY_TIERS, EASY_DAYS, RECOGNISABLE, VALIDATION_COUNTRIES, WELL_KNOWN,
 )
-from countries import find, load_countries, mainland, parts
+from countries import find, load_countries, mainland, parts, project
 from cuts import people_share, perfect_cut, surprise
 from population import aggregate, cells, people
 
@@ -80,6 +81,7 @@ class Country:
     cells: np.ndarray  # the raw 1 km cells, box units (for checking the points)
     population: float
     land_km2: float
+    dense_pct: float  # the whole country's land that holds half its people, % (see dense_share)
     grid_km: float  # the smallest quadtree square
     dropped: int
     dropped_area: float
@@ -114,6 +116,7 @@ def build(countries, src, name: str) -> Country:
         cells=np.column_stack([to_box(c[:, :2]), c[:, 2]]),
         population=float(c[:, 2].sum()),
         land_km2=m.projected.area / 1e6,
+        dense_pct=dense_share(src, row.geometry),
         grid_km=grid / 1000,
         dropped=m.dropped,
         dropped_area=m.dropped_area,
@@ -209,15 +212,30 @@ def possessive(name: str) -> str:
     return f"{name}'" if name.endswith("s") else f"{name}'s"
 
 
-def fact(country: Country) -> str:
-    """'Half of Egypt's population lives on just 1.2% of its land.' From the 1 km cells:
-    the most crowded cells, added up until they hold half the people (each cell is 1 km2)."""
-    w = np.sort(country.cells[:, 2])[::-1]
+def dense_share(src: rasterio.DatasetReader, lonlat) -> float:
+    """How much of a country's land holds half its people, in %: the most crowded 1 km
+    cells (each 1 km2: GHSL's grid is equal-area), added up until they hold half the
+    people, over the land's area. Measured on the WHOLE country, every island and
+    territory (Alaska and Hawaii too), not the board's mainland: the sentence says "its
+    land". Checked against a separate measurement on 2026-10-31."""
+    c = np.unique(cells(src, lonlat, POPULATION_CRS), axis=0)  # a cell two parts touch counts once
+    w = np.sort(c[:, 2])[::-1]
     cells_for_half = int(np.searchsorted(np.cumsum(w), w.sum() / 2)) + 1
-    pct = 100 * cells_for_half / country.land_km2
-    shown = f"{pct:.1f}" if pct < 10 else f"{pct:.0f}"
-    amount = f"just {shown}%" if shown != "0.0" else "less than 0.1%"
-    return f"Half of {possessive(display_name(country))} population lives on {amount} of its land."
+    return 100 * cells_for_half / (project(lonlat, "EPSG:4326", POPULATION_CRS).area / 1e6)
+
+
+def fact_text(name: str, pct: float) -> str:
+    """'Half of Egypt's population lives in the most crowded 0.21% of its land.' "The
+    most crowded": players read "lives on 0.21% of its land" as a piece one straight cut
+    could take, which no line can (developer's call, 2026-10-31). Two significant figures,
+    so a small share isn't rounded up to double itself (0.051% read "0.1%"); under 0.01%
+    it says 0.01%, still true, as the most crowded 0.01% holds more than half."""
+    amount = f"{max(pct, 0.01):.2g}%" if pct < 10 else f"{pct:.0f}%"
+    return f"Half of {possessive(name)} population lives in the most crowded {amount} of its land."
+
+
+def fact(country: Country) -> str:
+    return fact_text(display_name(country), country.dense_pct)
 
 
 def round_json(country: Country, mode: str, target: float) -> dict:
@@ -346,6 +364,27 @@ def repopulate() -> None:
                       flush=True)
 
 
+def refact() -> None:
+    """Re-measures the fact line of every round in the existing puzzle files (dense_share);
+    everything else in the files is untouched."""
+    countries = load_countries()
+    measured: dict[str, float] = {}
+    with rasterio.open(POPULATION_TIF) as src:
+        for path in sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json")):
+            puzzle = json.loads(path.read_text(encoding="utf-8"))
+            changed = []
+            for r in puzzle["rounds"]:
+                if r["id"] not in measured:
+                    measured[r["id"]] = dense_share(src, find(countries, r["id"]).geometry)
+                new = fact_text(r["country"], measured[r["id"]])
+                if new != r["fact"]:
+                    changed.append(f"{r['country']}: {re.search(r'on (.*) of', r['fact'])[1]} -> {re.search(r'on (.*) of', new)[1]}")
+                    r["fact"] = new
+            if changed:
+                path.write_text(json.dumps(puzzle, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+            print(f"#{puzzle['puzzle']:04d}  " + ("; ".join(changed) or "unchanged"), flush=True)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = parser.add_subparsers(dest="cmd", required=True)
@@ -356,6 +395,7 @@ def main() -> None:
     g.add_argument("--days", type=int, default=DEFAULT_DAYS)
     g.add_argument("--seed", type=int, default=None, help="default: the last puzzle number (repeatable runs)")
     sub.add_parser("repopulate", help="turn the land rounds of existing puzzles into half-the-population rounds")
+    sub.add_parser("refact", help="re-measure the fact line of every round in the existing puzzles")
     args = parser.parse_args()
     if args.cmd == "validate":
         run(list(VALIDATION_COUNTRIES), VALIDATION_COUNTRIES)
@@ -363,6 +403,8 @@ def main() -> None:
         generate(args.days, args.seed)
     elif args.cmd == "repopulate":
         repopulate()
+    elif args.cmd == "refact":
+        refact()
     else:
         run(args.names, {})
 

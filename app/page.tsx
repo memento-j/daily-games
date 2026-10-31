@@ -15,9 +15,10 @@ import { HomePeeker, TodayProgress } from "./HomeToday";
 // all of this text is in the static HTML (good for search and, later, AdSense);
 // only today's date is filled in by the browser.
 
-// "Daily geography puzzles" is what people search for; the brand alone isn't yet.
+// "Daily geography puzzles" is what people search for; the brand alone isn't yet. Under
+// ~60 characters, so Google shows it whole, and it names both games.
 export const metadata: Metadata = pageMetadata({
-  title: `${SITE_NAME}: daily puzzles, free`,
+  title: `${SITE_NAME}: free daily geography puzzles · Slice & Downstream`,
   absoluteTitle: true,
   description: SITE_DESCRIPTION,
   path: "/",

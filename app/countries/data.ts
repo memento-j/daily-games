@@ -18,7 +18,7 @@ export type CountryPage = {
   /** As a sentence says it: "Japan", "the United States". */
   name: string;
   question: string; // "Where does half of Japan's population live?"
-  answer: string; // "Half of Japan's population lives on just 2.2% of its land."
+  answer: string; // "Half of Japan's population lives in the most crowded 2.2% of its land."
   dense: string; // "2.2%"
   cut: HalfCut; // the most lopsided straight half-cut
   landHalfPeople: number; // people on the crowded side when the land is halved instead

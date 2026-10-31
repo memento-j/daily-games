@@ -98,12 +98,36 @@ export function countryJsonLd({ headline, description, path, image, name }: { he
 }
 
 /** Structured data for the homepage: the site (its name, for the name Google shows
- *  above results) and who makes it (with the logo). */
+ *  above results), the page with its preferred picture (a square one, /og-square.png:
+ *  Google's result thumbnail is square, and cropping the wide link preview left only its
+ *  slogan; scripts/brand/make_og.py), and who makes it (with the logo). */
 export function siteJsonLd(description: string) {
   return {
     "@context": "https://schema.org",
     "@graph": [
-      { "@type": "WebSite", "@id": absolute("/#website"), name: SITE_NAME, url: absolute("/"), description, publisher: { "@id": absolute("/#organization") } },
+      {
+        "@type": "WebSite",
+        "@id": absolute("/#website"),
+        name: SITE_NAME,
+        alternateName: [`${SITE_NAME} Games`, "pondo.games"],
+        url: absolute("/"),
+        description,
+        publisher: { "@id": absolute("/#organization") },
+      },
+      {
+        "@type": "WebPage",
+        "@id": absolute("/#webpage"),
+        url: absolute("/"),
+        name: `${SITE_NAME}: free daily geography puzzles`,
+        description,
+        isPartOf: { "@id": absolute("/#website") },
+        primaryImageOfPage: { "@type": "ImageObject", url: absolute("/og-square.png"), width: 1200, height: 1200 },
+        image: [absolute("/og-square.png"), absolute("/opengraph-image.png")],
+        hasPart: [
+          { "@type": "VideoGame", name: "Slice", url: absolute("/slice/") },
+          { "@type": "VideoGame", name: "Downstream", url: absolute("/downstream/") },
+        ],
+      },
       { "@type": "Organization", "@id": absolute("/#organization"), name: SITE_NAME, url: absolute("/"), logo: absolute("/icon-512.png") },
     ],
   };

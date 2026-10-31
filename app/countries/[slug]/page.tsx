@@ -32,7 +32,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (!page) return {};
   return pageMetadata({
     title: page.content.title,
-    description: page.content.description,
+    description: page.content.description(page.dense),
     path: page.path,
     absoluteTitle: true,
     image: { url: page.image, width: 1200, height: 630, alt: `${page.answer} A map of ${page.name} split in two by one straight line.` },
@@ -56,7 +56,7 @@ export default async function CountryPage({ params }: Props) {
 
   return (
     <div className="font-sans min-h-svh bg-land text-ink">
-      <JsonLd data={countryJsonLd({ headline: page.question, description: content.description, path: page.path, image: page.image, name: country.name })} />
+      <JsonLd data={countryJsonLd({ headline: page.question, description: content.description(page.dense), path: page.path, image: page.image, name: country.name })} />
       <div className="mx-auto max-w-[760px] px-5 pt-6 sm:px-8 sm:pt-8">
         <Header crumb={country.name} />
 
@@ -66,10 +66,11 @@ export default async function CountryPage({ params }: Props) {
           </h1>
           {/* The answer, straight away: what someone searching wants first. */}
           <p className="font-display mt-5 text-[clamp(21px,3.4vw,27px)] leading-snug font-semibold tracking-[-0.015em] text-pretty">
-            Half of {possessive(name)} population lives on just <span className="slice-mark">{page.dense}</span> of its land.
+            Half of {possessive(name)} population lives in the most crowded <span className="slice-mark">{page.dense}</span> of its land.
           </p>
           <p className="mt-2 text-sm text-ink-faint [&_a]:underline [&_a]:underline-offset-2 [&_a:hover]:text-ink">
-            Measured from the {DATA_SOURCE}. <a href="#how-we-measured" className="underline underline-offset-2 hover:text-ink">How we measured this</a>
+            That&apos;s its most crowded 1 km squares, wherever they are. They&apos;re spread across its cities, so no single straight line could cut
+            them all off: the map below shows the best one line can do. Measured from the {DATA_SOURCE}. <a href="#how-we-measured" className="underline underline-offset-2 hover:text-ink">How we measured this</a>
           </p>
         </main>
       </div>
@@ -111,7 +112,8 @@ export default async function CountryPage({ params }: Props) {
           <h2>The straight-line test</h2>
           <p>
             Draw one straight line across {name} so that exactly half the population is on each side. Of all the lines that do it, the most
-            lopsided puts half of everyone on the <strong>{cut.side} side</strong>, on just <strong>{pct(cut.land)} of the land</strong>.
+            lopsided puts half of everyone on the <strong>{cut.side} side</strong>, on just <strong>{pct(cut.land)} of the land</strong>. That&apos;s far
+            more than {page.dense}: a straight line can&apos;t pick out only the crowded places, so it takes the emptier land between them too.
           </p>
           <p>
             Now cut the <em>land</em> in half instead, at the same angle. That looks like the fair cut, but the {cut.side} half ends up with{" "}
@@ -166,8 +168,9 @@ export default async function CountryPage({ params }: Props) {
             square. We draw the country on an equal-area map, so every square kilometre counts the same.
           </p>
           <p>
-            &ldquo;{page.dense} of its land&rdquo; counts the most crowded 1 km squares first, until they hold half the people. It measures how tightly
-            people pack, which is why it comes out much smaller than maps that colour whole cities or counties. The straight-line figures test a
+            &ldquo;The most crowded {page.dense} of its land&rdquo; counts the most crowded 1 km squares first, until they hold half the people, across the whole
+            country. It measures how tightly people pack, which is why it comes out much smaller than maps that colour whole cities or counties; with
+            bigger squares it would come out bigger too. It is the same figure the game shows at the end of a round. The straight-line figures test a
             cut at every angle, one degree apart. {content.outlineNote}
           </p>
           <h3>Sources</h3>
@@ -195,7 +198,7 @@ export default async function CountryPage({ params }: Props) {
               <li key={p.country.slug}>
                 <Link href={p.path} className="group block rounded-2xl bg-card px-4 py-3 ring-1 ring-line transition-shadow hover:ring-ink/25">
                   <span className="block font-semibold group-hover:text-coral-deep">{p.question}</span>
-                  <span className="block text-sm text-ink-soft">Half on just {p.dense} of the land.</span>
+                  <span className="block text-sm text-ink-soft">Half in the most crowded {p.dense} of the land.</span>
                 </Link>
               </li>
             ))}

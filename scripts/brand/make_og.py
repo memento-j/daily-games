@@ -5,6 +5,7 @@ Writes, as Next.js file-convention images (app/**/opengraph-image.png + .alt.txt
     app/opengraph-image.png             the site: the Peeker, Pondo, both games
     app/slice/opengraph-image.png       Slice: Australia cut in half by population
     app/downstream/opengraph-image.png  Downstream: an Andes raindrop that reaches the Atlantic
+    public/og-square.png                the homepage's square picture, for Google's thumbnail
 
     python scripts/brand/make_og.py        # redraw the cards (after changing words or looks)
     python scripts/brand/make_og.py data   # re-measure the drawings from the datasets first
@@ -52,10 +53,6 @@ def peeker(size: int) -> str:
       <rect x="1" y="33.5" width="46" height="3.6" rx="1.8" fill="{INK}"/></svg>"""
 
 
-def _area(ring: list) -> float:
-    return abs(sum(x1 * y2 - x2 * y1 for (x1, y1), (x2, y2) in zip(ring, ring[1:] + ring[:1]))) / 2
-
-
 def slice_board(width: int, height: int, labels: bool = True) -> str:
     """Australia as the game's paper slab on the cutting mat, split along the perfect
     population half cut: the counted south-east corner slid off and tinted coral, the
@@ -96,14 +93,12 @@ def slice_board(width: int, height: int, labels: bool = True) -> str:
         cols += (f'<rect x="{px - 6:.1f}" y="{py - hh:.1f}" width="12" height="{hh:.1f}" rx="2.5" fill="{fill}"/>'
                  f'<ellipse cx="{px:.1f}" cy="{py - hh:.1f}" rx="6" ry="3" fill="{cap}"/>')
 
-    land = sum(_area(r) for r in a["counted"]) / sum(_area(r) for r in a["counted"] + a["other"])
     tags = ""
     if labels:
         tags = f"""
         <g font-family="Hanken Grotesk" font-weight="600">
-          <rect x="672" y="636" width="300" height="78" rx="39" fill="{CORAL}"/>
-          <text x="822" y="670" text-anchor="middle" font-size="27" fill="#fff">{a['share'] * 100:.0f}% of the population</text>
-          <text x="822" y="700" text-anchor="middle" font-size="22" fill="#fff" opacity=".9">on {land * 100:.0f}% of the land</text>
+          <rect x="672" y="644" width="300" height="56" rx="28" fill="{CORAL}"/>
+          <text x="822" y="681" text-anchor="middle" font-size="27" fill="#fff">{a['share'] * 100:.0f}% of the population</text>
           <rect x="120" y="215" width="250" height="56" rx="28" fill="{CARD}"/>
           <text x="245" y="251" text-anchor="middle" font-size="25" fill="{INK_SOFT}">the other {100 - a['share'] * 100:.0f}%</text>
         </g>"""
@@ -167,11 +162,11 @@ def downstream_map(width: int, height: int, labels: bool = True) -> str:
 # Cards (HTML)
 # --------------------------------------------------------------------------- #
 
-def page(body: str, background: str) -> str:
+def page(body: str, background: str, width: int = W, height: int = H) -> str:
     return f"""<!doctype html><html><head><meta charset="utf-8">
     <link rel="stylesheet" href="{FONTS}"><style>
       * {{ margin: 0; box-sizing: border-box; }}
-      body {{ width: {W}px; height: {H}px; overflow: hidden; background: {background}; color: {INK};
+      body {{ width: {width}px; height: {height}px; overflow: hidden; background: {background}; color: {INK};
               font-family: "Hanken Grotesk", sans-serif; position: relative; }}
       .display {{ font-family: "Bricolage Grotesque", sans-serif; font-weight: 700; letter-spacing: -0.04em; }}
       .dot {{ color: {CORAL}; }}
@@ -183,21 +178,56 @@ def page(body: str, background: str) -> str:
     </style></head><body>{body}</body></html>"""
 
 
+TILE = "position:absolute;border-radius:30px;overflow:hidden;box-shadow:0 24px 50px -18px rgb(18 26 43/.4)"
+
+
+def tag(size: int, edge: str = "bottom") -> str:
+    """A game's name on its tile, in a white pill (Downstream's sits at the top, clear of
+    the raindrop's start)."""
+    return (f"position:absolute;left:{size // 2}px;{edge}:{size // 2 - 2}px;font-size:{size}px;background:{CARD};"
+            f"border-radius:999px;padding:{size // 8}px {size // 2}px {size // 5}px")
+
+
+def game_tiles(left: int, top: int, w: int, h: int, gap: int, label: int) -> str:
+    """Both games, one tile each, stacked: Slice's board, then Downstream's map."""
+    return f"""
+      <div style="{TILE};left:{left}px;top:{top}px;width:{w}px;height:{h}px;background:{MAT}"><div class="grid"></div>
+        <div style="position:absolute;inset:0">{slice_board(w, h, labels=False)}</div>
+        <div class="display" style="{tag(label)}">Slice<span class="dot">.</span></div></div>
+      <div style="{TILE};left:{left}px;top:{top + h + gap}px;width:{w}px;height:{h}px">{downstream_map(w, h, labels=False)}
+        <div class="display" style="{tag(label, 'top')}">Downstream<span class="dot">.</span></div></div>"""
+
+
 def site_card() -> str:
-    tile = "position:absolute;width:330px;height:236px;border-radius:30px;overflow:hidden;box-shadow:0 24px 50px -18px rgb(18 26 43/.4)"
-    tag = f"position:absolute;left:16px;bottom:14px;font-size:30px;background:{CARD};border-radius:999px;padding:4px 16px 6px"
+    """The homepage's link preview. The games sit on the left: Google crops this to a
+    square for its result thumbnail and kept the left side, which used to be only the
+    slogan (2026-10-31). It says plainly what the site is, for people who've never heard
+    of it."""
+    games = f"color:{INK_SOFT};font-size:25px;line-height:1.3;margin-top:14px;font-weight:500"
     return page(f"""
-      <div style="position:absolute;left:72px;top:64px;width:640px">
-        <div class="brand display">{peeker(64)}<span style="font-size:44px">Pondo<span class="dot">.</span></span></div>
-        <h1 class="display" style="font-size:86px;line-height:.95;margin-top:44px">Your daily dose of “wait, really<span class="dot">?</span>”</h1>
-        <p style="font-size:30px;line-height:1.3;color:{INK_SOFT};margin-top:28px;font-weight:500">Small daily puzzles. Free, no sign-up.</p>
+      {game_tiles(40, 40, 520, 265, 20, 34)}
+      <div style="position:absolute;left:615px;top:62px;width:540px">
+        <div class="brand display">{peeker(60)}<span style="font-size:42px">Pondo<span class="dot">.</span></span></div>
+        <h1 class="display" style="font-size:72px;line-height:.98;margin-top:38px">Free daily geography puzzles<span class="dot">.</span></h1>
+        <p style="{games};margin-top:30px"><b class="display" style="color:{INK};font-size:28px;letter-spacing:-0.02em">Slice.</b> Cut a country’s population in half with one line.</p>
+        <p style="{games}"><b class="display" style="color:{INK};font-size:28px;letter-spacing:-0.02em">Downstream.</b> Guess which sea a raindrop reaches.</p>
       </div>
-      <div style="{tile};left:800px;top:52px;background:{MAT}"><div class="grid"></div>
-        <div style="position:absolute;inset:0">{slice_board(330, 236, labels=False)}</div>
-        <div class="display" style="{tag}">Slice<span class="dot">.</span></div></div>
-      <div style="{tile};left:800px;top:330px">{downstream_map(330, 236, labels=False)}
-        <div class="display" style="{tag}">Downstream<span class="dot">.</span></div></div>
     """, LAND)
+
+
+SQUARE = 1200
+
+
+def square_card() -> str:
+    """The homepage's square picture, for Google's result thumbnail (structured data,
+    lib/seo.ts siteJsonLd). Shown tiny, so it's mostly the two games, big."""
+    return page(f"""
+      <div style="position:absolute;left:70px;top:66px;width:1060px">
+        <div class="brand display">{peeker(88)}<span style="font-size:64px">Pondo<span class="dot">.</span></span></div>
+        <h1 class="display" style="font-size:84px;line-height:1;margin-top:30px">Free daily geography puzzles<span class="dot">.</span></h1>
+      </div>
+      {game_tiles(70, 310, 1060, 395, 30, 48)}
+    """, LAND, SQUARE, SQUARE)
 
 
 def slice_card() -> str:
@@ -209,7 +239,13 @@ def slice_card() -> str:
         <h1 class="display" style="font-size:120px;line-height:1;margin-top:46px">Slice<span class="dot">.</span></h1>
         <p class="display" style="font-size:42px;line-height:1.08;letter-spacing:-0.025em;margin-top:22px">
           Cut off half of Australia’s population with one straight line.</p>
-        <p style="font-size:26px;color:{INK};margin-top:26px;font-weight:500;opacity:.75">A daily geography puzzle. Free.</p>
+        <p style="font-size:26px;color:{INK};margin-top:22px;font-weight:500;opacity:.75">A daily geography puzzle. Free.</p>
+      </div>
+      <!-- Where Australians live: the 1 km squares, not the piece drawn (that piece is ~5% of
+           the land, which is why its label gives no land share). 0.051% measured from GHSL. -->
+      <div style="position:absolute;left:68px;bottom:34px;width:470px">
+        <p style="font-size:22px;line-height:1.3;color:{CORAL_DEEP};font-weight:600">Half of Australians live in the most crowded 0.1% of the land. Where would you cut?</p>
+        <p style="font-size:15px;color:{INK};opacity:.6;margin-top:4px;font-weight:500">Population: GHSL 2025, 1 km grid (EU JRC)</p>
       </div>
     """, MAT)
 
@@ -230,7 +266,7 @@ def downstream_card() -> str:
 
 
 CARDS = {
-    "app": (site_card, "Pondo: small daily puzzles. Slice and Downstream, new every day."),
+    "app": (site_card, "Pondo: free daily geography puzzles. Slice, a country cut in half by population, and Downstream, a raindrop's route to the sea."),
     "app/slice": (slice_card, "Slice: Australia cut in two along one straight line, half its population on the small south-east piece."),
     "app/downstream": (downstream_card, "Downstream: a raindrop's route from the Andes down the Amazon to the Atlantic Ocean."),
 }
@@ -252,6 +288,12 @@ def main() -> None:
             out.write_bytes(tab.screenshot(clip={"x": 0, "y": 0, "width": W, "height": H}))
             (ROOT / folder / "opengraph-image.alt.txt").write_text(alt, encoding="utf-8")
             print(f"wrote {out.relative_to(ROOT)} ({out.stat().st_size // 1024} KB)")
+        tab.set_viewport_size({"width": SQUARE, "height": SQUARE})
+        tab.set_content(square_card(), wait_until="networkidle")
+        tab.evaluate("document.fonts.ready")
+        out = ROOT / "public" / "og-square.png"
+        out.write_bytes(tab.screenshot(clip={"x": 0, "y": 0, "width": SQUARE, "height": SQUARE}))
+        print(f"wrote {out.relative_to(ROOT)} ({out.stat().st_size // 1024} KB)")
         browser.close()
 
 
