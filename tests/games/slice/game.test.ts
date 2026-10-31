@@ -24,7 +24,7 @@ const round: Round = {
 };
 const puzzle: Puzzle = { puzzle: 1, rounds: [round, round] };
 const perfect = lineAt(0, 50); // 50%: scores 100
-const near = lineAt(0, 53); // 47%: 3 points off, scores 70
+const near = lineAt(0, 53); // 47%: 3 points off, scores 71
 const far = lineAt(0, 70); // 30%: 20 points off, scores 0
 const misses = lineAt(0, 500);
 
@@ -39,7 +39,7 @@ describe("two tries per round", () => {
     let s = step(initialState, { type: "cut", line: near }, puzzle);
     expect(phase(s, puzzle)).toBe("result");
     expect(triesLeft(s)).toBe(1);
-    expect(s.cuts[0].score).toBe(74);
+    expect(s.cuts[0].score).toBe(71);
     s = step(s, { type: "keep" }, puzzle);
     expect(phase(s, puzzle)).toBe("settled");
     s = step(s, { type: "next" }, puzzle);
@@ -52,8 +52,8 @@ describe("two tries per round", () => {
     expect(phase(s, puzzle)).toBe("cutting");
     s = step(s, { type: "cut", line: far }, puzzle);
     expect(phase(s, puzzle)).toBe("settled");
-    expect(s.last!.score).toBe(14); // the board shows the latest cut...
-    expect(s.cuts[0].score).toBe(74); // ...but the better one counts
+    expect(s.last!.score).toBe(10); // the board shows the latest cut...
+    expect(s.cuts[0].score).toBe(71); // ...but the better one counts
     expect(step(s, { type: "again" }, puzzle)).toBe(s); // no third try
   });
 
@@ -65,7 +65,7 @@ describe("two tries per round", () => {
   it("plays through to the end", () => {
     const s = run(initialState, { type: "cut", line: perfect }, { type: "keep" }, { type: "next" }, { type: "cut", line: far }, { type: "keep" }, { type: "next" });
     expect(phase(s, puzzle)).toBe("finished");
-    expect(s.cuts.map((c) => c.score)).toEqual([100, 14]);
+    expect(s.cuts.map((c) => c.score)).toEqual([100, 10]);
   });
 
   it("ignores a line that misses the country", () => {
