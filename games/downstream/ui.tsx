@@ -365,7 +365,7 @@ export function DaySummary({
       </div>
       {/* One more of this game first, then the other game. (Hidden when both have nothing to offer.) */}
       <div className="flex flex-col gap-2.5 empty:hidden">
-        {!preview && <YesterdayLink path="/downstream/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's raindrops are still looking for the sea." />}
+        {!preview && <YesterdayLink path="/downstream/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's raindrops are still looking for the sea." maxPoints={maxPoints(5)} />}
         <TrySlice />
       </div>
 

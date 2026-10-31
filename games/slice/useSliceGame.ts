@@ -15,7 +15,7 @@ import { clearInProgress, getHistory, getInProgress, getResult, saveInProgress, 
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase, type SavedCut } from "./game";
 import { practiceCountry, practicePuzzle, type PracticeCountry } from "./practice";
 import { maxScore, totalScore } from "./scoring";
-import { puzzleToPlay, storageKeyFor } from "./schedule";
+import { GAME_KEY, puzzleToPlay, storageKeyFor } from "./schedule";
 import type { Puzzle } from "./types";
 
 // `points` feeds the shared streaks and stats (lib/stats.ts averages it).
@@ -91,8 +91,10 @@ export function useSliceGame(): SliceGameState {
         setLoad({ status: "missing" });
         return;
       }
-      // Already finished today? Show the summary. Half-way through? Resume.
-      const finished = getResult<SavedResult>(storageKey, number);
+      // Already finished? Show the summary. Half-way through? Resume. Yesterday's puzzle
+      // counts as finished if it was played on its own day too (the real key), so it
+      // shows that result rather than starting a fresh catch-up game.
+      const finished = getResult<SavedResult>(storageKey, number) ?? (preview ? getResult<SavedResult>(GAME_KEY, number) : null);
       const saved = getInProgress<unknown>(storageKey, number);
       if (finished) setGame({ ...initialState, round: puzzle.rounds.length, cuts: finished.cuts });
       else if (isValidState(saved, puzzle)) setGame(saved);

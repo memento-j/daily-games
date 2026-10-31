@@ -646,3 +646,63 @@ button:not(:disabled),
     linear-gradient(rgb(255 255 255 / 0.05) 1.5px, transparent 1.5px),
     linear-gradient(90deg, rgb(255 255 255 / 0.05) 1.5px, transparent 1.5px);
 }
+
+/* The homepage's Peeker (app/HomeToday.tsx). It glances down at whichever game card the
+   pointer is over (the Downstream card sits lower, so a touch further down); pure CSS,
+   the page knows the hovered card through :has. Once both games are done today it hops
+   once and a few dots burst around it. Reduced motion: no hop, no burst, no glance. */
+.home-pupils {
+  transition: translate 320ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+:root:has(.home-card-slice:hover) .home-pupils {
+  translate: 0.9px 1.8px;
+}
+:root:has(.home-card-downstream:hover) .home-pupils {
+  translate: 0.5px 2.4px;
+}
+.home-peeker.is-happy .home-peeker-body {
+  animation: home-hop 700ms cubic-bezier(0.22, 1, 0.36, 1) 150ms both;
+}
+@keyframes home-hop {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  35% {
+    translate: 0 -5px;
+  }
+  65% {
+    translate: 0 0.6px;
+  }
+}
+.home-burst {
+  opacity: 0;
+  animation: home-burst 800ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes home-burst {
+  0% {
+    opacity: 1;
+    translate: -50% -50%;
+    scale: 0.4;
+  }
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    translate: calc(-50% + var(--to-x)) calc(-50% + var(--to-y));
+    scale: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .home-pupils,
+  .home-peeker.is-happy .home-peeker-body,
+  .home-burst {
+    animation: none;
+    transition: none;
+    translate: none;
+  }
+  .home-burst {
+    display: none;
+  }
+}

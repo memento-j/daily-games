@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import JsonLd from "@/components/JsonLd";
-import { PeekerMark } from "@/components/Peeker";
 import { pageMetadata, siteJsonLd } from "@/lib/seo";
 import { SITE_DESCRIPTION, SITE_NAME } from "@/lib/site";
 import DownstreamStatus from "./DownstreamStatus";
@@ -10,6 +9,7 @@ import { DownstreamYesterday, SliceYesterday } from "./HomeYesterday";
 import SiteFooter from "@/components/SiteFooter";
 import ThemeToggle from "@/components/ThemeToggle";
 import TodayDate from "./TodayDate";
+import { HomePeeker, TodayProgress } from "./HomeToday";
 
 // The homepage: a short list of the site's daily games. A Server Component, so
 // all of this text is in the static HTML (good for search and, later, AdSense);
@@ -30,7 +30,7 @@ export default function Home() {
       <div className="mx-auto flex w-full max-w-[760px] flex-1 flex-col px-5 pt-6 pb-10 sm:px-8 sm:pt-8 lg:pb-7">
         <header className="flex items-center justify-between">
           <span className="font-display flex items-center gap-2 text-lg font-semibold tracking-[-0.02em]">
-            <PeekerMark className="size-8" />
+            <HomePeeker />
             <span>
               {SITE_NAME}
               <span className="text-coral">.</span>
@@ -54,14 +54,17 @@ export default function Home() {
         </section>
 
         <section className="mt-10" aria-labelledby="games">
-          <h2 id="games" className="font-display text-[22px] font-semibold tracking-[-0.02em]">
-            Today&apos;s puzzles
-          </h2>
+          <div className="flex items-center justify-between gap-3">
+            <h2 id="games" className="font-display text-[22px] font-semibold tracking-[-0.02em]">
+              Today&apos;s puzzles
+            </h2>
+            <TodayProgress />
+          </div>
           <ul className="mt-4 grid grid-cols-1 gap-3">
             <li>
               <Link
                 href="/slice/"
-                className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
+                className="home-card home-card-slice group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
               >
                 <span>
                   <span className="font-display block text-[34px] leading-none font-semibold tracking-[-0.035em]">
@@ -81,7 +84,7 @@ export default function Home() {
             <li>
               <Link
                 href="/downstream/"
-                className="group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
+                className="home-card home-card-downstream group grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-4 sm:gap-5 rounded-[28px] bg-card p-5 shadow-card transition-all duration-175 ease-out hover:-translate-y-0.5 hover:shadow-[0_24px_60px_-20px_rgb(18_26_43/0.32),0_3px_10px_-4px_rgb(18_26_43/0.12)] sm:p-7"
               >
                 <span>
                   <span className="font-display block text-[34px] leading-none font-semibold tracking-[-0.035em]">

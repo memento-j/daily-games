@@ -469,7 +469,7 @@ function Summary({
         caption="How close you cut, never the countries."
       />
       {/* One more of this game first, then the other game. */}
-      {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's countries are still waiting to be split." />}
+      {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's countries are still waiting to be split." maxPoints={maxScore(4)} />}
       <TryDownstream />
       <PracticeLinks />
 
