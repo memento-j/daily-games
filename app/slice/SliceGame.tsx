@@ -43,11 +43,12 @@ import { capitalise, fractionWords, goal, instruction, measure, perfectLineText,
 const BAND_WORDS = ["Spot on", "Pretty close", "Not bad", "Way off"];
 const LABEL = "pointer-events-none absolute top-0 left-0 rounded-full bg-card/90 px-3 py-1 text-[17px] font-bold tabular-nums shadow-card";
 // Every button on the board's card: one height, shape and type size, in every phase.
-const BUTTON = "h-12 rounded-full px-4 text-[16px] font-semibold";
-// A city's name on the settled board: quieter than the share labels, with a small ink
-// dot like the hint's, so it reads as a place rather than a number.
+const BUTTON = "h-12 rounded-full px-3 text-[15px] font-semibold whitespace-nowrap sm:px-4 sm:text-[16px]"; // one line even at 360 px
+// A city's name on the settled board: clearly second to the share labels (smaller,
+// lighter type on a fainter pill, a hairline shadow), with a small ink dot like the
+// hint's, so it reads as a place rather than a number.
 const CITY_LABEL =
-  "pointer-events-none absolute top-0 left-0 flex items-center gap-1 rounded-full bg-card/90 py-0.5 pr-2 pl-1.5 text-[12px] leading-tight font-semibold whitespace-nowrap text-ink shadow-card transition-opacity duration-300 lg:text-[13px]";
+  "pointer-events-none absolute top-0 left-0 flex items-center gap-1 rounded-full bg-card/75 py-px pr-1.5 pl-1 text-[11px] leading-tight font-medium whitespace-nowrap text-ink-soft shadow-[0_1px_3px_rgb(18_26_43/0.14)] transition-opacity duration-300 lg:text-[12px]";
 
 export default function SliceGame() {
   const g = useSliceGame();
@@ -257,13 +258,13 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
       <div ref={perfectLabel} className={`${LABEL} bg-ink! text-[13px]! text-card`} style={{ opacity: 0 }} />
       {/* A name placed away from its city gets a thin leader line back to it, ending in a dot. */}
       {cityLeaders.map((ref, i) => (
-        <div key={i} ref={ref} className="pointer-events-none absolute top-0 left-0 h-px origin-left bg-ink/55 transition-opacity duration-300" style={{ opacity: 0 }} aria-hidden="true">
-          <span className="absolute -top-[2px] -left-[2.5px] size-[5px] rounded-full bg-ink" />
+        <div key={i} ref={ref} className="pointer-events-none absolute top-0 left-0 h-px origin-left bg-ink/35 transition-opacity duration-300" style={{ opacity: 0 }} aria-hidden="true">
+          <span className="absolute -top-[1.5px] -left-[2px] size-1 rounded-full bg-ink/70" />
         </div>
       ))}
       {cityLabels.map((ref, i) => (
         <div key={i} ref={ref} className={CITY_LABEL} style={{ opacity: 0 }} aria-hidden="true">
-          <span className="size-1.5 shrink-0 rounded-full bg-ink" />
+          <span className="size-1 shrink-0 rounded-full bg-ink" />
           <span data-name />
         </div>
       ))}

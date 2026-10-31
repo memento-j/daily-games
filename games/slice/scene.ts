@@ -287,7 +287,7 @@ export class SliceScene {
   // elements, the names, and where each sits (worked out once per reveal).
   private cityLabels: HTMLElement[] = [];
   private cityLeaders: HTMLElement[] = []; // thin lines from a city to a name placed further out
-  private citySpots: number[] = []; // each name's spot last frame (placeCityLabels)
+  private citySpots: ([number, number] | null)[] = []; // each name's offset from its city last frame (placeCityLabels)
   private cityNames: string[] | null = null;
   private cityAnchors: { piece: number; rest: THREE.Vector3 }[] | null = null;
   private revealLine: Line | null = null;
@@ -428,6 +428,40 @@ export class SliceScene {
     });
   }
 
+  /** The two pieces' share labels, over each piece's middle. They come first: if the two
+   *  would touch (a cut close to the crowded part, Japan), each slides further into its
+   *  own piece, along the way the pieces parted on screen, until they're clear. */
+  private placeShareLabels(count: number) {
+    const box = this.renderer.domElement.getBoundingClientRect();
+    const toScreen = (v: THREE.Vector3) => {
+      const p = v.clone().project(this.camera);
+      return new THREE.Vector2(((p.x + 1) / 2) * box.width, ((1 - p.y) / 2) * box.height);
+    };
+    const spots = this.labels.map((el, i) => {
+      const piece = this.pieces[i];
+      if (!piece) return null;
+      el.textContent = `${(this.shares[i] * 100 * count).toFixed(1)}%`;
+      const centre = piece.centre.clone().add(piece.group.position).setY(TOP + 0.5);
+      const at = toScreen(centre);
+      const away = toScreen(centre.clone().addScaledVector(piece.dir, 1)).sub(at);
+      return { el, at, dir: away.lengthSq() > 1e-6 ? away.normalize() : new THREE.Vector2(i ? -1 : 1, 0), w: el.offsetWidth, h: el.offsetHeight };
+    });
+    const [a, b] = spots;
+    if (a && b) {
+      const gap = 10;
+      const touching = () => Math.abs(a.at.x - b.at.x) < (a.w + b.w) / 2 + gap && Math.abs(a.at.y - b.at.y) < (a.h + b.h) / 2 + gap;
+      for (let k = 0; k < 40 && touching(); k++) {
+        a.at.addScaledVector(a.dir, 3);
+        b.at.addScaledVector(b.dir, 3);
+      }
+    }
+    for (const spot of spots) {
+      if (!spot) continue;
+      spot.el.style.transform = `translate(-50%, -50%) translate(${spot.at.x}px, ${spot.at.y}px)`;
+      spot.el.style.opacity = String(count);
+    }
+  }
+
   /** The DOM elements for the cities' names (three, like the cities), and their leader lines. */
   setCityLabels(els: HTMLElement[], leaders: HTMLElement[] = []) {
     this.cityLabels = els;
@@ -462,19 +496,21 @@ export class SliceScene {
     });
   }
 
-  /** Each frame: put every name beside its city, at the first spot that touches nothing
-   *  (the pieces' share labels, the perfect cut's label, the names already placed, the
-   *  interface above and below the board, the screen edge). Right beside it first (above,
-   *  below, right, left); on a crowded phone screen, further out in rings up to
-   *  CITY_REACH px, with a thin leader line back to the city, so a name is only hidden
-   *  when its city is off screen or there's truly no room. A name keeps last frame's spot
-   *  while that's still free, so it doesn't hop about as the view turns. */
+  /** Each frame: place every name near its city without touching anything that matters:
+   *  the share labels (placed first, the priority), the perfect cut's label, the names
+   *  already placed, the other cities, the interface above and below the board and the
+   *  screen edge. Spots are tried nearest first, and in each ring the ones pointing away
+   *  from the country's middle first, so names fan out around the country instead of
+   *  piling into its centre where the share labels sit. A spot away from the city gets a
+   *  leader line, and only counts if that line crosses no label and no other leader. A
+   *  name keeps last frame's spot while it's still clear, so it doesn't hop as the view
+   *  turns; with no clear spot within CITY_REACH, it's hidden. */
   private placeCityLabels() {
     const show = !!this.cityNames && this.revealDone && this.phase === "reveal";
     const hide = (i: number) => {
       this.cityLabels[i].style.opacity = "0";
       if (this.cityLeaders[i]) this.cityLeaders[i].style.opacity = "0";
-      this.citySpots[i] = -1;
+      this.citySpots[i] = null;
     };
     if (!show) {
       this.cityLabels.forEach((_, i) => hide(i));
@@ -483,59 +519,86 @@ export class SliceScene {
     this.cityAnchors ??= this.anchorCities();
     const box = this.renderer.domElement.getBoundingClientRect();
     type Rect = { x0: number; y0: number; x1: number; y1: number };
-    const pad = 4;
+    type Seg = [number, number, number, number];
+    const pad = 3;
     const rectOf = (el: HTMLElement): Rect => {
       const r = el.getBoundingClientRect();
       return { x0: r.left - box.left - pad, y0: r.top - box.top - pad, x1: r.right - box.left + pad, y1: r.bottom - box.top + pad };
     };
-    const taken: Rect[] = [...this.labels, this.perfectLabel].filter((el) => Number(el.style.opacity || 0) > 0.05).map(rectOf);
     const overlaps = (a: Rect, b: Rect) => a.x0 < b.x1 && b.x0 < a.x1 && a.y0 < b.y1 && b.y0 < a.y1;
+    const inRect = (x: number, y: number, r: Rect) => x > r.x0 && x < r.x1 && y > r.y0 && y < r.y1;
+    // A segment hits a box if any point along it (every 3 px) falls inside.
+    const segHitsRect = ([x0, y0, x1, y1]: Seg, r: Rect) => {
+      const n = Math.max(2, Math.ceil(Math.hypot(x1 - x0, y1 - y0) / 3));
+      for (let k = 1; k < n; k++) if (inRect(x0 + ((x1 - x0) * k) / n, y0 + ((y1 - y0) * k) / n, r)) return true;
+      return false;
+    };
+    const side = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number) => Math.sign((bx - ax) * (cy - ay) - (by - ay) * (cx - ax));
+    const cross = (p: Seg, q: Seg) =>
+      side(p[0], p[1], p[2], p[3], q[0], q[1]) !== side(p[0], p[1], p[2], p[3], q[2], q[3]) &&
+      side(q[0], q[1], q[2], q[3], p[0], p[1]) !== side(q[0], q[1], q[2], q[3], p[2], p[3]);
+    const project = (v: THREE.Vector3) => {
+      const p = v.clone().project(this.camera);
+      return { x: ((p.x + 1) / 2) * box.width, y: ((1 - p.y) / 2) * box.height, z: p.z };
+    };
+    const middle = project(new THREE.Vector3(0, TOP, 0));
+    const anchors = (this.cityAnchors ?? []).map((a) => (this.pieces[a.piece] ? project(a.rest.clone().add(this.pieces[a.piece].group.position)) : null));
+    const taken: Rect[] = [...this.labels, this.perfectLabel].filter((el) => Number(el.style.opacity || 0) > 0.05).map(rectOf);
+    const leaders: Seg[] = [];
     this.cityLabels.forEach((el, i) => {
-      const anchor = this.cityAnchors?.[i];
-      const piece = anchor && this.pieces[anchor.piece];
-      if (!anchor || !piece || !this.cityNames?.[i]) return hide(i);
-      const v = anchor.rest.clone().add(piece.group.position).project(this.camera);
-      const ax = ((v.x + 1) / 2) * box.width;
-      const ay = ((1 - v.y) / 2) * box.height;
-      if (v.z >= 1 || ax < 0 || ax > box.width || ay < this.insets.top || ay > box.height - this.insets.bottom) return hide(i);
+      const a = anchors[i];
+      if (!a || !this.cityNames?.[i]) return hide(i);
+      if (a.z >= 1 || a.x < 0 || a.x > box.width || a.y < this.insets.top || a.y > box.height - this.insets.bottom) return hide(i);
       const w = el.offsetWidth;
       const h = el.offsetHeight;
-      const gap = 6;
-      // Candidate top-left corners: beside the city, then rings further out.
-      const spots: [number, number][] = [
-        [ax - w / 2, ay - h - gap], // above
-        [ax - w / 2, ay + gap], // below
-        [ax + gap + 4, ay - h / 2], // right
-        [ax - w - gap - 4, ay - h / 2], // left
-      ];
-      for (const r of [34, 52, 70, CITY_REACH])
-        for (let k = 0; k < 12; k++) {
-          const a = -Math.PI / 2 + (k * Math.PI) / 6; // starting straight up
-          spots.push([ax + Math.cos(a) * (r + w / 2) - w / 2, ay + Math.sin(a) * (r + h) - h / 2]);
+      // Other cities' towers stay uncovered too.
+      const others = anchors.flatMap((b, k) => (b && k !== i ? [{ x0: b.x - 5, y0: b.y - 5, x1: b.x + 5, y1: b.y + 5 }] : []));
+      const outward = Math.atan2(a.y - middle.y, a.x - middle.x);
+      // Candidate offsets of the label's centre from the city: nearest ring first, and in
+      // each ring the directions closest to outward first (beside the city: the outer half).
+      const offsets: [number, number][] = [];
+      for (const r of [0, 30, 46, 64, CITY_REACH]) {
+        const ring: [number, number, number][] = [];
+        for (let k = 0; k < 16; k++) {
+          const ang = (k * Math.PI) / 8;
+          const diff = Math.abs(Math.atan2(Math.sin(ang - outward), Math.cos(ang - outward)));
+          ring.push([Math.cos(ang) * (r + w / 2 + 6), Math.sin(ang) * (r + h / 2 + 6), diff]);
         }
-      const rectAt = ([x, y]: [number, number]): Rect => ({ x0: x - pad, y0: y - pad, x1: x + w + pad, y1: y + h + pad });
-      const free = (r: Rect) =>
-        r.x0 >= 4 && r.x1 <= box.width - 4 && r.y0 >= this.insets.top && r.y1 <= box.height - this.insets.bottom && !taken.some((t) => overlaps(r, t));
+        ring.sort((p, q) => p[2] - q[2]);
+        for (const [dx, dy] of r === 0 ? ring.slice(0, 8) : ring) offsets.push([dx, dy]);
+      }
+      const rectAt = ([dx, dy]: [number, number]): Rect => ({ x0: a.x + dx - w / 2 - pad, y0: a.y + dy - h / 2 - pad, x1: a.x + dx + w / 2 + pad, y1: a.y + dy + h / 2 + pad });
+      const leaderTo = (off: [number, number]): Seg => {
+        const r = rectAt(off);
+        return [a.x, a.y, Math.min(Math.max(a.x, r.x0 + pad), r.x1 - pad), Math.min(Math.max(a.y, r.y0 + pad), r.y1 - pad)];
+      };
+      const clear = (off: [number, number]) => {
+        const r = rectAt(off);
+        if (r.x0 < 4 || r.x1 > box.width - 4 || r.y0 < this.insets.top || r.y1 > box.height - this.insets.bottom) return false;
+        if (taken.some((t) => overlaps(r, t)) || others.some((t) => overlaps(r, t))) return false;
+        const seg = leaderTo(off);
+        if (Math.hypot(seg[2] - seg[0], seg[3] - seg[1]) < 8) return true; // right beside the city: no leader
+        return !taken.some((t) => segHitsRect(seg, t)) && !leaders.some((l) => cross(seg, l));
+      };
       const last = this.citySpots[i];
-      const pick = last >= 0 && last < spots.length && free(rectAt(spots[last])) ? last : spots.findIndex((s) => free(rectAt(s)));
-      if (pick < 0) return hide(i);
-      this.citySpots[i] = pick;
-      const [x, y] = spots[pick];
-      taken.push(rectAt(spots[pick]));
-      el.style.transform = `translate(${x}px, ${y}px)`;
+      const off = last && clear(last) ? last : offsets.find(clear);
+      if (!off) return hide(i);
+      this.citySpots[i] = off;
+      const r = rectAt(off);
+      taken.push(r);
+      el.style.transform = `translate(${r.x0 + pad}px, ${r.y0 + pad}px)`;
       el.style.opacity = "1";
-      // Further out than beside the city: a leader from the city to the name's nearest edge.
       const leader = this.cityLeaders[i];
       if (!leader) return;
-      if (pick < 4) {
+      const seg = leaderTo(off);
+      const len = Math.hypot(seg[2] - seg[0], seg[3] - seg[1]);
+      if (len < 8) {
         leader.style.opacity = "0";
         return;
       }
-      const ex = Math.min(Math.max(ax, x), x + w);
-      const ey = Math.min(Math.max(ay, y), y + h);
-      const len = Math.hypot(ex - ax, ey - ay);
+      leaders.push(seg);
       leader.style.width = `${len}px`;
-      leader.style.transform = `translate(${ax}px, ${ay}px) rotate(${Math.atan2(ey - ay, ex - ax)}rad)`;
+      leader.style.transform = `translate(${seg[0]}px, ${seg[1]}px) rotate(${Math.atan2(seg[3] - seg[1], seg[2] - seg[0])}rad)`;
       leader.style.opacity = "1";
     });
   }
@@ -1174,17 +1237,7 @@ export class SliceScene {
     }
     // Each piece's share counts up above it.
     const count = ease(window01(t, T.count, 0.9));
-    this.labels.forEach((el, i) => {
-      const piece = this.pieces[i];
-      if (!piece) return;
-      const pos = piece.centre.clone().add(piece.group.position);
-      pos.y = TOP + 0.5;
-      const v = pos.project(this.camera);
-      const r = this.renderer.domElement.getBoundingClientRect();
-      el.style.transform = `translate(-50%, -50%) translate(${((v.x + 1) / 2) * r.width}px, ${((1 - v.y) / 2) * r.height}px)`;
-      el.style.opacity = String(count);
-      el.textContent = `${(this.shares[i] * 100 * count).toFixed(1)}%`;
-    });
+    this.placeShareLabels(count);
     // Hand the camera to the player.
     if (t >= T.done && !this.revealDone) {
       this.revealDone = true;
