@@ -346,19 +346,19 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={keep}
+                    onClick={again}
                     disabled={!revealDone}
                     className="h-11 flex-1 rounded-full bg-card text-[15px] font-semibold ring-1 ring-ink/15 transition-shadow hover:ring-ink/35"
                   >
-                    Keep this cut
+                    Cut again · {triesLeft(g.game)} left
                   </button>
                   <button
                     type="button"
-                    onClick={again}
+                    onClick={keep}
                     disabled={!revealDone}
                     className="h-11 flex-1 rounded-full bg-ink text-[15px] font-bold text-card"
                   >
-                    Cut again · {triesLeft(g.game)} left
+                    Keep this cut
                   </button>
                 </div>
               ) : (
