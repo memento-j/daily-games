@@ -46,6 +46,9 @@ export type Events = {
   practice_finished: { country: string; points: number; hintsUsed: number };
   /** A country page's "Split Japan yourself" button (app/countries/): do readers become players? */
   country_practice_clicked: { country: string };
+  /** The "Support Pondo ☕" link to Buy Me a Coffee: in the footer, or under a finished
+   *  day's results; `game` when it's on a game's page. */
+  tip_clicked: { location: "footer" | "results"; game?: Game };
 };
 
 type PostHog = { __loaded?: boolean; capture: (name: string, data?: object) => void };

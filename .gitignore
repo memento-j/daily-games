@@ -68,3 +68,7 @@ CLAUDE.md
 
 # Store-listing images (icons, screenshots) made by scripts/marketing/shots.py
 /marketing/
+
+# Python bytecode caches, in any scripts folder (banner.py imports make_og.py, so brand/ gets one)
+__pycache__/
+*.pyc

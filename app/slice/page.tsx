@@ -85,7 +85,7 @@ export default function SlicePage() {
           <p className="mt-6 text-xs text-ink-faint">
             Population: GHSL GHS-POP 2025 (European Commission, JRC), CC BY 4.0. Cities: GHSL Urban Centre Database 2025 (European Commission, JRC), CC BY 4.0. Borders: Natural Earth. <a href="/about/#credits" className="underline underline-offset-2 hover:text-ink">Full credits</a>
           </p>
-          <SiteFooter className="mt-10" />
+          <SiteFooter className="mt-10" game="slice" />
         </div>
       </section>
     </>

@@ -9,6 +9,7 @@ import { useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import ShareButton from "@/components/ShareButton";
 import YesterdayLink from "@/components/YesterdayLink";
+import { SupportLine } from "@/components/SupportLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { shareText } from "@/lib/share";
@@ -439,6 +440,7 @@ export function DaySummary({
       <p className="font-display text-[20px] font-semibold tracking-[-0.02em]">
         <Countdown />
       </p>
+      <SupportLine game="downstream" />
     </div>
   );
 }

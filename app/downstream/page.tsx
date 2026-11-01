@@ -70,7 +70,7 @@ export default function DownstreamPage() {
           <p className="mt-4 text-xs text-ink-faint">
             Rivers: HydroRIVERS (HydroSHEDS). Seas: IHO Sea Areas (Marine Regions). Map: OpenFreeMap, OpenMapTiles, OpenStreetMap. <a href="/about/#credits" className="underline underline-offset-2 hover:text-ink">Full credits</a>
           </p>
-          <SiteFooter className="mt-10" />
+          <SiteFooter className="mt-10" game="downstream" />
         </div>
       </section>
     </>

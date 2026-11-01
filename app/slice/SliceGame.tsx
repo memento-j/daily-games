@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import ShareButton from "@/components/ShareButton";
 import YesterdayLink from "@/components/YesterdayLink";
+import { SupportLine } from "@/components/SupportLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { shareText } from "@/lib/share";
@@ -612,6 +613,7 @@ function Summary({
         </dl>
       )}
       <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />
+      <SupportLine game="slice" />
     </div>
   );
 }

@@ -48,7 +48,7 @@ export default function PrivacyPage() {
         <li>your approximate location (country, region and city), worked out from your IP address, which is not stored;</li>
         <li>
           game events: starting a puzzle, finishing it with your total score, current streak and (in Slice) how many rounds used the hint, starting and
-          finishing a Slice practice country (which country, its score and whether you used the hint), pressing a country page&apos;s button to try that country, pressing Share or saving the result picture (whether it was
+          finishing a Slice practice country (which country, its score and whether you used the hint), pressing a country page&apos;s button to try that country, clicking the &ldquo;Support Pondo&rdquo; link (and where it was), pressing Share or saving the result picture (whether it was
           shared, copied or saved, never what you shared or who to), and a once-a-day visit that says how many days it has been since your first visit and on how many
           different days you&apos;ve visited.
         </li>
@@ -68,6 +68,10 @@ export default function PrivacyPage() {
         <li>
           <strong>OpenFreeMap</strong> provides Downstream&apos;s map. Your browser downloads the map&apos;s pieces from its servers while you play. See{" "}
           <a href="https://openfreemap.org/privacy">OpenFreeMap&apos;s privacy policy</a>.
+        </li>
+        <li>
+          <strong>Buy Me a Coffee</strong>, only if you click &ldquo;Support Pondo&rdquo;: it opens their site in a new tab, under{" "}
+          <a href="https://buymeacoffee.com/privacy-policy">their privacy policy</a>. Nothing is loaded from it otherwise.
         </li>
         <li>
           <strong>PostHog</strong> (EU hosting), for the analytics above. See <a href="https://posthog.com/privacy">PostHog&apos;s privacy policy</a>.

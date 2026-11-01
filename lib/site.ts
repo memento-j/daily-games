@@ -14,4 +14,6 @@ export const SITE_URL = "https://pondo.games";
 
 // Where players reach us (Contact, Privacy). Forward it to a real inbox with Cloudflare
 // Email Routing once the domain is connected.
+/** Tips: the "Support Pondo ☕" link (components/SupportLink.tsx). */
+export const SUPPORT_URL = "https://buymeacoffee.com/pondogames";
 export const CONTACT_EMAIL = "hello@pondo.games";
