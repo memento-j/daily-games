@@ -1,9 +1,10 @@
 // All Slice scoring knobs, in one place. Placeholders until the playtest.
 //
 // A cut is scored on the piece whose share is closer to the target ("You cut off
-// 47.7%. The aim was 50%."). Every cut starts at 100 and halves for every 6 percentage
-// points it's off: 1 off scores 89, 3 off 71, 6 off 50, 10 off 31, 20 off 10 (7 until
-// 2026-10-31, made stricter as the city hint will lift scores; developer's call). The day is
+// 47.7%. The aim was 50%."). Every cut starts at 100 and halves for every 8 percentage
+// points it's off: 1 off scores 92, 3 off 77, 8 off 50, 10 off 42, 20 off 18 (7 until
+// 2026-10-31, then 6 as the city hint would lift scores; 8 since 2026-11-03, when days
+// averaged in the mid-to-high 30s out of 100, which felt too harsh; developer's call). The day is
 // the sum, out of 400 for four rounds (developer's call, 2026-10-19: a real score suits
 // a precision game better than Wordle-style squares, which Downstream keeps).
 //
@@ -21,7 +22,7 @@ import { positiveCounts, share } from "./cut";
 import type { Line, Round } from "./types";
 
 export const MAX_SCORE = 100; // a perfect cut
-export const HALF_EVERY_POINTS = 6; // the score halves for every this many percentage points off
+export const HALF_EVERY_POINTS = 8; // the score halves for every this many percentage points off
 
 export type CutResult = {
   share: number; // the counted piece's share, 0..1 ("You cut off 31.4%")

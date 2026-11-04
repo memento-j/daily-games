@@ -20,25 +20,25 @@ describe("missOf", () => {
 });
 
 describe("scoreOf", () => {
-  it("starts at 100 and halves every 6 percentage points off", () => {
-    expect([0, 0.01, 0.03, 0.06, 0.1, 0.14, 0.2].map(scoreOf)).toEqual([100, 89, 71, 50, 31, 20, 10]);
+  it("starts at 100 and halves every 8 percentage points off", () => {
+    expect([0, 0.01, 0.03, 0.08, 0.1, 0.16, 0.2].map(scoreOf)).toEqual([100, 92, 77, 50, 42, 25, 18]);
   });
 
   it("keeps 100 hard: half a point off already costs", () => {
-    expect(scoreOf(0.005)).toBe(94);
+    expect(scoreOf(0.005)).toBe(96);
   });
 
   it("still gives something for a big miss, and only a wild cut gets 0", () => {
-    expect(scoreOf(0.3)).toBe(3);
-    expect(scoreOf(0.6)).toBe(0);
+    expect(scoreOf(0.3)).toBe(7);
+    expect(scoreOf(0.8)).toBe(0);
   });
 
   it("rounds to whole points", () => {
-    expect(scoreOf(0.0234)).toBe(76);
+    expect(scoreOf(0.0234)).toBe(82);
   });
 
   it("scores exactly 3 points off as 71, despite floating point", () => {
-    expect(scoreOf(missOf(0.47, 0.5))).toBe(71);
+    expect(scoreOf(missOf(0.47, 0.5))).toBe(77);
   });
 });
 
@@ -60,7 +60,7 @@ describe("scoreCut", () => {
     expect(result.share).toBeCloseTo(0.3);
     expect(result.positive).toBe(true);
     expect(result.miss).toBeCloseTo(1 / 30); // 3.3 points off
-    expect(result.score).toBe(68);
+    expect(result.score).toBe(75);
   });
 
   it("gives the same score whichever way the line faces", () => {
@@ -76,7 +76,7 @@ describe("scoreCut", () => {
     const third = scoreCut(r(1 / 3), lineAt(0, 64.6667)); // 35.3%: 2 points off
     const tenth = scoreCut(r(0.1), lineAt(0, 88)); // 12%: 2 points off
     const ninety = scoreCut(r(0.9), lineAt(0, 12)); // 88%: 2 points off
-    expect([half.score, third.score, tenth.score, ninety.score]).toEqual([79, 79, 79, 79]);
+    expect([half.score, third.score, tenth.score, ninety.score]).toEqual([84, 84, 84, 84]);
   });
 });
 

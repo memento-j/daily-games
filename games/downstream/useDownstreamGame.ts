@@ -10,14 +10,16 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
+import { newScoreId, queueScore } from "@/lib/scores";
 import { computeStats } from "@/lib/stats";
 import { clearInProgress, getHistory, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase } from "./game";
-import { maxPoints, totalPoints, type DropResult } from "./scoring";
+import { dropPoints, maxPoints, totalPoints, type DropResult } from "./scoring";
 import { GAME_KEY, puzzleToPlay, storageKeyFor } from "./schedule";
 import type { Puzzle } from "./types";
 
-export type SavedResult = { results: DropResult[]; points: number };
+// `scoreId`: this puzzle's random id for the scores API (lib/scores.ts).
+export type SavedResult = { results: DropResult[]; points: number; scoreId?: string };
 
 export type Load =
   | { status: "loading" }
@@ -89,8 +91,20 @@ export function useDownstreamGame(): DownstreamGameState {
     const play = { game: "downstream", puzzle: number, preview: load.preview } as const;
     if (game.drop === 0 && game.stage === 0 && game.results.length === 0) track("puzzle_started", play);
     if (phase(next, puzzle) === "finished") {
-      saveResult<SavedResult>(storageKey, number, { results: next.results, points: totalPoints(next.results) });
+      const scoreId = newScoreId() ?? undefined;
+      saveResult<SavedResult>(storageKey, number, { results: next.results, points: totalPoints(next.results), scoreId });
       clearInProgress(storageKey);
+      // For the comparison with other players; the summary sends it. Downstream has no hints.
+      if (scoreId) {
+        queueScore({
+          deviceId: scoreId,
+          game: "downstream",
+          puzzle: number,
+          totalScore: totalPoints(next.results),
+          roundScores: next.results.map(dropPoints),
+          hintsUsed: next.results.map(() => false),
+        });
+      }
       // After saving, so the streak includes today.
       const streak = computeStats(getHistory<SavedResult>(storageKey), number).currentStreak;
       track("puzzle_finished", { ...play, points: totalPoints(next.results), maxPoints: maxPoints(puzzle.drops.length), streak });

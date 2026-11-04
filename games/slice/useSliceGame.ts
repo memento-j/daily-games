@@ -10,6 +10,7 @@ import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { track } from "@/lib/analytics";
 import { padPuzzleNumber } from "@/lib/daily";
+import { newScoreId, queueScore } from "@/lib/scores";
 import { computeStats } from "@/lib/stats";
 import { clearInProgress, getHistory, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { hintCount, initialState, isValidState, phase, step, withHints, type Action, type GameState, type Phase, type SavedCut } from "./game";
@@ -20,7 +21,8 @@ import type { Puzzle } from "./types";
 
 // `points` feeds the shared streaks and stats (lib/stats.ts averages it). `hints`: which
 // rounds used the hint, for the share text's 💡 (missing on results saved before hints).
-export type SavedResult = { cuts: SavedCut[]; points: number; hints?: boolean[] };
+// `scoreId`: this puzzle's random id for the scores API (lib/scores.ts).
+export type SavedResult = { cuts: SavedCut[]; points: number; hints?: boolean[]; scoreId?: string };
 
 export type Load =
   | { status: "loading" }
@@ -126,8 +128,20 @@ export function useSliceGame(): SliceGameState {
     const play = { game: "slice", puzzle: number, preview: load.preview } as const;
     if (action.type === "cut" && game.round === 0 && game.tries === 0) track("puzzle_started", play);
     if (phase(next, puzzle) === "finished") {
-      saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalScore(next.cuts), hints: next.hints });
+      const scoreId = newScoreId() ?? undefined;
+      saveResult<SavedResult>(storageKey, number, { cuts: next.cuts, points: totalScore(next.cuts), hints: next.hints, scoreId });
       clearInProgress(storageKey);
+      // For the comparison with other players; the summary sends it. (Practice returned above.)
+      if (scoreId) {
+        queueScore({
+          deviceId: scoreId,
+          game: "slice",
+          puzzle: number,
+          totalScore: totalScore(next.cuts),
+          roundScores: next.cuts.map((c) => c.score),
+          hintsUsed: next.cuts.map((_, i) => !!next.hints[i]),
+        });
+      }
       // After saving, so the streak includes today.
       const streak = computeStats(getHistory<SavedResult>(storageKey), number).currentStreak;
       track("puzzle_finished", { ...play, points: totalScore(next.cuts), maxPoints: maxScore(puzzle.rounds.length), streak, hintsUsed: hintCount(next.hints) });

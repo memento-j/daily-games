@@ -10,13 +10,14 @@ export type ShareInput = {
   points?: number; // the day's score; left out = the marks alone
   maxPoints?: number;
   detail?: string; // a second line (Slice: each round's score, "94 · 81 · 62 · 75")
+  standing?: string; // how it compares, when there's anyone to compare with ("Top 28%")
   url: string;
 };
 
-export function shareText({ game, number, marks, points, maxPoints, detail, url }: ShareInput): string {
+export function shareText({ game, number, marks, points, maxPoints, detail, standing, url }: ShareInput): string {
   const score = points !== undefined && maxPoints !== undefined ? `${points}/${maxPoints}` : "";
   const first = [`${game} #${number}`, marks?.join("") ?? "", score].filter(Boolean).join(" ");
-  return [first, detail, url].filter(Boolean).join("\n");
+  return [first, detail, standing, url].filter(Boolean).join("\n");
 }
 
 export type ShareOutcome = "shared" | "copied" | "failed";

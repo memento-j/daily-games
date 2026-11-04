@@ -7,8 +7,11 @@
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import NextUp, { type NextUpItem } from "@/components/NextUp";
+import { ScoreChart, ScoreStanding, shareStanding, useScoreComparison } from "@/components/ScoreComparison";
+import ScrollHint from "@/components/ScrollHint";
 import ShareButton from "@/components/ShareButton";
-import YesterdayLink from "@/components/YesterdayLink";
+import { useYesterdayItem } from "@/components/YesterdayLink";
 import { SupportLine } from "@/components/SupportLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -322,27 +325,32 @@ export function DaySummary({
   const max = maxPoints(puzzle.drops.length);
   const stats = useStats(storageKeyFor(preview), number);
   const marks = game.results.map(dropEmoji).join("");
+  const comparison = useScoreComparison("downstream", number, points, game.results.map(dropPoints));
+  const nextGame = useNextSlice();
+  const yesterday = useYesterdayItem("/downstream/", [GAME_KEY, PREVIEW_KEY], maxPoints(5));
   const text = shareText({
     game: "Downstream",
     number,
     marks: game.results.map(dropEmoji),
     points,
     maxPoints: max,
+    standing: shareStanding(comparison, points),
     url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
   });
   // The picture: each drop filled as far as it scored.
   const drops = game.results.map((r) => ({ points: dropPoints(r), max: POINTS_BY_STAGE[0], guessed: r.guess !== null }));
   const card = useShareCard(JSON.stringify([number, drops]), `downstream-${number}.png`, (ctx, f) => drawDownstreamCard(ctx, f, number, drops, points, max));
   return (
-    <div className="flex flex-col gap-5">
+    <div className="flex flex-col gap-5 [@media(max-height:720px)]:gap-3">
       <div>
-        <h2 className="font-display text-[22px] font-semibold tracking-[-0.02em]">
-          Done for today<span className="text-coral">.</span>
-        </h2>
-        <p className="font-display mt-2 text-[56px] leading-none font-semibold tracking-[-0.04em]">
+        <h2 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s drops" : "Today\u2019s drops"}</h2>
+        <p className="font-display mt-2 text-[56px] leading-none font-semibold tracking-[-0.04em] [@media(max-height:720px)]:mt-1 [@media(max-height:720px)]:text-[44px]">
           {points}
           <span className="text-[28px] text-ink-faint"> / {max}</span>
         </p>
+        <div className="mt-2">
+          <ScoreStanding comparison={comparison} score={points} today={!preview} />
+        </div>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -364,11 +372,22 @@ export function DaySummary({
           {EMOJI_LEGEND.map(([e, meaning]) => `${e} ${meaning}`).join("  ·  ")}
         </p>
       </div>
-      {/* One more of this game first, then the other game. (Hidden when both have nothing to offer.) */}
-      <div className="flex flex-col gap-2.5 empty:hidden">
-        {!preview && <YesterdayLink path="/downstream/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's raindrops are still looking for the sea." maxPoints={maxPoints(5)} />}
-        <TrySlice />
+      {/* The next game is the main action after sharing, then the quieter choices. */}
+      <NextUp from="downstream" next={nextGame} tone="bg-mat ring-slab-side/30 hover:ring-slab-side/70" rows={yesterday && !preview ? [yesterday] : []} />
+
+      {/* In the flow, so it can't sit on anything; gone once the player scrolls. */}
+      <div className="-my-2">
+        <ScrollHint ready={comparison.status !== "loading"} />
       </div>
+      <ScoreChart
+        game="downstream"
+        comparison={comparison}
+        score={points}
+        roundScores={game.results.map(dropPoints)}
+        roundNames={puzzle.drops.map((d) => d.answer)}
+        today={!preview}
+        onTap={sound.tap}
+      />
 
       <div>
         <p className="text-sm font-semibold text-ink-soft">{onView ? "Your drops · pick one to see its route" : "Your drops"}</p>
@@ -445,27 +464,24 @@ export function DaySummary({
   );
 }
 
-/** Done with Downstream: point to today's Slice, unless it's already been played today.
- *  In Slice's own look: a paper slab on the cutting mat, with the coral dashed cut. */
-function TrySlice() {
+/** Today's Slice as the results screen's next step, or null once it's done. In Slice's own
+ *  look: a paper slab on the cutting mat, with the coral dashed cut. */
+function useNextSlice(): NextUpItem | null {
   const today = useSliceToday();
   if (!today || today.result) return null; // still reading storage, or Slice is done
-  return (
-    <Link href="/slice/" className="group flex items-center gap-3 rounded-2xl bg-mat p-3 ring-1 ring-slab-side/30 transition-shadow hover:ring-slab-side/70">
-      <svg viewBox="0 0 32 32" className="size-8 shrink-0" aria-hidden="true">
+  return {
+    to: "slice",
+    href: "/slice/",
+    title: "Next: today's Slice",
+    description: "One straight line to split a country's population in half. Harder than it looks.",
+    icon: (
+      <svg viewBox="0 0 32 32" className="size-8" aria-hidden="true">
         <path d="M6 9.5 14 5l12 4.5-1.5 11L17 27 6.5 22.5Z" transform="translate(0 1.6)" fill="var(--color-slab-side)" />
         <path d="M6 9.5 14 5l12 4.5-1.5 11L17 27 6.5 22.5Z" fill="var(--color-slab)" />
         <path d="M3.5 19.5 28.5 10" fill="none" stroke="var(--color-coral)" strokeWidth="2" strokeLinecap="round" strokeDasharray="3 2.6" />
       </svg>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">Next: today&apos;s Slice</span>
-        <span className="block text-xs text-ink-soft">One straight line to split a country&apos;s population in half. Harder than it looks.</span>
-      </span>
-      <svg viewBox="0 0 20 20" className="size-4 shrink-0 text-ink-soft transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
-        <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </Link>
-  );
+    ),
+  };
 }
 
 /** Loading, not launched yet, and no puzzle file: a calm card on the land ground. */

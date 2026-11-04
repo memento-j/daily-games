@@ -29,6 +29,7 @@ const BEVEL = 0.035;
 const TOP = THICK + BEVEL; // the slab's top surface
 const SPLIT = 0.6; // how far the pieces slide apart
 const COLUMN_MAX = 2.2; // height of the most crowded column
+const WIDE_ASPECT = 1.2; // a board at least this wide frames its reveal by height (fitViews)
 const PERFECT_SECONDS = 1.1; // the perfect cut's slide from the player's line
 const HANDLE_PX = 30; // touch radius around a handle
 const MIN_CUT_PX = 24;
@@ -780,6 +781,14 @@ export class SliceScene {
     const r = Math.hypot(w, h) / 2;
     // 0.8: let the circle's corners crop a little; the country itself still fits.
     this.revealView.radius = ((r + SPLIT / 2) / Math.sin(Math.min(v, hor))) * 0.8 + COLUMN_MAX * 0.25; // + the pieces' spread
+    // Wide screens have width to spare, and from the reveal's tilt the circle looks squashed
+    // to an ellipse (cos(polar) tall), so fitting a full circle into the band left the country
+    // small with empty space all round. Fit what actually shows: that ellipse and the columns.
+    if (aspect >= WIDE_ASPECT) {
+      const polar = this.revealView.polar;
+      const tall = (r + SPLIT / 2) * Math.cos(polar) + COLUMN_MAX * Math.sin(polar) * 0.6;
+      this.revealView.radius = Math.max(tall / Math.tan(v), (r + SPLIT / 2) / Math.tan(hor)) * 0.92;
+    }
     // Orbiting after the reveal: zoom in close enough to read a city's column, out far
     // enough to see the whole country with room around it, never further either way.
     this.controls.minDistance = this.revealView.radius * 0.3;

@@ -49,6 +49,14 @@ export type Events = {
   /** The "Support Pondo ☕" link to Buy Me a Coffee: in the footer, or under a finished
    *  day's results; `game` when it's on a game's page. */
   tip_clicked: { location: "footer" | "results"; game?: Game };
+  /** A finished daily puzzle sent to the scores API (lib/scores.ts), one per attempt. */
+  score_submitted: { game: Game; puzzle: number; success: boolean };
+  /** A next step under a finished day's results (components/NextUp.tsx). `from`: this game;
+   *  `to`: the other game's name, "yesterday" or "practice"; `position`: 1 from the top. */
+  next_game_clicked: { from: Game; to: string; position: number };
+  /** The results chart switched between "total" and "round_1", "round_2"... (Downstream's
+   *  drops count as rounds here.) */
+  distribution_viewed: { game: Game; view: string };
 };
 
 type PostHog = { __loaded?: boolean; capture: (name: string, data?: object) => void };

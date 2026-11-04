@@ -3,6 +3,8 @@ import { Bricolage_Grotesque, Hanken_Grotesk } from "next/font/google";
 import { SITE_DESCRIPTION, SITE_NAME, SITE_TAGLINE, SITE_URL } from "@/lib/site";
 import { THEME_SCRIPT } from "@/lib/theme";
 import Analytics from "@/components/Analytics";
+import ScoreSync from "@/components/ScoreSync";
+import ScrollToTop from "@/components/ScrollToTop";
 import "./globals.css";
 
 // next/font downloads these at build time and serves them from our own domain,
@@ -55,6 +57,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       <body className="flex min-h-full flex-col">
         {children}
         <Analytics />
+        <ScoreSync />
+        <ScrollToTop />
       </body>
     </html>
   );

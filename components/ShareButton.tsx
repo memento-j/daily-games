@@ -45,7 +45,7 @@ export default function ShareButton({
       <button
         type="button"
         onClick={share}
-        className={`group relative flex h-14 w-full items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale] duration-200 hover:bg-coral-strong active:scale-[0.98] ${card ? "mt-4 pr-4 pl-20" : "px-6"}`}
+        className={`group relative flex h-14 w-full [@media(max-height:720px)]:h-12 [@media(max-height:720px)]:text-[17px] items-center justify-center gap-2 rounded-full bg-coral text-[19px] font-bold text-white shadow-[0_10px_24px_-10px_rgb(217_61_70/0.75)] transition-[background-color,scale] duration-200 hover:bg-coral-strong active:scale-[0.98] ${card ? "mt-4 pr-4 pl-20 [@media(max-height:720px)]:mt-2" : "px-6"}`}
       >
         {card && (
           // The card itself, like a photo half out of an envelope. Decorative: the
@@ -54,7 +54,7 @@ export default function ShareButton({
           <img
             src={card.url}
             alt=""
-            className="share-card-in absolute bottom-2.5 left-5 h-[70px] w-auto -rotate-[7deg] rounded-[5px] shadow-[0_6px_14px_-4px_rgb(18_26_43/0.45)] ring-2 ring-white transition-[rotate,translate] duration-300 ease-out group-hover:-translate-y-1.5 group-hover:-rotate-[2deg]"
+            className="share-card-in absolute bottom-2.5 left-5 h-[70px] w-auto [@media(max-height:720px)]:bottom-1.5 [@media(max-height:720px)]:h-[52px] -rotate-[7deg] rounded-[5px] shadow-[0_6px_14px_-4px_rgb(18_26_43/0.45)] ring-2 ring-white transition-[rotate,translate] duration-300 ease-out group-hover:-translate-y-1.5 group-hover:-rotate-[2deg]"
           />
         )}
         <svg viewBox="0 0 20 20" className="size-4 shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

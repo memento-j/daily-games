@@ -82,6 +82,12 @@ export function setSetting<T>(game: string, name: string, value: T): void {
   notify();
 }
 
+/** Removes the one permanent device id, used for a few days in Nov 2026. Scores now carry a
+ *  random id per puzzle, kept in that puzzle's saved result (lib/scores.ts). */
+export function removeOldDeviceId(): void {
+  remove("pondo_device_id");
+}
+
 // Change notifications, so components can re-read storage (e.g. with
 // useSyncExternalStore) when a result is saved here or in another tab.
 const EVENT = "dg-storage";

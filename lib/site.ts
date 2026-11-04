@@ -17,3 +17,8 @@ export const SITE_URL = "https://pondo.games";
 /** Tips: the "Support Pondo ☕" link (components/SupportLink.tsx). */
 export const SUPPORT_URL = "https://buymeacoffee.com/pondogames";
 export const CONTACT_EMAIL = "hello@pondo.games";
+
+// The scores API behind the percentiles (lib/scores.ts). Not a secret, so no env file: `npm run
+// dev` talks to a local backend, so dev plays never reach production, and production builds to
+// the live one. Next.js fills in NODE_ENV at build time.
+export const API_URL = process.env.NODE_ENV === "development" ? "http://localhost:8080" : "https://api.pondo.games";

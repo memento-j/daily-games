@@ -49,8 +49,9 @@ export default function AboutPage() {
         same puzzle and can compare results.
       </p>
       <p>
-        Your results and streaks are saved on your device, not on a server, so they don&apos;t follow you to another phone or browser, and clearing your
-        browser&apos;s data clears them too. More in the <Link href="/privacy/">privacy policy</Link>.
+        Your progress, results and streaks are saved on your device, so they don&apos;t follow you to another phone or browser, and clearing your
+        browser&apos;s data clears them too. When you finish a daily puzzle, your scores are also sent to our score server, with a random ID made for that
+        puzzle alone, so you can see how you compare with other players. More in the <Link href="/privacy/">privacy policy</Link>.
       </p>
 
       <h2 id="credits">Credits</h2>

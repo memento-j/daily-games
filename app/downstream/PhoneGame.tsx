@@ -283,7 +283,7 @@ function PhoneSummary(p: Props): ReactNode {
       <h1 className="sr-only">
         Downstream {p.preview ? "yesterday's No." : "No."} {p.number}: results
       </h1>
-      <div className="sticky top-0 h-[34svh] min-h-[230px]">
+      <div className="sticky top-0 h-[34svh] min-h-[230px] [@media(max-height:720px)]:h-[25svh] [@media(max-height:720px)]:min-h-[160px]">
         <MapTopBar number={p.number} preview={p.preview} />
         <RouteMap {...p.map} padding={{ top: 84, bottom: 48, left: 40, right: 40 }} className="h-full w-full" />
       </div>

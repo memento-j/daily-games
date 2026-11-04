@@ -13,8 +13,11 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
+import NextUp, { type NextUpItem } from "@/components/NextUp";
+import { ScoreChart, ScoreStanding, shareStanding, useScoreComparison } from "@/components/ScoreComparison";
+import ScrollHint from "@/components/ScrollHint";
 import ShareButton from "@/components/ShareButton";
-import YesterdayLink from "@/components/YesterdayLink";
+import { useYesterdayItem } from "@/components/YesterdayLink";
 import { SupportLine } from "@/components/SupportLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
@@ -517,14 +520,20 @@ function Summary({
   const stats = useStats(storageKeyFor(preview), number);
   const points = totalScore(cuts);
   const max = maxScore(cuts.length);
+  const comparison = useScoreComparison("slice", number, points, cuts.map((c) => c.score));
+  const sheet = useRef<HTMLDivElement>(null);
+  const nextGame = useNextDownstream();
+  const yesterday = useYesterdayItem("/slice/", [GAME_KEY, PREVIEW_KEY], maxScore(4));
   // "Slice #4 312/400", then each round's score, with a 💡 after any round that took the
-  // hint: no countries, no answers.
+  // hint, then how it compares ("Top 28%") when there's anyone to compare with: no countries,
+  // no answers.
   const text = shareText({
     game: GAME_NAME,
     number,
     points,
     maxPoints: max,
     detail: cuts.map((c, i) => `${c.score}${hints[i] ? "💡" : ""}`).join(" · "),
+    standing: shareStanding(comparison, points),
     url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
   });
   // The picture: one strip per round, showing how close the cut came to the aim.
@@ -534,20 +543,18 @@ function Summary({
     // The sheet scrolls; its blocks keep their size (in a flex column they'd shrink to fit).
     // On phones it stays low (about a third of the screen) so the board keeps most of it:
     // the score and Share show, the next card peeks in, and the fade at the bottom edge
-    // says there's more below. Desktop has the room for half.
-    <div className="sheet-fade flex max-h-[34svh] flex-col gap-3 overflow-y-auto px-1 pb-5 *:shrink-0 lg:max-h-[50svh]">
+    // says there's more below. On desktop it stays modest too, so the country can be big.
+    // The strip under it is the "More below" pill's own, so the pill covers nothing.
+    <>
+    <div ref={sheet} className="sheet-fade flex max-h-[calc(34svh-20px)] flex-col gap-3 overflow-y-auto px-1 pb-5 *:shrink-0 lg:max-h-[36svh] [@media(max-height:720px)]:max-h-[calc(42svh-20px)] [@media(max-height:720px)]:gap-2">
       <div className="flex items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s slices" : "Today\u2019s slices"}</h1>
-          <p className="text-xs text-ink-faint">
-            Each cut starts at {MAX_SCORE} and halves for every {HALF_EVERY_POINTS} percentage points off.
-          </p>
-        </div>
+        <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s slices" : "Today\u2019s slices"}</h1>
         <p className="shrink-0 text-right">
           <span className="font-display text-[34px] leading-none font-semibold tracking-[-0.03em] tabular-nums">{points}</span>
           <span className="text-sm text-ink-faint tabular-nums">/{max}</span>
         </p>
       </div>
+      <ScoreStanding comparison={comparison} score={points} today={!preview} />
       <ShareButton
         game="slice"
         number={number}
@@ -557,11 +564,21 @@ function Summary({
         onTap={sound.tap}
         caption="How close you cut, never the countries."
       />
-      {/* One more of this game first, then the other game. */}
-      {!preview && <YesterdayLink path="/slice/" storageKeys={[GAME_KEY, PREVIEW_KEY]} teaser="Yesterday's countries are still waiting to be split." maxPoints={maxScore(4)} />}
-      <TryDownstream />
-      <PracticeLinks />
+      {/* The next game is the main action after sharing, then the quieter choices. */}
+      <NextUp from="slice" next={nextGame} tone={DOWNSTREAM_TONE} rows={[...(yesterday && !preview ? [yesterday] : []), practiceItem(number)]} />
+      <ScoreChart
+        game="slice"
+        comparison={comparison}
+        score={points}
+        roundScores={cuts.map((c) => c.score)}
+        roundNames={puzzle.rounds.map((r) => capitalise(r.country))}
+        today={!preview}
+        onTap={sound.tap}
+      />
 
+      <p className="-mb-1 text-xs text-ink-faint">
+        Each cut starts at {MAX_SCORE} and halves for every {HALF_EVERY_POINTS} percentage points off.
+      </p>
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
         {puzzle.rounds.map((r: Round, i) => (
           <li key={i}>
@@ -615,6 +632,10 @@ function Summary({
       <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />
       <SupportLine game="slice" />
     </div>
+    <div className="pt-1">
+      <ScrollHint ready={comparison.status !== "loading"} scroller={sheet} />
+    </div>
+    </>
   );
 }
 
@@ -637,19 +658,29 @@ function PracticeChips({ countries }: { countries: PracticeCountry[] }) {
 }
 
 /** On the day's summary: more to play, on countries from past days. */
-function PracticeLinks() {
-  return (
-    <div className="rounded-2xl bg-land p-3">
-      <p className="text-[15px] leading-tight font-semibold">Want more? Practice a past country.</p>
-      <p className="mt-0.5 mb-2.5 text-xs text-ink-soft">Just for fun: practice never touches your score or streak.</p>
-      <PracticeChips countries={PRACTICE} />
-    </div>
-  );
+/** Practice, as a row on the results screen. One country a day, in turn; its summary offers
+ *  the others. A plain link: a fresh page load starts the board cleanly. */
+function practiceItem(number: number): NextUpItem {
+  const country = PRACTICE[number % PRACTICE.length];
+  return {
+    to: "practice",
+    href: `/slice/?country=${country.slug}`,
+    fullLoad: true,
+    title: "Practice a past country",
+    description: `Try ${country.name}. Never touches your streak.`,
+    icon: (
+      <svg viewBox="0 0 32 32" className="size-6" aria-hidden="true">
+        <path d="M6 9.5 14 5l12 4.5-1.5 11L17 27 6.5 22.5Z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" className="text-ink-faint" />
+        <path d="M3.5 19.5 28.5 10" fill="none" stroke="var(--color-coral)" strokeWidth="2" strokeLinecap="round" strokeDasharray="3 2.6" />
+      </svg>
+    ),
+  };
 }
 
 /** The end of a practice round: the score, then today's puzzle or another country. */
 function PracticeSummary({ country, cut, hinted }: { country: PracticeCountry; cut: SavedCut; hinted: boolean }) {
   const today = useSliceToday();
+  const nextGame = useNextDownstream();
   return (
     <div className="flex flex-col gap-3 px-1 pb-1">
       <div className="flex items-end justify-between gap-3">
@@ -684,7 +715,7 @@ function PracticeSummary({ country, cut, hinted }: { country: PracticeCountry; c
         </a>
       )}
       {/* Then the other game: practice was pulling players away from Downstream (2026-10-27). */}
-      <TryDownstream />
+      <NextUp from="slice" next={nextGame} tone={DOWNSTREAM_TONE} />
       <div>
         {/* No "try again": today's puzzle is the next step (developer's call, 2026-10-23). */}
         <p className="mb-2 text-sm font-semibold text-ink-soft">Practice another</p>
@@ -696,27 +727,24 @@ function PracticeSummary({ country, cut, hinted }: { country: PracticeCountry; c
 }
 
 /** Done with Slice: point to today's Downstream, unless it's already been played today. */
-function TryDownstream() {
+const DOWNSTREAM_TONE = "bg-sea ring-drop/15 hover:ring-drop/40";
+
+/** Today's Downstream as the results screen's next step, or null once it's done. */
+function useNextDownstream(): NextUpItem | null {
   const today = useDownstreamToday();
   if (!today || today.result) return null; // still reading storage, or Downstream is done
-  return (
-    <Link
-      href="/downstream/"
-      className="group flex items-center gap-3 rounded-2xl bg-sea p-3 ring-1 ring-drop/15 transition-shadow hover:ring-drop/40"
-    >
-      <svg viewBox="0 0 24 24" className="size-8 shrink-0 text-drop" aria-hidden="true">
+  return {
+    to: "downstream",
+    href: "/downstream/",
+    title: "Next: today's Downstream",
+    description: "A raindrop lands somewhere on Earth. Which sea does it reach?",
+    icon: (
+      <svg viewBox="0 0 24 24" className="size-8 text-drop" aria-hidden="true">
         <path d="M12 2.5c3.2 4.3 6.5 8.4 6.5 12a6.5 6.5 0 0 1-13 0c0-3.6 3.3-7.7 6.5-12Z" fill="currentColor" />
         <path d="M9 15.5a3 3 0 0 0 2.5 2.8" fill="none" stroke="white" strokeOpacity="0.7" strokeWidth="1.6" strokeLinecap="round" />
       </svg>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">Next: today&apos;s Downstream</span>
-        <span className="block text-xs text-ink-soft">A raindrop lands somewhere on Earth. Which sea does it reach?</span>
-      </span>
-      <svg viewBox="0 0 20 20" className="size-4 shrink-0 text-ink-soft transition-transform duration-200 group-hover:translate-x-0.5" aria-hidden="true">
-        <path d="M4 10h11M11 5.5 15.5 10 11 14.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-      </svg>
-    </Link>
-  );
+    ),
+  };
 }
 
 /** Sound on/off, remembered (storage setting "slice" / "muted"). */
