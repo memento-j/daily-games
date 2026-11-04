@@ -616,22 +616,50 @@ button:not(:disabled),
   mask-image: linear-gradient(to bottom, #000 calc(100% - 16px), transparent);
 }
 
-/* The "More below" pill's arrow nudges downward a few times, then rests
-   (components/ScrollHint.tsx). Reduced motion: still. */
-.scroll-hint-arrow {
-  animation: scroll-hint-nudge 1.1s cubic-bezier(0.16, 1, 0.3, 1) 0.8s 4;
+/* "See scores" while the chart is unseen (ScoreStanding): every few seconds its arrow hops
+   twice towards the chart and a soft ring leaves the button, then a long rest. Only translate,
+   scale and opacity move. Stops once the chart has been seen. Reduced motion: still. */
+.see-scores-idle .see-scores-arrow {
+  animation: see-scores-hop 3.6s cubic-bezier(0.33, 1, 0.68, 1) 1.2s infinite;
 }
-@keyframes scroll-hint-nudge {
+.see-scores-idle::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 2px var(--color-coral); /* inside, and a small spread: Slice's sheet clips 4px out */
+  opacity: 0;
+  pointer-events: none;
+  animation: see-scores-ring 3.6s cubic-bezier(0.16, 1, 0.3, 1) 1.2s infinite;
+}
+@keyframes see-scores-hop {
   0%,
+  24%,
   100% {
     translate: 0 0;
   }
-  45% {
+  6%,
+  18% {
     translate: 0 3px;
+  }
+  12% {
+    translate: 0 0;
+  }
+}
+@keyframes see-scores-ring {
+  0% {
+    opacity: 0.55;
+    scale: 1;
+  }
+  32%,
+  100% {
+    opacity: 0;
+    scale: 1.05 1.25;
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .scroll-hint-arrow {
+  .see-scores-idle .see-scores-arrow,
+  .see-scores-idle::before {
     animation: none;
   }
 }

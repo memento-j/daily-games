@@ -546,7 +546,7 @@ function Summary({
     // says there's more below. On desktop it stays modest too, so the country can be big.
     // The strip under it is the "More below" pill's own, so the pill covers nothing.
     <>
-    <div ref={sheet} className="sheet-fade flex max-h-[calc(34svh-20px)] flex-col gap-3 overflow-y-auto px-1 pb-5 *:shrink-0 lg:max-h-[36svh] [@media(max-height:720px)]:max-h-[calc(42svh-20px)] [@media(max-height:720px)]:gap-2">
+    <div ref={sheet} className="sheet-fade flex max-h-[calc(34svh-12px)] flex-col gap-3 overflow-y-auto px-1 pb-5 *:shrink-0 lg:max-h-[36svh] [@media(max-height:720px)]:max-h-[calc(42svh-20px)] [@media(max-height:720px)]:gap-2">
       <div className="flex items-end justify-between gap-3">
         <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s slices" : "Today\u2019s slices"}</h1>
         <p className="shrink-0 text-right">

@@ -79,7 +79,7 @@ export default function ScrollHint({
         }`}
       >
         More below
-        <svg viewBox="0 0 20 20" className="scroll-hint-arrow size-3.5" aria-hidden="true">
+        <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
           <path d="M10 4v11M5.5 11 10 15.5 14.5 11" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
       </button>

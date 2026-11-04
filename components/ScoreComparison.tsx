@@ -78,19 +78,35 @@ export function scrollToChart() {
  *  start, so nothing shifts when it fills in. */
 export function ScoreStanding({ comparison, score, today }: { comparison: Comparison; score: number; today: boolean }) {
   const players = comparison.status === "ready" ? playerCount(comparison.data.totalScores) : 0;
+  // The button keeps nudging until the player has seen the chart, by tapping it or scrolling
+  // to it, and then rests: it's an invitation, not a nag.
+  const [chartSeen, setChartSeen] = useState(false);
+  const hasChart = players > 0;
+  useEffect(() => {
+    const chart = document.getElementById(CHART_ID);
+    if (!hasChart || !chart) return;
+    const watch = new IntersectionObserver(([entry]) => entry.isIntersecting && setChartSeen(true), { threshold: 0.6 });
+    watch.observe(chart);
+    return () => watch.disconnect();
+  }, [hasChart]);
   return (
-    <div className="flex min-h-6 items-center justify-between gap-3 text-sm" aria-live="polite">
+    <div className="flex min-h-7 flex-wrap items-center justify-between gap-x-3 gap-y-1 text-sm leading-tight lg:min-h-9 lg:text-[17px]" aria-live="polite">
       {comparison.status === "loading" && <p className="text-ink-faint">Comparing with other players…</p>}
       {comparison.status === "failed" && <p className="text-ink-faint">Other players&apos; scores aren&apos;t available right now.</p>}
       {comparison.status === "ready" && <p className="text-ink-soft">{standingText(comparison.data, score, today)}</p>}
       {players > 0 && (
         <button
           type="button"
-          onClick={scrollToChart}
-          className="flex shrink-0 items-center gap-1 font-semibold whitespace-nowrap text-coral-deep underline-offset-[3px] hover:underline"
+          onClick={() => {
+            setChartSeen(true);
+            scrollToChart();
+          }}
+          className={`relative flex h-7 shrink-0 items-center gap-1 rounded-full bg-coral-soft pr-2 pl-2.5 text-[13px] font-semibold whitespace-nowrap text-coral-deep transition-[scale] duration-150 after:absolute after:inset-x-0 after:-inset-y-2 hover:scale-105 active:scale-95 lg:h-9 lg:pr-3 lg:pl-3.5 lg:text-[15px] ${
+            chartSeen ? "" : "see-scores-idle"
+          }`}
         >
           See scores
-          <svg viewBox="0 0 20 20" className="size-3.5" aria-hidden="true">
+          <svg viewBox="0 0 20 20" className="see-scores-arrow size-3.5 lg:size-4" aria-hidden="true">
             <path d="M10 4v11M5.5 11 10 15.5 14.5 11" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </button>
@@ -104,7 +120,9 @@ function standingText(data: ScoresResponse, score: number, today: boolean) {
   if (isFirstPlayer(data.totalScores)) return today ? "You're first to play today" : "You're first to play this one";
   return (
     <>
-      You beat <strong className="font-semibold text-ink">{betterThanPercent(data.totalScores, score)}%</strong> of players so far
+      You beat{" "}
+      <strong className="font-display text-[18px] leading-none font-semibold tracking-[-0.02em] text-ink lg:text-[26px]">{betterThanPercent(data.totalScores, score)}%</strong> of
+      players so far
     </>
   );
 }
