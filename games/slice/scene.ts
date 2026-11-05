@@ -4,10 +4,10 @@
 // players found it distracting, 2026-10-21); a drag on the slab draws a dashed "cut here" line
 // (raycast onto the slab's top, so it's exact at any tilt). On the reveal: a pair of
 // scissors snips along the line, the slab splits into its two pieces, which slide
-// apart; the people rise as columns; then the player can orbit and zoom. "Show perfect
-// cut" (showPerfect) slides the perfect cut at the player's angle in from their line,
+// apart; the people rise as columns; then the player can orbit and zoom. The Perfect cut
+// chip (showPerfect, hidePerfect) slides the perfect cut at the player's angle in from their line,
 // as an ink dashed line (a tester preferred it to a glass pane), with an arrow showing
-// which way it moved and a "Perfect cut · 50%" label.
+// which way it moved and a "Perfect cut for your angle · 50%" label.
 //
 // Scoring never happens here: the board maths (games/slice) stays 2D and decides
 // everything. This only shows it.
@@ -31,6 +31,7 @@ const SPLIT = 0.6; // how far the pieces slide apart
 const COLUMN_MAX = 2.2; // height of the most crowded column
 const WIDE_ASPECT = 1.2; // a board at least this wide frames its reveal by height (fitViews)
 const PERFECT_SECONDS = 1.1; // the perfect cut's slide from the player's line
+const PERFECT_LABEL_LONG_PX = 480; // a board at least this wide has room for the long label
 const HANDLE_PX = 30; // touch radius around a handle
 const MIN_CUT_PX = 24;
 const SCISSORS_SIZE = 1.8; // big enough to read on a phone
@@ -1101,12 +1102,21 @@ export class SliceScene {
     this.scene.add(group);
   }
 
-  /** "Show perfect cut": slide it in from the player's line, with the arrow and label.
-   *  `instant` puts it in place silently (the day's summary). */
-  showPerfect(instant = false) {
+  /** Slide it in from the player's line, with the arrow and label. `instant` puts it in place
+   *  (the day's summary); `quiet` leaves out the chime (only a tap on the chip earns one). */
+  showPerfect(instant = false, quiet = false) {
     if (!this.perfect || this.perfectStart !== null) return;
     this.perfectStart = performance.now() - (this.reduced || instant ? 10_000 : 0);
-    if (!instant) sound.perfect();
+    if (!instant && !quiet) sound.perfect();
+  }
+
+  /** Takes it away again, line, arrow and label. */
+  hidePerfect() {
+    if (!this.perfect) return;
+    this.perfectStart = null;
+    this.perfect.visible = false;
+    if (this.arrow) this.arrow.visible = false;
+    this.perfectLabel.style.opacity = "0";
   }
 
   private animatePerfect(now: number) {
@@ -1161,7 +1171,8 @@ export class SliceScene {
       this.perfectLabel.style.transform = `translate(-50%, -50%) translate(${best.x}px, ${best.y}px)`;
     }
     this.perfectLabel.style.opacity = String(ease((now - started) / 1000 / PERFECT_SECONDS - 0.4));
-    this.perfectLabel.textContent = `Perfect cut · ${formatShare(this.target)}`;
+    // There's a perfect cut for every angle: this is the one for the player's. Short on phones.
+    this.perfectLabel.textContent = `${box.width < PERFECT_LABEL_LONG_PX ? "A perfect cut" : "Perfect cut for your angle"} · ${formatShare(this.target)}`;
   }
 
   private columns(points: PeoplePoint[], heaviest: number, footprint: number, role: Role, piece: Piece): THREE.InstancedMesh {

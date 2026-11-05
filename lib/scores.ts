@@ -56,12 +56,6 @@ export function isFirstPlayer(counts: ScoreCount[]): boolean {
   return playerCount(counts) <= 1;
 }
 
-/** The share text's line, "Top 28%" (100 minus "you beat"), or null when the player is first. */
-export function standingLine(counts: ScoreCount[], score: number): string | null {
-  if (isFirstPlayer(counts)) return null;
-  return `Top ${Math.max(1, 100 - betterThanPercent(counts, score))}%`;
-}
-
 /** A read (GET) can be up to 60 s old, so it may not count the player yet, which would leave
  *  their own bar empty. If their exact total or any round's exact score isn't listed, they
  *  can't have been counted, so they're added: to each missing score and, as they're one more

@@ -37,9 +37,9 @@ export type Events = {
    *  it (lib/stats.ts, with its forgiven days). `hintsUsed`: Slice only, how many of the
    *  day's rounds took the hint (the three biggest cities as dots). */
   puzzle_finished: Play & { points: number; maxPoints: number; streak: number; hintsUsed?: number };
-  /** The Share button: the share sheet was used, the text was copied, or neither worked;
-   *  or "Save the picture" downloaded the result card (saved). */
-  result_shared: Play & { outcome: "shared" | "copied" | "failed" | "saved" };
+  /** Copy result copied the text (copied, or failed); Share used the share sheet (shared), or
+   *  the player closed it (cancelled); "Save the picture" downloaded the result card (saved). */
+  result_shared: Play & { outcome: "shared" | "copied" | "cancelled" | "failed" | "saved" };
   /** Slice's practice mode (games/slice/practice.ts): a past country, saved nowhere.
    *  Kept apart from puzzle_started / puzzle_finished so it never mixes into the daily numbers. */
   practice_started: { country: string };
@@ -54,6 +54,8 @@ export type Events = {
   /** A next step under a finished day's results (components/NextUp.tsx). `from`: this game;
    *  `to`: the other game's name, "yesterday" or "practice"; `position`: 1 from the top. */
   next_game_clicked: { from: Game; to: string; position: number };
+  /** Slice's chips over the map after a reveal: which one, and what it's now set to. */
+  overlay_toggled: { overlay: "cities" | "perfect_cut"; on: boolean };
   /** The results chart switched between "total" and "round_1", "round_2"... (Downstream's
    *  drops count as rounds here.) */
   distribution_viewed: { game: Game; view: string };

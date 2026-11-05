@@ -1,4 +1,4 @@
-// How Slice says things: the round's question, its goal, where the perfect cut lies.
+// How Slice says things: the round's question, its goal, where a perfect cut lies.
 // Pure, unit tested. A people round says "population" (friendlier than "people").
 
 import { formatShare } from "./scoring";
@@ -59,8 +59,8 @@ export function perfectDirection(line: Line, perfect: Line): string | null {
   return COMPASS[(sector + 8) % 8];
 }
 
-/** "At this angle, the perfect cut sits further north." */
+/** "At your angle, a perfect cut sits further north." There's one for every angle. */
 export function perfectLineText(line: Line, perfect: Line): string {
   const dir = perfectDirection(line, perfect);
-  return dir ? `At this angle, the perfect cut sits further ${dir}.` : "You found the perfect line.";
+  return dir ? `At your angle, a perfect cut sits further ${dir}.` : "You found a perfect line.";
 }

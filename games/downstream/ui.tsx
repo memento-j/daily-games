@@ -8,8 +8,7 @@ import Link from "next/link";
 import { useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import NextUp, { type NextUpItem } from "@/components/NextUp";
-import { ScoreChart, ScoreStanding, shareStanding, useScoreComparison } from "@/components/ScoreComparison";
-import ScrollHint from "@/components/ScrollHint";
+import { ScoreChart, ScoreSummary, useScoreComparison } from "@/components/ScoreComparison";
 import ShareButton from "@/components/ShareButton";
 import { useYesterdayItem } from "@/components/YesterdayLink";
 import { SupportLine } from "@/components/SupportLink";
@@ -22,7 +21,7 @@ import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import { useTodayResult as useSliceToday } from "@/games/slice/useTodayResult";
 import type { GameState } from "./game";
 import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "./schedule";
-import { dropEmoji, dropPoints, EMOJI_LEGEND, maxPoints, POINTS_BY_STAGE, totalPoints, type DropResult } from "./scoring";
+import { dropEmoji, dropPoints, maxPoints, POINTS_BY_STAGE, totalPoints, type DropResult } from "./scoring";
 import { drawDownstreamCard } from "./shareCard";
 import { isMuted, setMuted, sound } from "./sound";
 import { describeStart, describeStop } from "./describe";
@@ -324,7 +323,6 @@ export function DaySummary({
   const points = totalPoints(game.results);
   const max = maxPoints(puzzle.drops.length);
   const stats = useStats(storageKeyFor(preview), number);
-  const marks = game.results.map(dropEmoji).join("");
   const comparison = useScoreComparison("downstream", number, points, game.results.map(dropPoints));
   const nextGame = useNextSlice();
   const yesterday = useYesterdayItem("/downstream/", [GAME_KEY, PREVIEW_KEY], maxPoints(5));
@@ -334,60 +332,27 @@ export function DaySummary({
     marks: game.results.map(dropEmoji),
     points,
     maxPoints: max,
-    standing: shareStanding(comparison, points),
     url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
   });
   // The picture: each drop filled as far as it scored.
   const drops = game.results.map((r) => ({ points: dropPoints(r), max: POINTS_BY_STAGE[0], guessed: r.guess !== null }));
   const card = useShareCard(JSON.stringify([number, drops]), `downstream-${number}.png`, (ctx, f) => drawDownstreamCard(ctx, f, number, drops, points, max));
   return (
-    <div className="flex flex-col gap-5 [@media(max-height:720px)]:gap-3">
-      <div>
-        <h2 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s drops" : "Today\u2019s drops"}</h2>
-        <p className="font-display mt-2 text-[56px] leading-none font-semibold tracking-[-0.04em] [@media(max-height:720px)]:mt-1 [@media(max-height:720px)]:text-[44px]">
-          {points}
-          <span className="text-[28px] text-ink-faint"> / {max}</span>
-        </p>
-        <div className="mt-2">
-          <ScoreStanding comparison={comparison} score={points} today={!preview} />
+    <div className="flex flex-col gap-5">
+      {/* The first view on a phone: score, chart, caption, buttons, then the next card peeks in. */}
+      <div className="flex flex-col gap-3">
+        <div>
+          <h2 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s drops" : "Today\u2019s drops"}</h2>
+          <p className="font-display mt-2 text-[56px] leading-none font-semibold tracking-[-0.04em]">
+            {points}
+            <span className="text-[28px] text-ink-faint"> / {max}</span>
+          </p>
         </div>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <ShareButton
-          game="downstream"
-          number={number}
-          preview={preview}
-          text={text}
-          card={card}
-          onTap={sound.tap}
-          caption={
-            <>
-              Shares as <span className="font-semibold text-ink" aria-hidden="true">{marks}</span>
-              <span className="sr-only">your five squares and</span> {points}/{max}, never the answers.
-            </>
-          }
-        />
-        <p className="text-center text-xs text-ink-faint" aria-hidden="true">
-          {EMOJI_LEGEND.map(([e, meaning]) => `${e} ${meaning}`).join("  ·  ")}
-        </p>
+        <ScoreSummary game="downstream" comparison={comparison} score={points} today={!preview} />
+        <ShareButton game="downstream" number={number} preview={preview} text={text} card={card} onTap={sound.tap} />
       </div>
       {/* The next game is the main action after sharing, then the quieter choices. */}
       <NextUp from="downstream" next={nextGame} tone="bg-mat ring-slab-side/30 hover:ring-slab-side/70" rows={yesterday && !preview ? [yesterday] : []} />
-
-      {/* In the flow, so it can't sit on anything; gone once the player scrolls. */}
-      <div className="-my-2">
-        <ScrollHint ready={comparison.status !== "loading"} />
-      </div>
-      <ScoreChart
-        game="downstream"
-        comparison={comparison}
-        score={points}
-        roundScores={game.results.map(dropPoints)}
-        roundNames={puzzle.drops.map((d) => d.answer)}
-        today={!preview}
-        onTap={sound.tap}
-      />
 
       <div>
         <p className="text-sm font-semibold text-ink-soft">{onView ? "Your drops · pick one to see its route" : "Your drops"}</p>
@@ -437,6 +402,16 @@ export function DaySummary({
           })}
         </ol>
       </div>
+
+      <ScoreChart
+        game="downstream"
+        comparison={comparison}
+        score={points}
+        roundScores={game.results.map(dropPoints)}
+        roundNames={puzzle.drops.map((d) => d.answer)}
+        today={!preview}
+        onTap={sound.tap}
+      />
 
       <dl className="grid grid-cols-4 gap-2 text-center">
         {[

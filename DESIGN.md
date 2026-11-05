@@ -484,21 +484,28 @@ Everything the player touches or reads is rounded. Pills (fully round) for the c
 ### Done-today panel (game front page)
 - Replaces the Play pill once today's puzzle is finished. A coral-soft (60%) panel, 16px radius, 16px padding: "Done today · N-day streak" (streak shown from 2 days) in semibold coral-deep on the baseline with the score in 28px Bricolage ink and "/ max" at 16px ink-faint; below, the day's share squares at 20px with 0.15em tracking (the same squares the share text carries, labelled for screen readers); then the countdown in 14px semibold ink-soft. Under the panel, 16px: the coral Share button and the white See your results pill.
 
-### The standing line
+### The results screen
 
-`ScoreStanding`, directly under the score: "You beat 67% of players so far" at 14px (17px from 1024px), the percentage in the display face at 18px (26px), and beside it **See scores**, a coral-soft pill, never a solid coral one (the One Coral Action Rule). Until the chart has been seen, tapped or scrolled to, its arrow hops twice and a soft ring leaves the pill every 3.6 s; then it rests. Reduced motion: still.
+The first view, in order (developer's call, 2026-11-04): the score, the compact chart, one quiet caption, the Copy result and Share pair, and the top of the next-game card peeking in. On a 375x600 phone all of it shows without scrolling. On Slice the board gives way before the chart does.
+
+- **Caption:** "Better than 54% of today's players", 13px ink-faint, always, whatever the score. The only player reads "You're the first to play today. Check back later to see how others did." and gets no chart.
+- **Copy result** is the one solid coral action, flex-wide, 48px; it says "Copied!" for 2 s. **Share** beside it is white with a hairline ring, with a small icon and its label; it always shows, and copies where the browser has no share sheet. "Save the picture" is a small link beneath, on devices with a mouse.
 
 ### Score chart
 
-`components/ScoreComparison.tsx`, on both games' summaries, with no card of its own (the summary is already a card). A title in the headline face, a one-track switch (`bg-land`, the choice raised on `bg-card`; Total, R1, R2...), one readout line, then the bars: quiet ink at 18%, empty scores as low 6% stubs so a sparse day still reads as a scale, the player's bar coral with a coral "You" pill above everything and a hairline down to it, and a dashed line at the average with "avg N" under the axis. Shares only, never head counts. Blue stays for water, so nothing here is blue.
+`components/ScoreComparison.tsx`, with no card of its own (the summary is already a card). `ScoreSummary` under the score: 76px of bars (96px from 1024px), a "You" row above, the axis below. `ScoreChart` in the round breakdown: a title in the headline face, a one-track switch (`bg-land`, the choice raised on `bg-card`; Total, R1, R2...), a readout line, 112px of bars, the caption. Bars are quiet ink at 18%, empty scores low 6% stubs so a sparse day still reads as a scale, the player's bar coral with a coral "You" pill above everything and a hairline down to it, and a dashed line at the average with "avg N" under the axis. Shares only, never head counts. Blue stays for water, so nothing here is blue.
+
+### Slice's map chips
+
+After a round's reveal and on the summary, two small chips under the question: **Cities** (on by default) and **Perfect cut** (off by default). Off is a card pill in ink-soft; on is an ink pill with a drawn tick, so state isn't colour alone. They sit in the top block, so the board is framed below them and no label reaches them. The percentage labels have no chip: they're the result.
+
+### Slice's round strips
+
+Each round in the breakdown is the share picture's strip: the whole strip is the country's population, tinted to the share the cut took, a dashed coral line for the cut, an ink tick with a notch for the aim. Score left, country and "47.7% · aim 50%" above the strip. Tapping a round shows it on the board.
 
 ### Next up
 
 `components/NextUp.tsx`, the same on both games' results screens, directly under Share. The other game is one full-width card in that game's look (`bg-sea` to Downstream, `bg-mat` to Slice), a 32px icon and two lines. Everything else sits under it as quiet rows in one hairline-ringed list: 24px icon, 13px title, one truncated line in ink-faint, a small arrow. No carousel.
-
-### More below
-
-`components/ScrollHint.tsx`, on both games' results. An ink pill, "More below" with a still arrow (the one thing moving on this screen is See scores). It has its own place in the layout and never floats over content: a strip under Slice's sheet, the gap after next up on Downstream. Tapping it goes to the chart. It goes for good once the player starts scrolling or the chart is in view.
 
 ### Countdown
 - "New drops in 5h 12m" (then "12m", then "under a minute"): the time to the player's next local midnight, ticking every 15s. Browser-only: empty at build time and on first render, so it never mismatches. It takes its size and colour from where it sits.

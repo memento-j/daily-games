@@ -4,7 +4,7 @@
 // under a thin layer of interface. Each round: the question announces itself (a
 // People/Land badge, its key words highlighted, a two-note sound), the player draws a
 // dashed cut and presses Cut, the scissors snip, the pieces part and the population rises;
-// then "Show perfect cut" and Next. After the last round, the day's summary sits in a
+// then chips to show the cities and a perfect cut, and Next. After the last round, the day's summary sits in a
 // sheet at the bottom and tapping a round shows its cut again on the board.
 //
 // Game rules and loading live in games/slice (useSliceGame); this file only decides
@@ -14,17 +14,17 @@ import Link from "next/link";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import Countdown from "@/components/Countdown";
 import NextUp, { type NextUpItem } from "@/components/NextUp";
-import { ScoreChart, ScoreStanding, shareStanding, useScoreComparison } from "@/components/ScoreComparison";
-import ScrollHint from "@/components/ScrollHint";
+import { ScoreChart, ScoreSummary, useScoreComparison } from "@/components/ScoreComparison";
 import ShareButton from "@/components/ShareButton";
 import { useYesterdayItem } from "@/components/YesterdayLink";
 import { SupportLine } from "@/components/SupportLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
+import { track } from "@/lib/analytics";
 import { shareText } from "@/lib/share";
 import { useShareCard } from "@/lib/shareCard";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
-import { subscribe } from "@/lib/storage";
+import { getSetting, setSetting, subscribe } from "@/lib/storage";
 import { useTheme } from "@/lib/useTheme";
 import { GAME_NAME } from "@/games/slice/config";
 import { crosses, perfectLine, share } from "@/games/slice/cut";
@@ -78,7 +78,11 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   const [hasDraft, setHasDraft] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [revealDone, setRevealDone] = useState(false);
-  const [perfectShown, setPerfectShown] = useState(false);
+  // What the map shows after a reveal (the chips above the board). Remembered, and held here
+  // too, so the chips still work for the visit where storage is blocked.
+  const [citiesOn, setCitiesOn] = useState(() => getSetting<boolean>("slice", "overlayCities", true) !== false);
+  const [perfectOn, setPerfectOn] = useState(() => getSetting<boolean>("slice", "overlayPerfect", false) === true);
+  const perfectTapped = useRef(false);
   const [viewing, setViewing] = useState(0); // the summary's selected round
   const theme = useTheme();
 
@@ -179,7 +183,6 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
         () => setRevealDone(true),
         true,
       );
-      if (finished) s.showPerfect(true);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- g.game is read for the hint only when the board changes
   }, [sceneReady, key, g.phase, round, roundIndex, cut, finished]);
@@ -188,8 +191,39 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   // the day's summary: never before or between cuts, hinted or not.
   const namesShown = finished || (g.phase === "settled" && !!cut);
   useEffect(() => {
-    if (sceneReady) scene.current?.showCityNames(namesShown ? (round.cityNames ?? null) : null);
-  }, [sceneReady, namesShown, round, key]);
+    if (sceneReady) scene.current?.showCityNames(namesShown && citiesOn ? (round.cityNames ?? null) : null);
+  }, [sceneReady, namesShown, citiesOn, round, key]);
+
+  // A perfect cut, only once the round is over, so it never helps a try. In place at once on
+  // the summary, sliding in otherwise, with a chime when the player asked for it just now.
+  const overlaysOpen = finished || (g.phase === "settled" && !!cut && revealDone);
+  useEffect(() => {
+    if (!sceneReady) return;
+    if (overlaysOpen && perfectOn) {
+      const tapped = perfectTapped.current;
+      perfectTapped.current = false;
+      scene.current?.showPerfect(finished && !tapped, !tapped);
+    } else {
+      scene.current?.hidePerfect();
+    }
+  }, [sceneReady, overlaysOpen, perfectOn, finished, key]);
+
+  function toggleCities() {
+    sound.tap();
+    const on = !citiesOn;
+    setCitiesOn(on);
+    setSetting("slice", "overlayCities", on);
+    track("overlay_toggled", { overlay: "cities", on });
+  }
+
+  function togglePerfect() {
+    sound.tap();
+    const on = !perfectOn;
+    perfectTapped.current = on;
+    setPerfectOn(on);
+    setSetting("slice", "overlayPerfect", on);
+    track("overlay_toggled", { overlay: "perfect_cut", on });
+  }
 
   function confirm() {
     const draft = scene.current?.getDraft();
@@ -218,7 +252,6 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   function next() {
     sound.tap();
     setRevealDone(false);
-    setPerfectShown(false);
     g.act({ type: "next" });
   }
 
@@ -226,19 +259,13 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
   function again() {
     sound.tap();
     setRevealDone(false);
-    setPerfectShown(false);
     g.act({ type: "again" });
   }
 
-  // Happy with this cut: settle the round, which brings out the perfect cut.
+  // Happy with this cut: settle the round, which opens the map's chips.
   function keep() {
     sound.tap();
     g.act({ type: "keep" });
-  }
-
-  function showPerfect() {
-    setPerfectShown(true);
-    scene.current?.showPerfect();
   }
 
   return (
@@ -352,6 +379,15 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
             </div>
           </>
         )}
+        {/* What the map shows. In the top block, so the board is framed below them and its
+            labels keep clear of them. Their room is held from the cut, so the board doesn't
+            jump when they appear after the reveal. */}
+        {cut && g.phase !== "cutting" && (
+          <div className={`mt-2 flex gap-1.5 ${overlaysOpen ? "pointer-events-auto" : "invisible"}`}>
+            <OverlayChip label="Cities" on={citiesOn} onClick={toggleCities} />
+            <OverlayChip label="Perfect cut" on={perfectOn} onClick={togglePerfect} />
+          </div>
+        )}
       </div>
 
       <div className="pointer-events-none absolute inset-x-0 bottom-0 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
@@ -422,8 +458,8 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
               </p>
               <p className="px-1 text-[13px] leading-snug text-ink-soft" aria-live="polite">
                 {g.phase === "result"
-                  ? "Slice again to try to beat it, or keep it. The perfect cut shows once you're done."
-                  : perfectShown
+                  ? "Slice again to try to beat it, or keep it. You can see a perfect cut once you're done."
+                  : perfectOn
                     ? perfectLineText(cut.line, perfectLine(round, cut.line))
                     : best && best !== cut
                       ? `Your first cut was better: it scored ${best.score}, so that's the one that counts.`
@@ -450,16 +486,6 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
                 </div>
               ) : (
                 <div className="flex gap-2">
-                  {!perfectShown && (
-                    <button
-                      type="button"
-                      onClick={showPerfect}
-                      disabled={!revealDone}
-                      className={`${BUTTON} flex-1 bg-card ring-1 ring-ink/15 transition-shadow hover:ring-ink/35`}
-                    >
-                      Show perfect cut
-                    </button>
-                  )}
                   <button
                     type="button"
                     onClick={next}
@@ -521,19 +547,16 @@ function Summary({
   const points = totalScore(cuts);
   const max = maxScore(cuts.length);
   const comparison = useScoreComparison("slice", number, points, cuts.map((c) => c.score));
-  const sheet = useRef<HTMLDivElement>(null);
   const nextGame = useNextDownstream();
   const yesterday = useYesterdayItem("/slice/", [GAME_KEY, PREVIEW_KEY], maxScore(4));
   // "Slice #4 312/400", then each round's score, with a 💡 after any round that took the
-  // hint, then how it compares ("Top 28%") when there's anyone to compare with: no countries,
-  // no answers.
+  // hint: no countries, no answers.
   const text = shareText({
     game: GAME_NAME,
     number,
     points,
     maxPoints: max,
     detail: cuts.map((c, i) => `${c.score}${hints[i] ? "💡" : ""}`).join(" · "),
-    standing: shareStanding(comparison, points),
     url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
   });
   // The picture: one strip per round, showing how close the cut came to the aim.
@@ -541,12 +564,10 @@ function Summary({
   const card = useShareCard(JSON.stringify([number, rounds]), `slice-${number}.png`, (ctx, f) => drawSliceCard(ctx, f, number, rounds, points, max));
   return (
     // The sheet scrolls; its blocks keep their size (in a flex column they'd shrink to fit).
-    // On phones it stays low (about a third of the screen) so the board keeps most of it:
-    // the score and Share show, the next card peeks in, and the fade at the bottom edge
-    // says there's more below. On desktop it stays modest too, so the country can be big.
-    // The strip under it is the "More below" pill's own, so the pill covers nothing.
-    <>
-    <div ref={sheet} className="sheet-fade flex max-h-[calc(34svh-12px)] flex-col gap-3 overflow-y-auto px-1 pb-5 *:shrink-0 lg:max-h-[36svh] [@media(max-height:720px)]:max-h-[calc(42svh-20px)] [@media(max-height:720px)]:gap-2">
+    // It's as tall as the score, the chart, its caption and the buttons need, with the next
+    // game's card peeking in under them, whatever the screen: on a short phone the board gives
+    // way, never the chart (developer's call, 2026-11-04). Taller screens show a little more.
+    <div className="sheet-fade flex max-h-[max(272px,34svh)] flex-col gap-2 overflow-y-auto px-1 pb-5 *:shrink-0 [@media(pointer:fine)_and_(max-width:1023px)]:max-h-[max(292px,34svh)] lg:max-h-[max(350px,38svh)]">
       <div className="flex items-end justify-between gap-3">
         <h1 className="font-display text-[22px] font-semibold tracking-[-0.02em]">{preview ? "Yesterday\u2019s slices" : "Today\u2019s slices"}</h1>
         <p className="shrink-0 text-right">
@@ -554,29 +575,11 @@ function Summary({
           <span className="text-sm text-ink-faint tabular-nums">/{max}</span>
         </p>
       </div>
-      <ScoreStanding comparison={comparison} score={points} today={!preview} />
-      <ShareButton
-        game="slice"
-        number={number}
-        preview={preview}
-        text={text}
-        card={card}
-        onTap={sound.tap}
-        caption="How close you cut, never the countries."
-      />
+      <ScoreSummary game="slice" comparison={comparison} score={points} today={!preview} />
+      <ShareButton game="slice" number={number} preview={preview} text={text} card={card} onTap={sound.tap} />
       {/* The next game is the main action after sharing, then the quieter choices. */}
       <NextUp from="slice" next={nextGame} tone={DOWNSTREAM_TONE} rows={[...(yesterday && !preview ? [yesterday] : []), practiceItem(number)]} />
-      <ScoreChart
-        game="slice"
-        comparison={comparison}
-        score={points}
-        roundScores={cuts.map((c) => c.score)}
-        roundNames={puzzle.rounds.map((r) => capitalise(r.country))}
-        today={!preview}
-        onTap={sound.tap}
-      />
-
-      <p className="-mb-1 text-xs text-ink-faint">
+      <p className="mt-3 -mb-1 text-xs text-ink-faint">
         Each cut starts at {MAX_SCORE} and halves for every {HALF_EVERY_POINTS} percentage points off.
       </p>
       <ol className="divide-y divide-line overflow-hidden rounded-2xl ring-1 ring-line">
@@ -595,25 +598,36 @@ function Summary({
                 {cuts[i].score}
               </span>
               <span className="min-w-0 flex-1">
-                <span className="flex items-center gap-1.5 text-sm font-semibold">
-                  {capitalise(r.country)}
-                  {hints[i] && (
-                    <span className="flex items-center gap-0.5 text-xs font-medium text-coral-deep">
-                      <HintIcon on className="size-3.5" />
-                      hint
-                    </span>
-                  )}
+                <span className="flex items-baseline justify-between gap-2">
+                  <span className="flex min-w-0 items-center gap-1.5 text-sm font-semibold">
+                    <span className="truncate">{capitalise(r.country)}</span>
+                    {hints[i] && (
+                      <span className="flex items-center gap-0.5 text-xs font-medium text-coral-deep">
+                        <HintIcon on className="size-3.5" />
+                        hint
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 text-xs text-ink-faint tabular-nums">
+                    <span className="sr-only">{goal(r)}. You cut off </span>
+                    <span className="font-semibold text-ink-soft">{formatShare(cuts[i].share)}</span> · aim {formatShare(r.target)}
+                  </span>
                 </span>
-                <span className="block text-xs text-ink-soft">{goal(r)}</span>
-              </span>
-              <span className="text-right">
-                <span className="block text-sm font-semibold tabular-nums">{formatShare(cuts[i].share)}</span>
-                <span className="block text-xs text-ink-faint tabular-nums">aim {formatShare(r.target)}</span>
+                <CutStrip share={cuts[i].share} target={r.target} />
               </span>
             </button>
           </li>
         ))}
       </ol>
+      <ScoreChart
+        game="slice"
+        comparison={comparison}
+        score={points}
+        roundScores={cuts.map((c) => c.score)}
+        roundNames={puzzle.rounds.map((r) => capitalise(r.country))}
+        today={!preview}
+        onTap={sound.tap}
+      />
 
       {stats && (
         <dl className="grid grid-cols-3 gap-2 text-center">
@@ -632,10 +646,23 @@ function Summary({
       <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />
       <SupportLine game="slice" />
     </div>
-    <div className="pt-1">
-      <ScrollHint ready={comparison.status !== "loading"} scroller={sheet} />
-    </div>
-    </>
+  );
+}
+
+/** One round as the share picture draws it: the whole strip is the country's population, the
+ *  tinted part is the share the cut took, the dashed coral line is the cut, the ink tick is the
+ *  aim. The gap between them is the miss. */
+function CutStrip({ share, target }: { share: number; target: number }) {
+  const at = (x: number) => `${Math.min(100, Math.max(0, x * 100))}%`;
+  return (
+    <span aria-hidden="true" className="relative mt-2.5 mb-1 block h-3 rounded-[4px] bg-ink/7 ring-1 ring-ink/12">
+      <span className="absolute inset-y-0 left-0 rounded-l-[4px] bg-slab-counted" style={{ width: at(share) }} />
+      <span className="absolute inset-y-0.5 w-0.5 -translate-x-1/2 bg-ink ring-1 ring-card" style={{ left: at(target) }} />
+      <svg viewBox="0 0 8 5" className="absolute -top-[6px] h-[5px] w-2 -translate-x-1/2 text-ink" style={{ left: at(target) }}>
+        <path d="M0 0h8L4 5Z" fill="currentColor" />
+      </svg>
+      <span className="absolute -inset-y-1 -translate-x-1/2 border-l-2 border-dashed border-coral" style={{ left: at(share) }} />
+    </span>
   );
 }
 
@@ -745,6 +772,27 @@ function useNextDownstream(): NextUpItem | null {
       </svg>
     ),
   };
+}
+
+/** Turns something on the map on or off. Says which by more than colour: a tick when it's on. */
+function OverlayChip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={on}
+      className={`relative flex h-7 items-center gap-1 rounded-full px-2.5 text-xs font-semibold whitespace-nowrap shadow-card transition-colors duration-150 after:absolute after:inset-x-0 after:-inset-y-2 ${
+        on ? "bg-ink text-card" : "bg-card text-ink-soft hover:text-ink"
+      }`}
+    >
+      {on && (
+        <svg viewBox="0 0 20 20" className="-ml-0.5 size-3" aria-hidden="true">
+          <path d="M4 10.5 8.2 15 16 5.5" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      )}
+      {label}
+    </button>
+  );
 }
 
 /** Sound on/off, remembered (storage setting "slice" / "muted"). */

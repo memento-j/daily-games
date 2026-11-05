@@ -14,7 +14,7 @@ export const metadata: Metadata = pageMetadata({
   path: "/privacy/",
 });
 
-const UPDATED = "3 November 2026";
+const UPDATED = "5 November 2026";
 
 export default function PrivacyPage() {
   return (
@@ -74,8 +74,8 @@ export default function PrivacyPage() {
         <li>your approximate location (country, region and city), worked out from your IP address, which is not stored;</li>
         <li>
           game events: starting a puzzle, finishing it with your total score, current streak and (in Slice) how many rounds used the hint, starting and
-          finishing a Slice practice country (which country, its score and whether you used the hint), pressing a country page&apos;s button to try that country, clicking the &ldquo;Support Pondo&rdquo; link (and where it was), whether a score reached the score server, switching the score chart between its views, choosing what to play next from a results screen (which option and where it was), pressing Share or saving the result picture (whether it was
-          shared, copied or saved, never what you shared or who to), and a once-a-day visit that says how many days it has been since your first visit and on how many
+          finishing a Slice practice country (which country, its score and whether you used the hint), pressing a country page&apos;s button to try that country, clicking the &ldquo;Support Pondo&rdquo; link (and where it was), whether a score reached the score server, switching the score chart between its views, turning Slice&apos;s map overlays on or off, choosing what to play next from a results screen (which option and where it was), pressing Share or saving the result picture (whether it was
+          shared, copied, saved or cancelled, never what you shared or who to), and a once-a-day visit that says how many days it has been since your first visit and on how many
           different days you&apos;ve visited.
         </li>
       </ul>
@@ -130,7 +130,7 @@ export default function PrivacyPage() {
         <li>No cookies.</li>
         <li>No advertising or ad tracking, and no selling or sharing of data.</li>
         <li>
-          Sharing a result only puts a line of text (the puzzle number, your score and how it compares) on your clipboard or share sheet, and on phones a picture of
+          Sharing a result only puts a line of text (the puzzle number and your score) on your clipboard or share sheet, and on phones a picture of
           your score, drawn in your browser. We never see what you share.
         </li>
       </ul>

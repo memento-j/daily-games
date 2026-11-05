@@ -12,13 +12,6 @@ export const EMOJI_BY_STAGE = ["🟩", "🟦", "🟨", "🟧"];
 export const EMOJI_WRONG = "🟥";
 export const EMOJI_NO_GUESS = "⬜";
 
-/** What each square means, for the legend under the summary's share preview. */
-export const EMOJI_LEGEND: [string, string][] = [
-  ...EMOJI_BY_STAGE.map((e, i): [string, string] => [e, `${POINTS_BY_STAGE[i]}`]),
-  [EMOJI_WRONG, "wrong"],
-  [EMOJI_NO_GUESS, "no guess"],
-];
-
 export type DropResult = {
   guess: string | null; // null = never guessed
   stage: number;

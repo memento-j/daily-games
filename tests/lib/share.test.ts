@@ -20,7 +20,4 @@ describe("shareText", () => {
     ).toBe("Slice #4 312/400\n94 · 81 · 62 · 75\nhttps://example.com/slice/");
   });
 
-  it("adds the standing above the link, when there is one", () => {
-    expect(shareText({ ...base, standing: "Top 28%" })).toBe("Downstream #12 🟩🟨🟥🟩🟧 14/20\nTop 28%\nhttps://example.com/downstream/");
-  });
 });

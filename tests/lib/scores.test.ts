@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { averageScore, betterThanPercent, bucketIndex, buckets, chartX, flushScores, includePlayer, isFirstPlayer, loadComparison, newScoreId, playerCount, queueScore, standingLine, type ScoreSubmission } from "../../lib/scores";
+import { averageScore, betterThanPercent, bucketIndex, buckets, chartX, flushScores, includePlayer, isFirstPlayer, loadComparison, newScoreId, playerCount, queueScore, type ScoreSubmission } from "../../lib/scores";
 import { getSetting } from "../../lib/storage";
 
 const counts = [
@@ -43,23 +43,11 @@ describe("the standing", () => {
   it("is first only when there's nobody else", () => {
     expect(isFirstPlayer([{ score: 50, count: 1 }])).toBe(true);
     expect(isFirstPlayer([{ score: 50, count: 2 }])).toBe(false);
-    expect(standingLine([{ score: 50, count: 1 }], 50)).toBeNull();
-  });
-
-  it("gives Top X% from two players up, with no minimum", () => {
-    expect(standingLine([{ score: 10, count: 1 }, { score: 50, count: 1 }], 50)).toBe("Top 50%");
-    expect(standingLine([{ score: 50, count: 1 }, { score: 90, count: 1 }], 50)).toBe("Top 100%");
-    expect(standingLine([{ score: 10, count: 2 }, { score: 50, count: 1 }], 50)).toBe("Top 33%");
   });
 
   it("doesn't count a tie as beaten", () => {
     expect(betterThanPercent([{ score: 50, count: 2 }], 50)).toBe(0);
-    expect(standingLine([{ score: 50, count: 2 }], 50)).toBe("Top 100%");
     expect(betterThanPercent([{ score: 10, count: 1 }, { score: 50, count: 2 }], 50)).toBe(33);
-  });
-
-  it("stays at Top 1% at the very top", () => {
-    expect(standingLine([{ score: 10, count: 999 }, { score: 50, count: 1 }], 50)).toBe("Top 1%");
   });
 });
 

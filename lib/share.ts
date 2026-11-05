@@ -10,40 +10,37 @@ export type ShareInput = {
   points?: number; // the day's score; left out = the marks alone
   maxPoints?: number;
   detail?: string; // a second line (Slice: each round's score, "94 · 81 · 62 · 75")
-  standing?: string; // how it compares, when there's anyone to compare with ("Top 28%")
   url: string;
 };
 
-export function shareText({ game, number, marks, points, maxPoints, detail, standing, url }: ShareInput): string {
+export function shareText({ game, number, marks, points, maxPoints, detail, url }: ShareInput): string {
   const score = points !== undefined && maxPoints !== undefined ? `${points}/${maxPoints}` : "";
   const first = [`${game} #${number}`, marks?.join("") ?? "", score].filter(Boolean).join(" ");
-  return [first, detail, standing, url].filter(Boolean).join("\n");
+  return [first, detail, url].filter(Boolean).join("\n");
 }
 
-export type ShareOutcome = "shared" | "copied" | "failed";
-
-/**
- * Phones open the system share sheet (Messages, WhatsApp, ...); elsewhere the
- * text is copied. Cancelling the share sheet counts as shared (nothing to do).
- * With a picture (lib/shareCard.ts) phones send it along with the text, where the
- * share sheet takes files. Call it straight from the tap: phones only open the share
- * sheet in answer to one, so the picture must already be drawn.
- */
-export async function shareResult(text: string, image?: File | null): Promise<ShareOutcome> {
-  const touch = typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
-  if (touch && typeof navigator.share === "function") {
-    const files = image && navigator.canShare?.({ files: [image] }) ? [image] : undefined;
-    try {
-      await navigator.share(files ? { files, text } : { text });
-      return "shared";
-    } catch (e) {
-      if ((e as Error).name === "AbortError") return "shared";
-    }
-  }
+export async function copyText(text: string): Promise<"copied" | "failed"> {
   try {
     await navigator.clipboard.writeText(text);
     return "copied";
   } catch {
     return "failed";
+  }
+}
+
+/**
+ * Opens the system share sheet (Messages, WhatsApp, ...), with the result picture
+ * (lib/shareCard.ts) where the sheet takes files. Call it straight from the tap: browsers only
+ * open it in answer to one, so the picture must already be drawn. If the sheet fails for any
+ * reason but the player closing it, the text is copied instead.
+ */
+export async function openShareSheet(text: string, image?: File | null): Promise<"shared" | "cancelled" | "copied" | "failed"> {
+  try {
+    const files = image && navigator.canShare?.({ files: [image] }) ? [image] : undefined;
+    await navigator.share(files ? { files, text } : { text });
+    return "shared";
+  } catch (e) {
+    if ((e as Error).name === "AbortError") return "cancelled";
+    return copyText(text);
   }
 }

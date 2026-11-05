@@ -66,7 +66,7 @@ describe("perfectDirection", () => {
 
 describe("perfectLineText", () => {
   it("says where the perfect cut sits", () => {
-    expect(perfectLineText(lineAt(Math.PI / 2, 300), lineAt(Math.PI / 2, 200))).toBe("At this angle, the perfect cut sits further north.");
-    expect(perfectLineText(lineAt(0, 300), lineAt(0, 300))).toBe("You found the perfect line.");
+    expect(perfectLineText(lineAt(Math.PI / 2, 300), lineAt(Math.PI / 2, 200))).toBe("At your angle, a perfect cut sits further north.");
+    expect(perfectLineText(lineAt(0, 300), lineAt(0, 300))).toBe("You found a perfect line.");
   });
 });
