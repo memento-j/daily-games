@@ -46,6 +46,7 @@ const CITY_DOT = 0.11;
 const CITY_RING = 0.15;
 const CITY_APART = CITY_RING * 2 + 0.03;
 const CITY_REACH = 90; // px: how far from its city a name may move to find room, with a leader line
+const LABEL_GAP = 8; // px kept clear between any two labels on the board
 
 // The reveal's timing, in seconds after Cut. sound.reveal plays to the same clock.
 const SNIP_EVERY = 0.2; // one snip per scissor close
@@ -501,12 +502,14 @@ export class SliceScene {
   /** Each frame: place every name near its city without touching anything that matters:
    *  the share labels (placed first, the priority), the perfect cut's label, the names
    *  already placed, the other cities, the interface above and below the board and the
-   *  screen edge. Spots are tried nearest first, and in each ring the ones pointing away
-   *  from the country's middle first, so names fan out around the country instead of
-   *  piling into its centre where the share labels sit. A spot away from the city gets a
-   *  leader line, and only counts if that line crosses no label and no other leader. A
-   *  name keeps last frame's spot while it's still clear, so it doesn't hop as the view
-   *  turns; with no clear spot within CITY_REACH, it's hidden. */
+   *  screen edge, keeping LABEL_GAP from every label. Biggest city first, so the smallest
+   *  gives way first. Spots are tried nearest first, and in each ring only upwards or away
+   *  from the country's middle, so names fan out around the country instead of piling into
+   *  its centre where the share labels sit. A spot away from the city gets a leader line,
+   *  and only counts if that line crosses no label and no other leader. A name keeps last
+   *  frame's spot while it's still clear, so it doesn't hop as the view turns; with no clear
+   *  spot within CITY_REACH, the name goes and a dot stays on the city. The share labels and
+   *  the perfect cut's label never move for a name. */
   private placeCityLabels() {
     const show = !!this.cityNames && this.revealDone && this.phase === "reveal";
     const hide = (i: number) => {
@@ -522,7 +525,7 @@ export class SliceScene {
     const box = this.renderer.domElement.getBoundingClientRect();
     type Rect = { x0: number; y0: number; x1: number; y1: number };
     type Seg = [number, number, number, number];
-    const pad = 3;
+    const pad = LABEL_GAP / 2; // on every rectangle, so two of them keep the whole gap
     const rectOf = (el: HTMLElement): Rect => {
       const r = el.getBoundingClientRect();
       return { x0: r.left - box.left - pad, y0: r.top - box.top - pad, x1: r.right - box.left + pad, y1: r.bottom - box.top + pad };
@@ -545,8 +548,20 @@ export class SliceScene {
     };
     const middle = project(new THREE.Vector3(0, TOP, 0));
     const anchors = (this.cityAnchors ?? []).map((a) => (this.pieces[a.piece] ? project(a.rest.clone().add(this.pieces[a.piece].group.position)) : null));
-    const taken: Rect[] = [...this.labels, this.perfectLabel].filter((el) => Number(el.style.opacity || 0) > 0.05).map(rectOf);
+    // The perfect cut's label counts from the moment it's asked for, before it has faded in.
+    const taken: Rect[] = [...this.labels.filter((el) => Number(el.style.opacity || 0) > 0.05), ...(this.perfectStart !== null ? [this.perfectLabel] : [])].map(rectOf);
     const leaders: Seg[] = [];
+    // No room for the name: the dot stays, unless it would sit on a label (the leader's own dot,
+    // on a line of no length).
+    const dotOnly = (i: number, a: { x: number; y: number }) => {
+      hide(i);
+      const leader = this.cityLeaders[i];
+      if (!leader || taken.some((t) => inRect(a.x, a.y, t))) return;
+      leader.style.width = "0px";
+      leader.style.transform = `translate(${a.x}px, ${a.y}px)`;
+      leader.style.opacity = "1";
+      taken.push({ x0: a.x - 3, y0: a.y - 3, x1: a.x + 3, y1: a.y + 3 });
+    };
     this.cityLabels.forEach((el, i) => {
       const a = anchors[i];
       if (!a || !this.cityNames?.[i]) return hide(i);
@@ -557,34 +572,39 @@ export class SliceScene {
       const others = anchors.flatMap((b, k) => (b && k !== i ? [{ x0: b.x - 5, y0: b.y - 5, x1: b.x + 5, y1: b.y + 5 }] : []));
       const outward = Math.atan2(a.y - middle.y, a.x - middle.x);
       // Candidate offsets of the label's centre from the city: nearest ring first, and in
-      // each ring the directions closest to outward first (beside the city: the outer half).
+      // each ring only upwards or outwards, the directions closest to either first.
       const offsets: [number, number][] = [];
       for (const r of [0, 30, 46, 64, CITY_REACH]) {
         const ring: [number, number, number][] = [];
         for (let k = 0; k < 16; k++) {
           const ang = (k * Math.PI) / 8;
-          const diff = Math.abs(Math.atan2(Math.sin(ang - outward), Math.cos(ang - outward)));
-          ring.push([Math.cos(ang) * (r + w / 2 + 6), Math.sin(ang) * (r + h / 2 + 6), diff]);
+          const from = (dir: number) => Math.abs(Math.atan2(Math.sin(ang - dir), Math.cos(ang - dir)));
+          const diff = Math.min(from(outward), from(-Math.PI / 2));
+          if (diff <= Math.PI / 2 + 0.01) ring.push([Math.cos(ang) * (r + w / 2 + 6), Math.sin(ang) * (r + h / 2 + 6), diff]);
         }
         ring.sort((p, q) => p[2] - q[2]);
-        for (const [dx, dy] of r === 0 ? ring.slice(0, 8) : ring) offsets.push([dx, dy]);
+        for (const [dx, dy] of ring) offsets.push([dx, dy]);
       }
       const rectAt = ([dx, dy]: [number, number]): Rect => ({ x0: a.x + dx - w / 2 - pad, y0: a.y + dy - h / 2 - pad, x1: a.x + dx + w / 2 + pad, y1: a.y + dy + h / 2 + pad });
       const leaderTo = (off: [number, number]): Seg => {
         const r = rectAt(off);
         return [a.x, a.y, Math.min(Math.max(a.x, r.x0 + pad), r.x1 - pad), Math.min(Math.max(a.y, r.y0 + pad), r.y1 - pad)];
       };
-      const clear = (off: [number, number]) => {
+      const clear = (off: [number, number], overTowers = false) => {
         const r = rectAt(off);
         if (r.x0 < 4 || r.x1 > box.width - 4 || r.y0 < this.insets.top || r.y1 > box.height - this.insets.bottom) return false;
-        if (taken.some((t) => overlaps(r, t)) || others.some((t) => overlaps(r, t))) return false;
+        if (taken.some((t) => overlaps(r, t)) || leaders.some((l) => segHitsRect(l, r))) return false;
+        if (!overTowers && others.some((t) => overlaps(r, t))) return false;
         const seg = leaderTo(off);
         if (Math.hypot(seg[2] - seg[0], seg[3] - seg[1]) < 8) return true; // right beside the city: no leader
-        return !taken.some((t) => segHitsRect(seg, t)) && !leaders.some((l) => cross(seg, l));
+        // A city under a share label can't be helped (those don't move): its line runs out from
+        // behind that label, which is drawn over the lines. Any other label blocks the way.
+        return !taken.some((t) => !inRect(a.x, a.y, t) && segHitsRect(seg, t)) && !leaders.some((l) => cross(seg, l));
       };
       const last = this.citySpots[i];
-      const off = last && clear(last) ? last : offsets.find(clear);
-      if (!off) return hide(i);
+      // A bigger city's name may cover a smaller city's tower rather than go altogether.
+      const off = last && clear(last) ? last : (offsets.find((o) => clear(o)) ?? offsets.find((o) => clear(o, true)));
+      if (!off) return dotOnly(i, a);
       this.citySpots[i] = off;
       const r = rectAt(off);
       taken.push(r);
@@ -1145,17 +1165,20 @@ export class SliceScene {
     const others = this.labels.map((el) => el.getBoundingClientRect());
     const box = this.renderer.domElement.getBoundingClientRect();
     let best: THREE.Vector2 | null = null;
+    let fallback: THREE.Vector2 | null = null;
     let bestGap = -1;
     for (const f of [0, -0.35, 0.35]) {
       const v = this.perfect.position.clone().addScaledVector(along, f * this.perfectLen).setY(y).project(this.camera);
       const at = new THREE.Vector2(((v.x + 1) / 2) * box.width, ((1 - v.y) / 2) * box.height);
-      if (at.x < 60 || at.x > box.width - 60 || at.y < 0 || at.y > box.height) continue; // keep it on screen
+      fallback ??= at;
+      if (at.x < 60 || at.x > box.width - 60 || at.y < this.insets.top || at.y > box.height - this.insets.bottom) continue; // keep it clear of the interface
       const gap = Math.min(...others.map((o) => Math.hypot(at.x - (o.left + o.width / 2 - box.left), at.y - (o.top + o.height / 2 - box.top))));
       if (gap > bestGap) {
         bestGap = gap;
         best = at;
       }
     }
+    best ??= fallback;
     if (best) {
       // A short perfect line (narrow Chile) can leave every spot near a piece's label:
       // step upwards until the two no longer overlap.
@@ -1168,6 +1191,9 @@ export class SliceScene {
           return Math.abs(best!.x - cx) < w + o.width / 2 && Math.abs(best!.y - cy) < h + o.height / 2;
         });
       for (let i = 0; i < 30 && hits(); i++) best.y -= 4;
+      // Never over the chips, the card or the screen's edge.
+      best.x = Math.min(Math.max(best.x, w), box.width - w);
+      best.y = Math.min(Math.max(best.y, this.insets.top + h), box.height - this.insets.bottom - h);
       this.perfectLabel.style.transform = `translate(-50%, -50%) translate(${best.x}px, ${best.y}px)`;
     }
     this.perfectLabel.style.opacity = String(ease((now - started) / 1000 / PERFECT_SECONDS - 0.4));

@@ -283,16 +283,16 @@ function Board({ load, game: g }: { load: Extract<Load, { status: "ready" }>; ga
         </p>
       )}
 
-      {/* Piece labels and the perfect cut's label, positioned by the scene every frame. */}
-      <div ref={labelA} className={LABEL} style={{ opacity: 0 }} />
-      <div ref={labelB} className={LABEL} style={{ opacity: 0 }} />
-      <div ref={perfectLabel} className={`${LABEL} bg-ink! text-[13px]! text-card`} style={{ opacity: 0 }} />
-      {/* A name placed away from its city gets a thin leader line back to it, ending in a dot. */}
+      {/* A name placed away from its city gets a thin leader line back to it, ending in a dot. First, so the labels are drawn over the lines. */}
       {cityLeaders.map((ref, i) => (
         <div key={i} ref={ref} className="pointer-events-none absolute top-0 left-0 h-px origin-left bg-ink/35 transition-opacity duration-300" style={{ opacity: 0 }} aria-hidden="true">
           <span className="absolute -top-[1.5px] -left-[2px] size-1 rounded-full bg-ink/70" />
         </div>
       ))}
+      {/* Piece labels and the perfect cut's label, positioned by the scene every frame. */}
+      <div ref={labelA} className={LABEL} style={{ opacity: 0 }} />
+      <div ref={labelB} className={LABEL} style={{ opacity: 0 }} />
+      <div ref={perfectLabel} className={`${LABEL} bg-ink! text-[13px]! text-card`} style={{ opacity: 0 }} />
       {cityLabels.map((ref, i) => (
         <div key={i} ref={ref} className={CITY_LABEL} style={{ opacity: 0 }} aria-hidden="true">
           <span className="size-1 shrink-0 rounded-full bg-ink" />
