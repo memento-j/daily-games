@@ -258,6 +258,7 @@ def build_drop(rivers: Rivers, seas: Seas, c: Candidate, rng: np.random.Generato
         "fact": f"This drop travels {distance:,} km and ends up in {with_article(c.answer)}.",
         "difficulty": c.difficulty,
         "seaLabels": sea_labels(seas, c.pin, options),
+        "seaShape": sea_shape(seas, c.answer, list(c.pin), drop.route_coords(), sea_labels(seas, c.pin, options)),
         # The sea a player would naively guess (nearest the pin): when it isn't the
         # answer, the game can say so, which is the surprise worth sharing.
         "nearestSea": display_name(drop.nearest_sea),
@@ -272,6 +273,26 @@ def sea_labels(seas: Seas, pin: tuple[float, float], options: list[str]) -> dict
         if point:
             labels[name] = list(point)
     return labels
+
+
+def sea_shape(seas: Seas, answer: str, pin: list[float], route: list[list[float]], labels: dict) -> list | None:
+    """The answer sea's outline around the drop (Seas.shape_near), framed like the game's
+    camera: the pin, the four seas' labels and where the river meets the sea."""
+    return seas.shape_near(answer, [pin, route[-1], *labels.values()])
+
+
+def add_shapes() -> None:
+    """Add (or redo) seaShape on every drop of the existing puzzle files; nothing else changes."""
+    seas = Seas()
+    for f in sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json")):
+        data = json.loads(f.read_text(encoding="utf-8"))
+        before = f.stat().st_size
+        missing = 0
+        for d in data["drops"]:
+            d["seaShape"] = sea_shape(seas, d["answer"], d["pin"], d["route"], d["seaLabels"])
+            missing += d["seaShape"] is None
+        f.write_text(json.dumps(data, separators=(",", ":"), ensure_ascii=False), encoding="utf-8")
+        print(f"  {f.name}: {before // 1024} -> {f.stat().st_size // 1024} KB" + (f", {missing} without a shape" if missing else ""))
 
 
 def add_labels() -> None:
@@ -549,6 +570,7 @@ if __name__ == "__main__":
     g.add_argument("--seed", type=int, help="random seed (default: last puzzle number, so runs are repeatable)")
     sub.add_parser("label", help="add map label points and the nearest sea to existing puzzle files")
     sub.add_parser("shuffle", help="mix the drop order of existing puzzles (seeded by puzzle number)")
+    sub.add_parser("shape", help="add the answer sea's outline (seaShape) to every drop of the existing puzzle files")
     sub.add_parser("restage", help="rewrite existing puzzles' stop distances from STAGE_FRACTIONS")
     t = sub.add_parser("trace", help="trace one pin")
     t.add_argument("lon", type=float)
@@ -567,5 +589,7 @@ if __name__ == "__main__":
         restage()
     elif args.cmd == "shuffle":
         shuffle_existing()
+    elif args.cmd == "shape":
+        add_shapes()
     else:
         trace_one(args.lon, args.lat)

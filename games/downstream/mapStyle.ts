@@ -30,6 +30,9 @@ export type MapPalette = {
   coral: string;
   optionText: string; // a picked or option sea's lettering
   optionHalo: string;
+  mouthFill: string; // inside the river mouth's ring
+  optionFaded: number; // opacity of the options that weren't the answer or the pick
+  seaFill: number; // opacity of each band of the answer sea's wash (seaFill.ts)
 };
 
 export const MAP_PALETTES: Record<MapTheme, MapPalette> = {
@@ -49,6 +52,9 @@ export const MAP_PALETTES: Record<MapTheme, MapPalette> = {
     coral: "#f2545b",
     optionText: "#c0303a",
     optionHalo: "rgba(255,255,255,0.97)",
+    mouthFill: "#ffffff",
+    optionFaded: 0.4,
+    seaFill: 0.034,
   },
   dark: {
     land: "#161d26",
@@ -66,6 +72,9 @@ export const MAP_PALETTES: Record<MapTheme, MapPalette> = {
     coral: "#f2545b",
     optionText: "#ff8a90",
     optionHalo: "rgba(14,20,28,0.95)",
+    mouthFill: "#e9edf3",
+    optionFaded: 0.5,
+    seaFill: 0.05,
   },
 };
 
@@ -262,5 +271,10 @@ export function themePaint(theme: MapTheme): [string, string, unknown][] {
     ["head", "circle-color", C.coral],
     ["option-labels", "text-color", ["case", ["get", "answer"], C.route, C.optionText]],
     ["option-labels", "text-halo-color", C.optionHalo],
+    ["mouth", "circle-color", C.mouthFill],
+    ["option-labels", "text-opacity", ["case", ["get", "faded"], C.optionFaded, 1]],
+    ["sea-fill", "fill-color", C.route],
+    ["sea-fill", "fill-opacity", C.seaFill],
+    ["mouth", "circle-stroke-color", C.route],
   ];
 }

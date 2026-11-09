@@ -57,12 +57,13 @@ export default function DownstreamGame() {
   // The sea picked on the map waits for Lock in.
   const [picked, setPick] = usePick(g.game);
   const [seasHidden, setSeasHidden] = useState(false);
+  const [intro, setIntro] = useState(false); // the map is close in on a new drop's pin
   // The day's summary: which drop's route the map is replaying (null = the biggest surprise).
   const [viewing, setViewing] = useState<number | null>(null);
   const [mapRef, mapSize] = useSize<HTMLDivElement>();
   const ready = g.load.status === "ready" ? g.load : null;
   const current = ready ? ready.puzzle.drops[Math.min(g.game.drop, ready.puzzle.drops.length - 1)] : null;
-  const [onCamera, spots] = useSeaSpots(current?.seaLabels);
+  const [onCamera, spots] = useSeaSpots(current?.seaLabels, current?.pin);
   // Start downloading the map code now, alongside the puzzle, not after it.
   useEffect(() => {
     import("maplibre-gl").catch(() => {}); // RouteMap shows "Try again" if it really fails
@@ -141,6 +142,12 @@ export default function DownstreamGame() {
       stopFlow.current = ms > 0 ? sound.flow(ms) : () => {};
     },
     onFlowEnd: (final: boolean) => (final ? sound.splash() : sound.chime()),
+    seaShape: mapDrop.seaShape,
+    distanceKm: mapDrop.distanceKm,
+    // While guessing the map steps back (no towns, faded cities) so the pin stands out.
+    quiet: !(finished || result),
+    // A new drop opens close on the pin; the sea buttons wait until it pulls back.
+    onIntro: setIntro,
   };
 
   if (!isDesktop) {
@@ -163,6 +170,7 @@ export default function DownstreamGame() {
         onNext={next}
         viewing={shown}
         onView={setViewing}
+        intro={intro}
         map={mapProps}
       />
     );
@@ -250,7 +258,7 @@ export default function DownstreamGame() {
           padding={{ top: 100, bottom: 100, left: 120, right: 120 }}
           className="h-full w-full"
         />
-        {guessing && !seasHidden && (
+        {guessing && !seasHidden && !intro && (
           <SeaButtons
             size="md"
             keys={drop.options}

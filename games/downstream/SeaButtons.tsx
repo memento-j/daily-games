@@ -6,11 +6,14 @@
 
 import { useLayoutEffect, useState, useSyncExternalStore } from "react";
 import type { GameState } from "./game";
+import { pinBox, placeLabels, type Box } from "./labelPlacement";
 import type { Project } from "./RouteMap";
 import { sound } from "./sound";
 import type { LngLat } from "./types";
 
 type Spot = { name: string; x: number; y: number };
+/** The option seas on screen, the pin, and the water drawn so far (none of them ever covered). */
+type Spots = { seas: Spot[]; pin: { x: number; y: number } | null; water: Box[] };
 
 /**
  * Size of an element, kept up to date. Returns a callback ref, so measuring starts
@@ -42,21 +45,21 @@ export function usePick(game: GameState): [string | null, (name: string | null) 
   return [picked, (name) => setPick(name ? { name, at } : null)];
 }
 
-/** The option seas' screen positions, which change on every camera frame. */
-export type SpotStore = { get: () => Spot[]; subscribe: (listener: () => void) => () => void };
+/** The option seas' (and the pin's) screen positions, which change on every camera frame. */
+export type SpotStore = { get: () => Spots; subscribe: (listener: () => void) => () => void };
 
 /**
  * Where each option sea is on screen; pass `onCamera` to RouteMap and the store to
  * SeaButtons. The positions live in a small store that only SeaButtons listens to,
  * so a moving camera re-renders four buttons, not the whole game screen.
  */
-export function useSeaSpots(labels?: Record<string, LngLat>): [(project: Project) => void, SpotStore] {
+export function useSeaSpots(labels?: Record<string, LngLat>, pin?: LngLat): [(project: Project, water: Box[]) => void, SpotStore] {
   const [store] = useState(() => {
-    let spots: Spot[] = [];
+    let spots: Spots = NO_SPOTS;
     const listeners = new Set<() => void>();
     return {
       get: () => spots,
-      set: (next: Spot[]) => {
+      set: (next: Spots) => {
         spots = next;
         listeners.forEach((l) => l());
       },
@@ -66,29 +69,44 @@ export function useSeaSpots(labels?: Record<string, LngLat>): [(project: Project
       },
     };
   });
-  const onCamera = (project: Project) => {
-    if (labels) store.set(Object.entries(labels).map(([name, ll]) => ({ name, ...project(ll) })));
+  const onCamera = (project: Project, water: Box[]) => {
+    if (labels) store.set({ seas: Object.entries(labels).map(([name, ll]) => ({ name, ...project(ll) })), pin: pin ? project(pin) : null, water });
   };
   return [onCamera, store];
 }
 
-const NO_SPOTS: Spot[] = [];
+const NO_SPOTS: Spots = { seas: [], pin: null, water: [] };
 
-/** Keep the sea buttons inside the map's free area and off each other (a simple top-to-bottom nudge). */
-function placeSpots(spots: Spot[], width: number, top: number, bottom: number, big: boolean): Spot[] {
-  const half = big ? 90 : 66; // about half a button's width, to keep it on the map
-  const gapX = big ? 170 : 120;
-  const gapY = big ? 44 : 34;
-  const placed: Spot[] = [];
-  for (const s of [...spots].sort((a, b) => a.y - b.y)) {
-    const x = Math.min(Math.max(s.x, half), width - half);
-    let y = Math.min(Math.max(s.y, top), bottom);
-    for (const o of placed) {
-      if (Math.abs(o.x - x) < gapX && y - o.y < gapY) y = o.y + gapY;
-    }
-    placed.push({ ...s, x, y: Math.min(y, bottom) });
-  }
-  return placed;
+/**
+ * Keep the sea buttons inside the map's free area, off each other, and clear of the
+ * pin (labelPlacement.ts): a button that would cover where the rain fell moves away
+ * from it. Every button stays: they're the choices. Sizes are the buttons' own,
+ * measured once drawn (an estimate before that).
+ */
+function placeSpots(
+  spots: Spots,
+  sizes: Map<string, { w: number; h: number }>,
+  previous: Map<string, [number, number]>,
+  width: number,
+  top: number,
+  bottom: number,
+  big: boolean,
+): Spot[] {
+  const items = [...spots.seas]
+    .sort((a, b) => a.y - b.y)
+    .map((s) => {
+      const size = sizes.get(s.name) ?? { w: Math.min(big ? 176 : 124, s.name.length * (big ? 8.5 : 7) + (big ? 60 : 24)), h: big ? 38 : 30 };
+      return { id: s.name, x: s.x, y: s.y, w: size.w, h: size.h, keep: true };
+    });
+  // The area holds the buttons' centres between top and bottom, as before.
+  const area = { x0: 4, y0: top - 15, x1: width - 4, y1: bottom + 15 };
+  // The pin, and the water as it flows (the drop and the line behind it).
+  const markers = [...(spots.pin ? [pinBox(spots.pin.x, spots.pin.y)] : []), ...spots.water];
+  const placed = placeLabels(items, markers, area, { previous });
+  return spots.seas.map((s) => {
+    const p = placed.find((q) => q.id === s.name);
+    return { ...s, x: s.x + (p?.dx ?? 0), y: s.y + (p?.dy ?? 0) };
+  });
 }
 
 /** The buttons themselves, laid over the map (the parent is the map's positioned wrapper). */
@@ -115,10 +133,23 @@ export function SeaButtons({
   onPick: (name: string) => void;
 }) {
   const list = useSyncExternalStore(spots.subscribe, spots.get, () => NO_SPOTS);
+  // Each button's drawn size (for placing it), and where it was last frame (so it doesn't hop).
+  const [sizes] = useState(() => new Map<string, { w: number; h: number }>());
+  const [previous] = useState(() => new Map<string, [number, number]>());
+  const [, remeasured] = useState(0);
+  const measure = (el: HTMLButtonElement | null) => {
+    if (!el?.dataset.sea) return;
+    const old = sizes.get(el.dataset.sea);
+    const now = { w: el.offsetWidth, h: el.offsetHeight };
+    if (now.w && (!old || Math.abs(old.w - now.w) > 1 || Math.abs(old.h - now.h) > 1)) {
+      sizes.set(el.dataset.sea, now);
+      remeasured((n) => n + 1);
+    }
+  };
   if (!width) return null;
   return (
-    <div className="pointer-events-none absolute inset-0 z-[5]" role="group" aria-label="Which sea does this raindrop reach?">
-      {placeSpots(list, width, top, Math.max(top + 40, bottom), size === "md")
+    <div className="sea-buttons-in pointer-events-none absolute inset-0 z-[5]" role="group" aria-label="Which sea does this raindrop reach?">
+      {placeSpots(list, sizes, previous, width, top, Math.max(top + 40, bottom), size === "md")
         // Tab order follows the 1-4 badges (positions are absolute, so order is free).
         .sort((a, b) => (keys ? keys.indexOf(a.name) - keys.indexOf(b.name) : 0))
         .map((s) => {
@@ -126,6 +157,7 @@ export function SeaButtons({
         return (
           <button
             key={s.name}
+            ref={measure}
             type="button"
             onClick={() => {
               sound.tap();
@@ -134,9 +166,13 @@ export function SeaButtons({
             aria-pressed={on}
             data-sea={s.name}
             style={{ left: s.x, top: s.y }}
-            // Small to look at, bigger to touch: the ::after extends the tap area.
-            className={`pointer-events-auto absolute -translate-x-1/2 -translate-y-1/2 rounded-full text-center leading-[1.15] font-bold ${
-              size === "md" ? "max-w-[176px] px-4 py-2 text-[15px]" : "max-w-[124px] px-2.5 py-1.5 text-[12.5px]"
+            // Small to look at, bigger to touch: the ::after extends the tap area. `w-max`: its width
+            // never depends on where it sits (near the edge it would wrap, be measured, move, unwrap...).
+            // A flex row centres the number badge and the name on each other and in the pill (inline,
+            // the 20px badge stretched the line and lifted the name 3px).
+            className={`pointer-events-auto absolute inline-flex w-max -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-center leading-[1.15] font-bold ${
+              // Half a pixel more above than below: Hanken's letters sit a little high in their line.
+              size === "md" ? "max-w-[176px] px-4 pt-[8.5px] pb-[7.5px] text-[15px]" : "max-w-[124px] px-2.5 pt-[6.5px] pb-[5.5px] text-[12.5px]"
             } shadow-[0_3px_10px_-3px_rgb(18_26_43/0.35)] transition-[scale,background-color,color,box-shadow] duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] after:absolute after:-inset-x-2 after:-inset-y-3 after:content-[''] active:scale-95 active:duration-100 motion-reduce:transition-none ${
               on ? "z-10 scale-110 bg-coral-strong text-white ring-2 ring-card" : "bg-card/95 text-coral-deep ring-[1.5px] ring-coral/60 hover:bg-coral-soft"
             }`}
@@ -144,12 +180,12 @@ export function SeaButtons({
             {keys && keys.includes(s.name) && (
               <kbd
                 aria-hidden="true"
-                className={`mr-1.5 inline-grid size-5 place-items-center rounded-full font-sans text-[11px] leading-none font-bold ${on ? "bg-white/25 text-white" : "bg-coral-soft text-coral-deep"}`}
+                className={`mr-1.5 grid size-5 shrink-0 place-items-center rounded-full font-sans text-[11px] leading-none font-bold ${on ? "bg-white/25 text-white" : "bg-coral-soft text-coral-deep"}`}
               >
                 {keys.indexOf(s.name) + 1}
               </kbd>
             )}
-            {s.name}
+            <span className="sea-name">{s.name}</span>
           </button>
         );
       })}

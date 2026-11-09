@@ -33,6 +33,8 @@ type Props = {
   /** The day's summary: which drop's route the map is replaying. */
   viewing: number;
   onView: (drop: number) => void;
+  /** The map is close in on a new drop's pin (the zoom-in): the sea buttons wait. */
+  intro: boolean;
   /** The map's props, minus the layout-specific ones this file sets. */
   map: Omit<RouteMapProps, "className" | "padding" | "hideOptionLabels" | "onCamera">;
 };
@@ -145,7 +147,7 @@ function IntroBubble({ onDismiss, bubbleRef }: { onDismiss: () => void; bubbleRe
 function PhonePlay(p: Props) {
   const [barRef, barHeight] = useHeight<HTMLElement>();
   const [rootRef, root] = useSize<HTMLDivElement>();
-  const [onCamera, spots] = useSeaSpots(p.drop.seaLabels);
+  const [onCamera, spots] = useSeaSpots(p.drop.seaLabels, p.drop.pin);
   const [picked, setPick] = usePick(p.game);
   const [seasHidden, setSeasHidden] = useState(false);
   const [bubbleRef, bubble] = useSize<HTMLDivElement>();
@@ -164,7 +166,7 @@ function PhonePlay(p: Props) {
       {intro && <IntroBubble onDismiss={p.onDismissIntro} bubbleRef={bubbleRef} />}
       <DropAnnouncer drop={p.drop} stage={p.game.stage} decided={!guessing} />
 
-      {guessing && !seasHidden && (
+      {guessing && !seasHidden && !p.intro && (
         <SeaButtons
           spots={spots}
           width={root.width}

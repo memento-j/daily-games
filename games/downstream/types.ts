@@ -14,6 +14,7 @@ export type Drop = {
   difficulty: number; // 1 (easy) to 5 (surprising)
   seaLabels?: Record<string, LngLat>; // where to letter each option's name, near the pin
   nearestSea?: string; // the sea nearest the pin (what you might guess); differs from answer = a surprise
+  seaShape?: number[][][][] | null; // the answer sea's outline near the drop (MultiPolygon), for the map's wash on arrival
 };
 
 export type Puzzle = {

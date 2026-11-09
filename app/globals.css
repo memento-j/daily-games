@@ -457,23 +457,109 @@ button:not(:disabled),
   }
 }
 
-/* The game map's pin (games/downstream/RouteMap.tsx). Solid coral while it is the
-   raindrop; a hollow coral ring once the water has flowed on ("where it fell").
-   A new drop lands with a small fall and bounce. */
+/* The game map's pin (games/downstream/RouteMap.tsx, pinElement): a raindrop, the
+   site's drop mark, sitting with its round body on the spot (2026-11-09; a coral disc
+   until then, which players found hard to spot and too like the coral sea buttons).
+   Solid coral while it is the rain; hollow (white, coral edge) once the water has
+   flowed on ("where it fell"). Two coral rings pulse out of its body like rain on a
+   pond, slower and fainter once it's only where it fell. A new drop lands with a small
+   fall and bounce, while "Rain lands here" shows above it during the zoom-in.
+   The wrapper is 28x36; the body's centre is 22.5px down, so the marker is offset
+   4.5px up. Its size for keeping names clear is pinBox in labelPlacement.ts. */
 .route-pin {
-  width: 18px;
-  height: 18px;
-  border-radius: 9999px;
-  background: var(--color-coral);
-  border: 3px solid #fff;
-  box-shadow: 0 2px 8px rgb(18 26 43 / 0.35);
-  transition:
-    background-color 400ms ease-out,
-    border-color 400ms ease-out;
+  position: relative;
+  width: 28px;
+  height: 36px;
 }
-.route-pin.is-origin {
-  background: #fff;
-  border-color: var(--color-coral);
+.route-pin-drop {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+  filter: drop-shadow(0 2px 3px rgb(18 26 43 / 0.38));
+}
+.route-pin-drop path {
+  fill: var(--color-coral);
+  stroke: #fff;
+  stroke-width: 3;
+  stroke-linejoin: round;
+  transition:
+    fill 400ms ease-out,
+    stroke 400ms ease-out;
+}
+.route-pin.is-origin .route-pin-drop path {
+  fill: #fff;
+  stroke: var(--color-coral);
+}
+/* The rings are centred on the whole drop (tip to bottom, 2 to 33px), not its round
+   body, which read as pulsing from the drop's foot. */
+.route-pin-ring {
+  position: absolute;
+  left: -1px;
+  top: 2.5px;
+  width: 30px;
+  height: 30px;
+  border-radius: 9999px;
+  border: 2px solid var(--color-coral);
+  pointer-events: none;
+  opacity: 0;
+  animation: pin-pulse 2400ms cubic-bezier(0.16, 1, 0.3, 1) 700ms infinite;
+}
+.route-pin-ring + .route-pin-ring {
+  animation-delay: 1500ms;
+}
+.route-pin.is-origin .route-pin-ring {
+  animation-name: pin-pulse-soft;
+  animation-duration: 3200ms;
+}
+.route-pin.is-origin .route-pin-ring + .route-pin-ring {
+  animation-delay: 2300ms;
+}
+@keyframes pin-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.75;
+  }
+  100% {
+    transform: scale(2.3);
+    opacity: 0;
+  }
+}
+@keyframes pin-pulse-soft {
+  0% {
+    transform: scale(1);
+    opacity: 0.45;
+  }
+  100% {
+    transform: scale(1.9);
+    opacity: 0;
+  }
+}
+/* "Rain lands here": a map pill over the drop while the camera is close in. */
+.route-pin-tag {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  translate: -50% 6px;
+  padding: 5px 11px;
+  border-radius: 9999px;
+  background: var(--color-card);
+  color: var(--color-ink);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+  white-space: nowrap;
+  box-shadow:
+    0 18px 50px -18px rgb(18 26 43 / 0.28),
+    0 3px 10px -4px rgb(18 26 43 / 0.12);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 300ms ease-out,
+    translate 400ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.route-pin.show-tag .route-pin-tag {
+  opacity: 1;
+  translate: -50% 0;
 }
 .route-pin.is-landing {
   animation: pin-land 700ms cubic-bezier(0.22, 1.2, 0.36, 1) both;
@@ -491,9 +577,63 @@ button:not(:disabled),
     transform: none;
   }
 }
+
+/* The magnifier (games/downstream/Magnifier.tsx): a round lens in a card-white rim,
+   lifted like every map pill, and the thin line and ring on the main map that tie it
+   to the river it shows. Opens with a short scale from its own centre. */
+.magnifier-lens {
+  border: 3px solid var(--color-card);
+  box-shadow:
+    0 18px 50px -18px rgb(18 26 43 / 0.4),
+    0 3px 10px -4px rgb(18 26 43 / 0.18);
+}
+.magnifier {
+  animation: magnifier-in 420ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes magnifier-in {
+  from {
+    opacity: 0;
+    scale: 0.85;
+  }
+}
+.magnifier-leader {
+  stroke: var(--color-ink);
+  stroke-opacity: 0.35;
+  stroke-width: 1.5;
+  fill: none;
+}
+
+/* The sea buttons come in once the zoom-in has pulled back to the four seas. */
+.sea-buttons-in {
+  animation: sea-buttons-in 380ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes sea-buttons-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The arrow at the map's edge back to where the rain fell, once it's out of view. */
+.pin-arrow {
+  transition: opacity 200ms ease-out;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .route-pin {
+  .route-pin-drop path {
     transition: none;
+  }
+  /* No pulse: one still ring around the pin instead, so it's as easy to find. */
+  .route-pin-ring {
+    animation: none;
+    transform: scale(1.35);
+    opacity: 0.4;
+  }
+  .route-pin-ring + .route-pin-ring {
+    opacity: 0;
+  }
+  .magnifier,
+  .sea-buttons-in {
+    animation: none;
   }
 }
 

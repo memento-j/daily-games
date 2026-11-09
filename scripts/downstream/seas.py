@@ -121,6 +121,35 @@ class Seas:
         i = np.flatnonzero(ok)[np.argmin(gap[ok])]
         return round(float(xs[i]), 2), round(float(ys[i]), 2)
 
+    def shape_near(self, name: str, points: list[list[float]]) -> list | None:
+        """The sea's outline around a drop, for the map's "the sea fills" moment: the
+        display name's parts (simplified outlines), clipped to the drop's framing (the
+        box around `points`, the pin, the four seas' labels and the river mouth, grown
+        by half on every side), simplified to its size and rounded to 0.01 degrees.
+        GeoJSON MultiPolygon coordinates, or None if the sea isn't there.
+        """
+        parts = [g for g, n in zip(self.simple(), self.names) if display_name(str(n)) == name]
+        if not parts:
+            return None
+        xs = [p[0] for p in points]
+        ys = [p[1] for p in points]
+        w, h = max(xs) - min(xs), max(ys) - min(ys)
+        grow = max(w, h, 4.0) * 0.5
+        box = shapely.box(max(min(xs) - grow, -180), max(min(ys) - grow, -85), min(max(xs) + grow, 180), min(max(ys) + grow, 85))
+        sea = shapely.intersection(shapely.union_all(parts), box)
+        sea = shapely.simplify(sea, max(w, h, 4.0) / 120, preserve_topology=True)
+        polys = [g for g in getattr(sea, "geoms", [sea]) if g.geom_type == "Polygon" and g.area > (max(w, h, 4.0) / 200) ** 2]
+        if not polys:
+            return None
+        # Islands are holes in the sea: only ones big enough to see at this framing are kept
+        # (the IHO outlines carry thousands of tiny ones, which made files 20 times bigger).
+        size = max(w, h, 4.0)
+        tol = size / 120  # about a pixel at the framing's zoom on a phone
+        holes = lambda p: [i for i in p.interiors if shapely.Polygon(i).area > (size / 40) ** 2]
+        polys = [shapely.simplify(shapely.Polygon(p.exterior, holes(p)), tol, preserve_topology=True) for p in polys]
+        ring = lambda r: [[round(x, 2), round(y, 2)] for x, y in r.coords]
+        return [[ring(p.exterior), *[ring(i) for i in p.interiors]] for p in polys if not p.is_empty]
+
     def ranked(self, lon: float, lat: float) -> list[str]:
         """Display names of all seas, nearest to the point first (duplicates removed).
 
