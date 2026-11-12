@@ -5,6 +5,7 @@
 // a streak nudge when there is one, else the game's basics.
 
 import Countdown from "@/components/Countdown";
+import { useStreak } from "@/lib/useStreak";
 import { hintCount } from "@/games/slice/game";
 import { HintIcon } from "@/games/slice/HintIcon";
 import { maxScore } from "@/games/slice/scoring";
@@ -12,6 +13,7 @@ import { useTodayResult } from "@/games/slice/useTodayResult";
 
 export default function SliceStatus() {
   const t = useTodayResult();
+  const streak = useStreak(t?.number ?? null);
   if (t?.result) {
     const hints = hintCount(t.result.hints);
     return (
@@ -32,8 +34,9 @@ export default function SliceStatus() {
   }
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-faint">
-      {t && t.stats.currentStreak > 0 ? (
-        <span className="font-semibold text-coral-deep">Keep your {t.stats.currentStreak}-day streak going</span>
+      {/* The shared streak (both games), only while today hasn't counted yet in either. */}
+      {streak && streak.current > 0 && !streak.playedToday ? (
+        <span className="font-semibold text-coral-deep">Keep your {streak.current}-day streak going</span>
       ) : (
         // One unbreakable group, so a narrow card never leaves a stray dot at a line end.
         <span className="whitespace-nowrap">4 countries · 2 to 5 minutes</span>

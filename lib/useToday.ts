@@ -17,7 +17,7 @@ function read(): Today {
   const key = now.toDateString();
   if (cached?.key === key) return cached.value; // stable object between renders
   const value: Today = {
-    number: getPuzzleNumber(now),
+    number: getPuzzleNumber(), // (with ?debugDay in dev, the pretend day)
     date: now.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }),
   };
   cached = { key, value };

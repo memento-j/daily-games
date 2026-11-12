@@ -6,10 +6,10 @@
 
 import Link from "next/link";
 import { useSyncExternalStore } from "react";
-import Countdown from "@/components/Countdown";
 import NextUp, { type NextUpItem } from "@/components/NextUp";
 import { ScoreChart, ScoreSummary, useScoreComparison } from "@/components/ScoreComparison";
 import ShareButton from "@/components/ShareButton";
+import StreakRow, { FreezeNote } from "@/components/StreakRow";
 import { useYesterdayItem } from "@/components/YesterdayLink";
 import { SupportLine } from "@/components/SupportLink";
 import Loading from "@/components/Loading";
@@ -18,6 +18,8 @@ import { shareText } from "@/lib/share";
 import { useShareCard } from "@/lib/shareCard";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
+import { useStreak } from "@/lib/useStreak";
+import { useToday } from "@/lib/useToday";
 import { useTodayResult as useSliceToday } from "@/games/slice/useTodayResult";
 import type { GameState } from "./game";
 import { GAME_KEY, PREVIEW_KEY, storageKeyFor } from "./schedule";
@@ -323,6 +325,9 @@ export function DaySummary({
   const points = totalPoints(game.results);
   const max = maxPoints(puzzle.drops.length);
   const stats = useStats(storageKeyFor(preview), number);
+  // The shared streak (both games, lib/streak.ts), as of the player's today.
+  const today = useToday();
+  const streak = useStreak(today?.number ?? null);
   const comparison = useScoreComparison("downstream", number, points, game.results.map(dropPoints));
   const nextGame = useNextSlice();
   const yesterday = useYesterdayItem("/downstream/", [GAME_KEY, PREVIEW_KEY], maxPoints(5));
@@ -332,6 +337,8 @@ export function DaySummary({
     marks: game.results.map(dropEmoji),
     points,
     maxPoints: max,
+    // Yesterday's puzzle never counts toward the streak, so its text has none.
+    streak: preview ? 0 : (streak?.current ?? 0),
     url: `${SITE_URL}/downstream/`, // always the real address, whichever copy of the site is open
   });
   // The picture: each drop filled as far as it scored.
@@ -348,6 +355,7 @@ export function DaySummary({
             <span className="text-[28px] text-ink-faint"> / {max}</span>
           </p>
         </div>
+        <StreakRow news={!preview} />
         <ScoreSummary game="downstream" comparison={comparison} score={points} today={!preview} />
         <ShareButton game="downstream" number={number} preview={preview} text={text} card={card} onTap={sound.tap} />
       </div>
@@ -415,8 +423,8 @@ export function DaySummary({
 
       <dl className="grid grid-cols-4 gap-2 text-center">
         {[
-          ["Streak", stats?.currentStreak],
-          ["Best", stats?.bestStreak],
+          ["Streak", streak?.current],
+          ["Best", streak?.best],
           ["Played", stats?.played],
           ["Avg points", stats?.averagePoints ?? "–"],
         ].map(([label, value]) => (
@@ -429,11 +437,7 @@ export function DaySummary({
           </div>
         ))}
       </dl>
-      <p className="-mt-2 text-xs text-ink-faint">Miss a day and your streak survives, once a week.</p>
-
-      <p className="font-display text-[20px] font-semibold tracking-[-0.02em]">
-        <Countdown />
-      </p>
+      <FreezeNote />
       <SupportLine game="downstream" />
     </div>
   );

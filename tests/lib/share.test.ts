@@ -20,4 +20,9 @@ describe("shareText", () => {
     ).toBe("Slice #4 312/400\n94 · 81 · 62 · 75\nhttps://example.com/slice/");
   });
 
+  it("adds the streak to the first line when there is one", () => {
+    expect(shareText({ ...base, streak: 5 })).toBe("Downstream #12 🟩🟨🟥🟩🟧 14/20 · 🔥 5-day streak\nhttps://example.com/downstream/");
+    expect(shareText({ ...base, streak: 0 })).toBe(shareText(base));
+    expect(shareText({ ...base, streak: 1 })).toBe(shareText(base));
+  });
 });

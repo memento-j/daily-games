@@ -14,7 +14,7 @@ export const metadata: Metadata = pageMetadata({
   path: "/privacy/",
 });
 
-const UPDATED = "5 November 2026";
+const UPDATED = "12 November 2026";
 
 export default function PrivacyPage() {
   return (
@@ -73,7 +73,7 @@ export default function PrivacyPage() {
         <li>the page you visit, the site that linked you here, and your browser, operating system, device type, screen size and language;</li>
         <li>your approximate location (country, region and city), worked out from your IP address, which is not stored;</li>
         <li>
-          game events: starting a puzzle, finishing it with your total score, current streak and (in Slice) how many rounds used the hint, starting and
+          game events: starting a puzzle, finishing it with your total score, current streak, streak freezes held and (in Slice) how many rounds used the hint, reaching a streak milestone (how many days) or having a streak freeze cover a missed day (your streak and freezes left), starting and
           finishing a Slice practice country (which country, its score and whether you used the hint), pressing a country page&apos;s button to try that country, clicking the &ldquo;Support Pondo&rdquo; link (and where it was), whether a score reached the score server, switching the score chart between its views, turning Slice&apos;s map overlays on or off, choosing what to play next from a results screen (which option and where it was), pressing Share or saving the result picture (whether it was
           shared, copied, saved or cancelled, never what you shared or who to), and a once-a-day visit that says how many days it has been since your first visit and on how many
           different days you&apos;ve visited.

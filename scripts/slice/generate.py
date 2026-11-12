@@ -79,6 +79,7 @@ from population import aggregate, cells, people
 @dataclass
 class Country:
     id: str  # Natural Earth's ADMIN name, used to track reuse
+    iso: str  # the ISO two-letter code (Natural Earth's ISO_A2_EH): the share text's flag
     name: str
     continent: str
     outline: MultiPolygon  # box units, y down, simplified
@@ -121,6 +122,15 @@ def cities_of(row, m, to_box, outline) -> tuple[list, list]:
     return top_cities(m.lonlat, outline, lambda lon, lat: to_box(np.array([to_crs.transform(lon, lat)]))[0])
 
 
+def iso_of(row) -> str:
+    """The country's ISO 3166-1 two-letter code (Natural Earth's ISO_A2_EH), for the share
+    text's flag. Every country in the pool has one; -99 means none."""
+    code = row.ISO_A2_EH
+    if not re.fullmatch(r"[A-Z]{2}", code or ""):
+        raise SystemExit(f"{row.ADMIN} has no two-letter country code in Natural Earth")
+    return code
+
+
 def build(countries, src, name: str) -> Country:
     row = find(countries, name)
     m, to_box, outline = board(row, src)
@@ -129,6 +139,7 @@ def build(countries, src, name: str) -> Country:
     cities, city_names = cities_of(row, m, to_box, outline)
     return Country(
         id=row.ADMIN,
+        iso=iso_of(row),
         name=row.NAME,
         continent=row.CONTINENT,
         outline=outline,
@@ -317,6 +328,7 @@ def round_json(country: Country, mode: str, target: float) -> dict:
             rings.append([[round(x, OUTLINE_DECIMALS), round(y, OUTLINE_DECIMALS)] for x, y in ring.coords[:-1]])
     out = {
         "id": country.id,
+        "iso": country.iso,
         "country": display_name(country),
         "mode": mode,
         "target": round(target, 6),
@@ -459,6 +471,21 @@ def recities() -> None:
             print(f"#{puzzle['puzzle']:04d}  {', '.join(names)}", flush=True)
 
 
+def codes() -> None:
+    """Adds `iso`, each round's two-letter country code, to every round in the existing
+    puzzle files; nothing else changes."""
+    countries = load_countries()
+    for path in sorted(PUZZLE_DIR.glob("[0-9][0-9][0-9][0-9].json")):
+        puzzle = json.loads(path.read_text(encoding="utf-8"))
+        # Rebuilt in order, so `iso` sits after `id` as `round_json` writes it.
+        puzzle["rounds"] = [
+            {"id": r["id"], "iso": iso_of(find(countries, r["id"])), **{k: v for k, v in r.items() if k not in ("id", "iso")}}
+            for r in puzzle["rounds"]
+        ]
+        path.write_text(json.dumps(puzzle, ensure_ascii=False, separators=(",", ":")), encoding="utf-8")
+        print(f"#{puzzle['puzzle']:04d}  " + ", ".join(f"{r['iso']} {r['country']}" for r in puzzle["rounds"]), flush=True)
+
+
 def refact() -> None:
     """Re-measures the fact line of every round in the existing puzzle files (dense_share);
     everything else in the files is untouched."""
@@ -492,6 +519,7 @@ def main() -> None:
     sub.add_parser("repopulate", help="turn the land rounds of existing puzzles into half-the-population rounds")
     sub.add_parser("refact", help="re-measure the fact line of every round in the existing puzzles")
     sub.add_parser("recities", help="add the hint's three biggest cities to every round in the existing puzzles")
+    sub.add_parser("codes", help="add each round's two-letter country code (iso) to the existing puzzles")
     args = parser.parse_args()
     if args.cmd == "validate":
         run(list(VALIDATION_COUNTRIES), VALIDATION_COUNTRIES)
@@ -503,6 +531,8 @@ def main() -> None:
         refact()
     elif args.cmd == "recities":
         recities()
+    elif args.cmd == "codes":
+        codes()
     else:
         run(args.names, {})
 

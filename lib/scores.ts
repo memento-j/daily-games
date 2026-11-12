@@ -10,6 +10,7 @@
 // Pure parts (percentile, buckets) first; they're unit tested.
 
 import { track } from "./analytics";
+import { debugDay } from "./devDay";
 import { API_URL } from "./site";
 import { getSetting, removeOldDeviceId, setSetting } from "./storage";
 
@@ -177,6 +178,7 @@ function removeFromOutbox(s: ScoreSubmission): void {
 
 /** The game calls this as a daily puzzle finishes (never for practice). */
 export function queueScore(s: ScoreSubmission): void {
+  if (debugDay() !== null) return; // a pretend day (dev only) never reaches the scores API
   session.set(idOf(s), s);
   setSetting("site", OUTBOX, [...outbox().filter((o) => idOf(o) !== idOf(s)), s].slice(-OUTBOX_LIMIT));
 }

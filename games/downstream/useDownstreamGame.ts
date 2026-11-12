@@ -9,10 +9,11 @@
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { track } from "@/lib/analytics";
-import { padPuzzleNumber } from "@/lib/daily";
+import { getPuzzleNumber, padPuzzleNumber } from "@/lib/daily";
 import { newScoreId, queueScore } from "@/lib/scores";
-import { computeStats } from "@/lib/stats";
-import { clearInProgress, getHistory, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
+import { streakAfterFinish } from "@/lib/streakEvents";
+import { readStreak } from "@/lib/useStreak";
+import { clearInProgress, getInProgress, getResult, saveInProgress, saveResult } from "@/lib/storage";
 import { initialState, isValidState, phase, step, type Action, type GameState, type Phase } from "./game";
 import { dropPoints, maxPoints, totalPoints, type DropResult } from "./scoring";
 import { GAME_KEY, puzzleToPlay, storageKeyFor } from "./schedule";
@@ -92,6 +93,8 @@ export function useDownstreamGame(): DownstreamGameState {
     if (game.drop === 0 && game.stage === 0 && game.results.length === 0) track("puzzle_started", play);
     if (phase(next, puzzle) === "finished") {
       const scoreId = newScoreId() ?? undefined;
+      // Was a daily puzzle already finished today (in either game)? Then this one adds no day.
+      const firstToday = !load.preview && !readStreak(getPuzzleNumber()).playedToday;
       saveResult<SavedResult>(storageKey, number, { results: next.results, points: totalPoints(next.results), scoreId });
       clearInProgress(storageKey);
       // For the comparison with other players; the summary sends it. Downstream has no hints.
@@ -105,9 +108,10 @@ export function useDownstreamGame(): DownstreamGameState {
           hintsUsed: next.results.map(() => false),
         });
       }
-      // After saving, so the streak includes today.
-      const streak = computeStats(getHistory<SavedResult>(storageKey), number).currentStreak;
-      track("puzzle_finished", { ...play, points: totalPoints(next.results), maxPoints: maxPoints(puzzle.drops.length), streak });
+      // After saving, so the shared streak includes today (lib/streak.ts); yesterday's puzzle
+      // doesn't count toward it, so it never sends the streak's own events.
+      const s = streakAfterFinish(getPuzzleNumber(), firstToday);
+      track("puzzle_finished", { ...play, points: totalPoints(next.results), maxPoints: maxPoints(puzzle.drops.length), streak: s.current, freezes: s.freezes });
     } else {
       saveInProgress(storageKey, number, next);
     }

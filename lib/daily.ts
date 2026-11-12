@@ -5,13 +5,21 @@
 // browser (after mount), never during render on the server/build: the build runs
 // on a different day than the player's visit.
 
+import { debugDay } from "./devDay";
+
 // Launch day, puzzle #1: 21 October 2026 (developer's call, 2026-10-20). Months are
 // 0-based (9 = October). Never shown to players; it only sets which day is #1.
 const LAUNCH = Date.UTC(2026, 9, 21);
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** Launch day is #1. Below 1 means the game hasn't launched yet. */
-export function getPuzzleNumber(now = new Date()): number {
+export function getPuzzleNumber(at?: Date): number {
+  // Dev only: `?debugDay=N` pretends today is puzzle N (lib/devDay.ts). Never with a date given.
+  if (!at) {
+    const debug = debugDay();
+    if (debug !== null) return debug;
+  }
+  const now = at ?? new Date();
   // Read the *local* year/month/day, then subtract as UTC midnights, so daylight
   // saving changes (23- or 25-hour days) can't shift the result by one.
   const today = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate());

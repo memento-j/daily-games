@@ -54,6 +54,20 @@ export function saveResult<T>(game: string, day: number, result: T): void {
   notify();
 }
 
+/** Dev only (lib/devDay.ts's streak helpers): forget one day's result. */
+export function removeResult(game: string, day: number): void {
+  const history = getHistory<unknown>(game);
+  delete history[day];
+  write(key(game, "history"), history);
+  notify();
+}
+
+/** Forget a setting, so its fallback applies again. */
+export function removeSetting(game: string, name: string): void {
+  remove(key(game, `setting:${name}`));
+  notify();
+}
+
 export function getLastPlayed(game: string): number | null {
   return read<number>(key(game, "lastPlayed"));
 }

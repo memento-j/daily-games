@@ -4,11 +4,13 @@
 // played, a streak nudge when there is one, else the game's basics.
 
 import Countdown from "@/components/Countdown";
+import { useStreak } from "@/lib/useStreak";
 import { maxPoints, totalPoints } from "@/games/downstream/scoring";
 import { useTodayResult } from "@/games/downstream/useTodayResult";
 
 export default function DownstreamStatus() {
   const t = useTodayResult();
+  const streak = useStreak(t?.number ?? null);
   if (t?.result) {
     return (
       // Two short lines rather than one wrapping line (which left a stray "·").
@@ -28,8 +30,9 @@ export default function DownstreamStatus() {
   }
   return (
     <span className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-ink-faint">
-      {t && t.stats.currentStreak > 0 ? (
-        <span className="font-semibold text-coral-deep">Keep your {t.stats.currentStreak}-day streak going</span>
+      {/* The shared streak (both games), only while today hasn't counted yet in either. */}
+      {streak && streak.current > 0 && !streak.playedToday ? (
+        <span className="font-semibold text-coral-deep">Keep your {streak.current}-day streak going</span>
       ) : (
         <>
           <span>5 drops</span>

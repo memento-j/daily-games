@@ -16,12 +16,16 @@ import Countdown from "@/components/Countdown";
 import NextUp, { type NextUpItem } from "@/components/NextUp";
 import { ScoreChart, ScoreSummary, useScoreComparison } from "@/components/ScoreComparison";
 import ShareButton from "@/components/ShareButton";
+import StreakRow, { FreezeNote } from "@/components/StreakRow";
 import { useYesterdayItem } from "@/components/YesterdayLink";
 import { SupportLine } from "@/components/SupportLink";
 import Loading from "@/components/Loading";
 import ThemeToggle from "@/components/ThemeToggle";
 import { track } from "@/lib/analytics";
-import { shareText } from "@/lib/share";
+import { canShowFlags } from "@/lib/flags";
+import { sliceShareText } from "@/games/slice/shareText";
+import { useStreak } from "@/lib/useStreak";
+import { useToday } from "@/lib/useToday";
 import { useShareCard } from "@/lib/shareCard";
 import { SITE_NAME, SITE_URL } from "@/lib/site";
 import { getSetting, setSetting, subscribe } from "@/lib/storage";
@@ -544,20 +548,28 @@ function Summary({
   onView: (i: number) => void;
 }) {
   const stats = useStats(storageKeyFor(preview), number);
+  // The shared streak (both games, lib/streak.ts), as of the player's today.
+  const today = useToday();
+  const streak = useStreak(today?.number ?? null);
   const points = totalScore(cuts);
   const max = maxScore(cuts.length);
   const comparison = useScoreComparison("slice", number, points, cuts.map((c) => c.score));
   const nextGame = useNextDownstream();
   const yesterday = useYesterdayItem("/slice/", [GAME_KEY, PREVIEW_KEY], maxScore(4));
-  // "Slice #4 312/400", then each round's score, with a 💡 after any round that took the
-  // hint: no countries, no answers.
-  const text = shareText({
+  // "Slice #22 · 135/400 · 🔥 5-day streak", each round's flag and score (a 💡 if it took
+  // the hint), what the game is, and the address (games/slice/shareText.ts). Yesterday's
+  // puzzle never counts toward the streak, so its text has none.
+  const text = sliceShareText({
     game: GAME_NAME,
     number,
     points,
     maxPoints: max,
-    detail: cuts.map((c, i) => `${c.score}${hints[i] ? "💡" : ""}`).join(" · "),
-    url: `${SITE_URL}/slice/`, // always the real address, whichever copy of the site is open
+    streak: preview ? 0 : (streak?.current ?? 0),
+    rounds: cuts.map((c, i) => ({ iso: puzzle.rounds[i]?.iso, score: c.score, hinted: !!hints[i] })),
+    flags: canShowFlags(),
+    // Always the real address, whichever copy of the site is open; with https://, which every
+    // app turns into a link (Discord and some email apps don't link a bare "pondo.games/slice").
+    url: `${SITE_URL}/slice`,
   });
   // The picture: one strip per round, showing how close the cut came to the aim.
   const rounds = cuts.map((c, i) => ({ share: c.share, target: puzzle.rounds[i].target, score: c.score }));
@@ -575,6 +587,7 @@ function Summary({
           <span className="text-sm text-ink-faint tabular-nums">/{max}</span>
         </p>
       </div>
+      <StreakRow news={!preview} />
       <ScoreSummary game="slice" comparison={comparison} score={points} today={!preview} />
       <ShareButton game="slice" number={number} preview={preview} text={text} card={card} onTap={sound.tap} />
       {/* The next game is the main action after sharing, then the quieter choices. */}
@@ -633,8 +646,8 @@ function Summary({
         <dl className="grid grid-cols-3 gap-2 text-center">
           {[
             ["Played", stats.played],
-            ["Streak", stats.currentStreak],
-            ["Best", stats.bestStreak],
+            ["Streak", streak?.current ?? " "],
+            ["Best", streak?.best ?? " "],
           ].map(([label, value]) => (
             <div key={label} className="rounded-2xl bg-land py-2">
               <dd className="font-display text-xl font-semibold">{value}</dd>
@@ -643,7 +656,7 @@ function Summary({
           ))}
         </dl>
       )}
-      <Countdown prefix="New countries in" className="text-center text-sm text-ink-soft" />
+      <FreezeNote />
       <SupportLine game="slice" />
     </div>
   );

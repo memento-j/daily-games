@@ -33,10 +33,15 @@ export type Events = {
    *  many different days it has visited, today included (how often they come). */
   daily_visit: { day: number; visits: number };
   puzzle_started: Play;
-  /** `streak`: the player's streak in this game after this puzzle, as the summary shows
-   *  it (lib/stats.ts, with its forgiven days). `hintsUsed`: Slice only, how many of the
-   *  day's rounds took the hint (the three biggest cities as dots). */
-  puzzle_finished: Play & { points: number; maxPoints: number; streak: number; hintsUsed?: number };
+  /** `streak`: the player's shared streak (both games, lib/streak.ts) after this puzzle, as the
+   *  summary shows it; `freezes`: streak freezes held after it. On yesterday's puzzle (preview)
+   *  both are the streak as it stands, as that play doesn't count. `hintsUsed`: Slice only, how
+   *  many of the day's rounds took the hint (the three biggest cities as dots). */
+  puzzle_finished: Play & { points: number; maxPoints: number; streak: number; freezes: number; hintsUsed?: number };
+  /** A day's first finished puzzle reached a streak milestone (3, 7, 30, 100 days). */
+  streak_milestone: { days: number };
+  /** A day's first finished puzzle used freezes to cover missed days; `streak` after it. */
+  streak_freeze_used: { streak: number; freezes_left: number };
   /** Copy result copied the text (copied, or failed); Share used the share sheet (shared), or
    *  the player closed it (cancelled); "Save the picture" downloaded the result card (saved). */
   result_shared: Play & { outcome: "shared" | "copied" | "cancelled" | "failed" | "saved" };

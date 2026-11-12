@@ -16,7 +16,8 @@ GEOD = Geod(ellps="WGS84")
 
 
 def load_countries() -> gpd.GeoDataFrame:
-    return gpd.read_file(COUNTRIES_SHP, columns=["ADMIN", "NAME", "NAME_LONG", "CONTINENT", "POP_EST"])
+    # ISO_A2_EH: the two-letter country code, filled in where ISO_A2 is -99 (France, Norway).
+    return gpd.read_file(COUNTRIES_SHP, columns=["ADMIN", "NAME", "NAME_LONG", "CONTINENT", "POP_EST", "ISO_A2_EH"])
 
 
 def find(countries: gpd.GeoDataFrame, name: str):
